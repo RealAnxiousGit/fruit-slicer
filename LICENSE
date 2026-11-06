@@ -1,0 +1,13 @@
+Fruit Slicer 3DS
+Copyright (c) 2026 RealAnxiousGit
+
+All code and assets in this repository are licensed under the
+Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0).
+
+You may share and adapt this work for non-commercial purposes, provided you give
+appropriate credit, link to the license, and indicate if changes were made.
+
+Full license text: https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
+The downloaded build tools (makerom, bannertool) and linked libraries (libctru,
+citro3D, citro2D) remain under their own licenses.

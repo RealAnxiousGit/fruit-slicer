@@ -1,0 +1,13 @@
+build/
+romfs/gfx/
+*.elf
+*.3dsx
+*.smdh
+*.cia
+*.map
+*.exe
+*.bnr
+*.icn
+dist/
+.tools/
+__pycache__/
