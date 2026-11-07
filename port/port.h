@@ -11,6 +11,7 @@
 
 #define PORT_3DS 0
 #define PORT_HAS_VORBIS 1  // recorded Shop music ships as Ogg Vorbis here
+#define PORT_CUSTOM_MUSIC 1  // the player's own songs for Beat Slice, from a Custom Music folder
 #define PORT_TWO_SCREENS 0
 #define PORT_HAS_SENSITIVITY PORT_ANDROID
 #define PORT_PAUSE_BUTTON PORT_ANDROID

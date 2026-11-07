@@ -15,6 +15,11 @@ struct AssetFile {
 	SDL_IOStream* io;
 };
 
+AssetFile* fileOpen(const char* fullPath) {
+	SDL_IOStream* io = SDL_IOFromFile(fullPath, "rb");
+	return io ? new AssetFile{io} : nullptr;
+}
+
 AssetFile* assetOpen(const char* path) {
 	char full[512];
 #if PORT_ANDROID
