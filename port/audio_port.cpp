@@ -1,5 +1,6 @@
 // Sound on SDL: a small software mixer feeding one stereo stream.
 #include <SDL3/SDL.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -28,6 +29,11 @@ static s16 sOut[kChunk * 2];
 
 static void mixVoice(Voice& v, float l, float r, int frames) {
 	if (!v.on) return;
+	// A voice that could never finish, or would read outside its clip, stops here on its own.
+	if (!v.pcm || v.samples == 0 || !(v.step > 0) || !isfinite(l) || !isfinite(r)) {
+		v.on = false;
+		return;
+	}
 	for (int i = 0; i < frames; i++) {
 		u32 at = (u32)v.pos;
 		if (at >= v.samples) {
@@ -56,6 +62,9 @@ static void limit(float* mix, int frames) {
 	static float gain = 1;
 	for (int i = 0; i < frames; i++) {
 		float l = mix[i * 2], r = mix[i * 2 + 1];
+		// A bad sample is dropped here, before it can pull the shared gain down for every sound.
+		if (!isfinite(l)) l = 0;
+		if (!isfinite(r)) r = 0;
 		float a = (l < 0 ? -l : l) > (r < 0 ? -r : r) ? (l < 0 ? -l : l) : (r < 0 ? -r : r);
 		if (a * gain > kCeiling) gain = kCeiling / a;
 		mix[i * 2] = l * gain;
