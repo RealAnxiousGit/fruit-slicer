@@ -1,7 +1,5 @@
 #pragma once
-#include <3ds.h>
-#include <citro2d.h>
-#include <citro3d.h>
+#include "port.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -82,6 +80,7 @@ struct Settings {
 	u8 forgiveness;  // 50 is normal
 	u8 frenzyDrain;  // 50 is normal
 	u8 misses;       // 1..5, Classic only
+	PORT_SETTINGS_FIELDS
 };
 extern Settings gSave;
 void saveDefaults(bool keepScores, int section);  // section: -1 all, 0 audio, 1 visuals, 2 gameplay
@@ -97,4 +96,8 @@ struct Input {
 	u32 down, held, repeat;
 	bool touching;
 	int tx, ty;
+	bool hovering;  // a mouse cursor rests at tx, ty with no button held
 };
+
+// Sound pans with position on the field.
+inline float fieldPan(float x) { return (x - kFieldW * 0.5f) / 200.0f; }

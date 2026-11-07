@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 
 #include "common.h"
+#include "port_api.h"
 
 Settings gSave;
 bool gIsNew3ds = false;
@@ -11,9 +11,6 @@ bool gHas3dScreen = true;
 static constexpr u32 kMagic = 0x33534C46;    // "FLS3"
 static constexpr u32 kMagicV2 = 0x32534C46;  // "FLS2", written by 0.2.0
 static constexpr u32 kMagicV1 = 0x31534C46;  // "FLS1", written by 0.1.0
-static const char* const kDir = "sdmc:/3ds/FruitSlicer";
-static const char* const kFile = "sdmc:/3ds/FruitSlicer/save.bin";
-static const char* const kTemp = "sdmc:/3ds/FruitSlicer/save.tmp";
 
 static u32 checksum(const void* data, size_t size) {
 	const u8* p = (const u8*)data;
@@ -48,7 +45,7 @@ void saveDefaults(bool keepScores, int section) {
 		gSave.transitions = 1;
 	}
 	if (section < 0 || section == 2) {
-		gSave.stylus = 40;
+		gSave.stylus = PORT_DEFAULT_SENSITIVITY;
 		gSave.difficulty = DIFF_NORMAL;
 		gSave.fruitSpeed = 50;
 		gSave.bombs = 50;
@@ -73,8 +70,11 @@ struct SettingsV1 {
 
 void saveLoad() {
 	saveDefaults(false, -1);
-	FILE* f = fopen(kFile, "rb");
-	if (!f) f = fopen(kTemp, "rb");  // power was lost between the two steps of saveWrite
+	char file[256], temp[256];
+	port::dataPath(file, sizeof file, "save.bin");
+	port::dataPath(temp, sizeof temp, "save.tmp");
+	FILE* f = fopen(file, "rb");
+	if (!f) f = fopen(temp, "rb");  // power was lost between the two steps of saveWrite
 	if (!f) return;
 	u32 magic = 0, sum = 0;
 	if (fread(&magic, 4, 1, f) == 1) {
@@ -131,12 +131,14 @@ void saveLoad() {
 }
 
 void saveWrite() {
-	mkdir("sdmc:/3ds", 0777);
-	mkdir(kDir, 0777);
+	port::ensureDataDir();
+	char file[256], temp[256];
+	port::dataPath(file, sizeof file, "save.bin");
+	port::dataPath(temp, sizeof temp, "save.tmp");
 	// Written beside the old save and swapped in afterwards, so a power cut can't lose both.
-	FILE* f = fopen(kTemp, "wb");
+	FILE* f = fopen(temp, "wb");
 	if (!f) {
-		fprintf(stderr, "[save] could not write %s\n", kTemp);
+		fprintf(stderr, "[save] could not write %s\n", temp);
 		return;
 	}
 	u32 sum = checksum(&gSave, sizeof gSave);
@@ -144,6 +146,6 @@ void saveWrite() {
 	fwrite(&gSave, sizeof gSave, 1, f);
 	fwrite(&sum, 4, 1, f);
 	fclose(f);
-	remove(kFile);
-	rename(kTemp, kFile);
+	remove(file);
+	rename(temp, file);
 }

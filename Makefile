@@ -15,9 +15,9 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET		:=	FruitSlicer3DS
 BUILD		:=	build
-SOURCES		:=	source
+SOURCES		:=	source port
 DATA		:=	data
-INCLUDES	:=	source
+INCLUDES	:=	source port
 GRAPHICS	:=	gfx
 GFXBUILD	:=	romfs/gfx
 ROMFS		:=	romfs
@@ -87,7 +87,7 @@ $(GFXBUILD)/%.t3x: $(GRAPHICS)/%.t3s | $(BUILD) $(GFXBUILD)
 	@echo tex3ds $(notdir $<)
 	@cd $(GRAPHICS) && tex3ds -i $(notdir $<) -H $(CURDIR)/$(BUILD)/$*.h -d $(CURDIR)/$(BUILD)/$*.d -o $(CURDIR)/$@
 
-$(ROMFS_SHADER): source/fruit.v.pica | $(GFXBUILD)
+$(ROMFS_SHADER): port/fruit.v.pica | $(GFXBUILD)
 	@echo picasso $(notdir $<)
 	@picasso -o $@ $<
 

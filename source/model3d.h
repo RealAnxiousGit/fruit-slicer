@@ -1,7 +1,7 @@
 #pragma once
 #include "common.h"
 
-// Real 3D fruit, drawn with citro3D in between citro2D's 2D layers.
+// Real 3D fruit, drawn by each port in between the 2D layers.
 namespace m3d {
 
 enum MeshId {

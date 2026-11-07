@@ -5,7 +5,23 @@ import random
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-BOARD_W, BOARD_H = 320, 240
+# The field a board covers, in game units, and how many pixels each unit gets.
+BOARD_W, BOARD_H, BOARD_K = 320, 240, 1
+
+
+def set_board_size(w, h, k):
+    global BOARD_W, BOARD_H, BOARD_K
+    BOARD_W, BOARD_H, BOARD_K = w, h, k
+
+
+def board_grid():
+    """Pixel rows and columns, in game units."""
+    y, x = np.mgrid[0:BOARD_H * BOARD_K, 0:BOARD_W * BOARD_K].astype(np.float32)
+    return y / BOARD_K, x / BOARD_K
+
+
+def board_fractal(scale, seed, octaves=4, stretch=1.0):
+    return fractal(BOARD_W * BOARD_K, BOARD_H * BOARD_K, scale * BOARD_K, seed, octaves, stretch)
 
 
 def smooth_noise(w, h, scale_x, scale_y, seed):
@@ -44,9 +60,9 @@ def mix(a, b, t):
 
 
 def board_blanket():
-    W, H = BOARD_W, BOARD_H
+    H, W = BOARD_H * BOARD_K, BOARD_W * BOARD_K
     y, x = np.mgrid[0:H, 0:W]
-    size = 32
+    size = 32 * BOARD_K
     a, b = (x // size) % 2, (y // size) % 2
     arr = np.zeros((H, W, 3), np.float32)
     arr[:] = np.array([38, 62, 92], np.float32)
@@ -59,38 +75,38 @@ def board_blanket():
 
 def board_wood():
     """Kitchen cutting board: one slab with curved end grain, knife marks and a juice groove."""
-    W, H = BOARD_W, BOARD_H
-    y, x = np.mgrid[0:H, 0:W].astype(np.float32)
-    warp = fractal(W, H, 90, 41, 3, stretch=3.0)
-    rings = np.sin((y + warp * 70) * 0.42 + fractal(W, H, 40, 44, 3, stretch=4.0) * 5)
-    t = np.clip(0.5 + rings * 0.38 + (fractal(W, H, 8, 47, 2, stretch=9.0) - 0.5) * 0.7, 0, 1)
+    W, H, K = BOARD_W, BOARD_H, BOARD_K
+    y, x = board_grid()
+    warp = board_fractal(90, 41, 3, stretch=3.0)
+    rings = np.sin((y + warp * 70) * 0.42 + board_fractal(40, 44, 3, stretch=4.0) * 5)
+    t = np.clip(0.5 + rings * 0.38 + (board_fractal(8, 47, 2, stretch=9.0) - 0.5) * 0.7, 0, 1)
     arr = mix(np.array([118, 72, 40], np.float32), np.array([176, 120, 72], np.float32), t)
     img = finish(arr)
-    marks = Image.new("RGBA", (W * 2, H * 2), (0, 0, 0, 0))
+    marks = Image.new("RGBA", (W * K * 2, H * K * 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(marks)
     rng = random.Random(5)
     for _ in range(46):
         px, py = rng.uniform(30, W * 2 - 30), rng.uniform(30, H * 2 - 30)
         a, ln = rng.uniform(-0.9, 0.9), rng.uniform(30, 120)
-        d.line([px, py, px + math.cos(a) * ln, py + math.sin(a) * ln], fill=(60, 32, 16, 70), width=1)
-        d.line([px, py + 1.5, px + math.cos(a) * ln, py + 1.5 + math.sin(a) * ln], fill=(235, 190, 140, 34), width=1)
-    d.rounded_rectangle([20, 20, W * 2 - 20, H * 2 - 20], 34, outline=(70, 38, 18, 170), width=6)
-    d.rounded_rectangle([24, 25, W * 2 - 24, H * 2 - 18], 30, outline=(226, 170, 116, 60), width=2)
-    img.alpha_composite(marks.resize((W, H), Image.LANCZOS))
+        d.line([px * K, py * K, (px + math.cos(a) * ln) * K, (py + math.sin(a) * ln) * K], fill=(60, 32, 16, 70), width=K)
+        d.line([px * K, (py + 1.5) * K, (px + math.cos(a) * ln) * K, (py + 1.5 + math.sin(a) * ln) * K], fill=(235, 190, 140, 34), width=K)
+    d.rounded_rectangle([20 * K, 20 * K, (W * 2 - 20) * K, (H * 2 - 20) * K], 34 * K, outline=(70, 38, 18, 170), width=6 * K)
+    d.rounded_rectangle([24 * K, 25 * K, (W * 2 - 24) * K, (H * 2 - 18) * K], 30 * K, outline=(226, 170, 116, 60), width=2 * K)
+    img.alpha_composite(marks.resize((W * K, H * K), Image.LANCZOS))
     return finish(vignette(np.asarray(img.convert("RGB"), np.float32), 0.55, 0.55))
 
 
 def board_plate():
     """Ceramic plate on a soft linen tablecloth."""
     W, H = BOARD_W, BOARD_H
-    y, x = np.mgrid[0:H, 0:W].astype(np.float32)
-    linen = 150 + 8 * np.sin(x * 2.1) + 8 * np.sin(y * 2.1) + (fractal(W, H, 30, 61, 3) - 0.5) * 22
+    y, x = board_grid()
+    linen = 150 + 8 * np.sin(x * 2.1) + 8 * np.sin(y * 2.1) + (board_fractal(30, 61, 3) - 0.5) * 22
     arr = np.dstack([linen * 0.88, linen * 0.66, linen * 0.54]).astype(np.float32)
     r = np.sqrt((x - W / 2) ** 2 + (y - H / 2) ** 2) / 116.0
     shadow = np.clip(1 - np.sqrt((x - W / 2 - 2) ** 2 + (y - H / 2 - 7) ** 2) / 124.0, 0, 1)
     arr *= (1 - np.clip(shadow * 5, 0, 1) * 0.36)[..., None]
     edge = np.clip((1.04 - r) * 36, 0, 1)[..., None]
-    plate = np.full((H, W, 3), 0, np.float32)
+    plate = np.full(x.shape + (3,), 0, np.float32)
     plate[:] = np.array([242, 240, 232], np.float32)
     # Raised rim, then a softly shaded well.
     shade = 1.0 - 0.13 * np.exp(-(((r - 0.70) / 0.05) ** 2)) + 0.05 * np.exp(-(((r - 0.76) / 0.05) ** 2))
@@ -105,13 +121,12 @@ def board_plate():
 
 
 def board_marble():
-    W, H = BOARD_W, BOARD_H
-    y, x = np.mgrid[0:H, 0:W].astype(np.float32)
-    f = fractal(W, H, 110, 71, 5)
+    y, x = board_grid()
+    f = board_fractal(110, 71, 5)
     veins = np.abs(np.sin((x * 0.007 + y * 0.012 + f * 2.6) * math.pi))
     v = np.clip(1 - veins * 7, 0, 1) ** 1.5
-    v = np.asarray(Image.fromarray((v * 255).astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(0.8)), np.float32) / 255
-    f2 = fractal(W, H, 70, 77, 4)
+    v = np.asarray(Image.fromarray((v * 255).astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(0.8 * BOARD_K)), np.float32) / 255
+    f2 = board_fractal(70, 77, 4)
     veins2 = np.abs(np.sin((x * 0.012 - y * 0.006 + f2 * 3.2) * math.pi))
     v2 = np.clip(1 - veins2 * 12, 0, 1) ** 1.5
     base = 214 + (f - 0.5) * 34
@@ -123,12 +138,11 @@ def board_marble():
 
 def board_sand():
     """Sandy beach with ripple lines and a little foam at the edge."""
-    W, H = BOARD_W, BOARD_H
-    y, x = np.mgrid[0:H, 0:W].astype(np.float32)
-    f = fractal(W, H, 70, 81, 4)
+    y, x = board_grid()
+    f = board_fractal(70, 81, 4)
     ripples = np.sin((y + f * 80) * 0.5) * 0.5 + 0.5
     arr = mix(np.array([206, 170, 116], np.float32), np.array([236, 210, 160], np.float32), ripples * 0.55 + f * 0.45)
-    arr += np.random.default_rng(83).normal(0, 4.5, (H, W, 1))
+    arr += np.random.default_rng(83).normal(0, 4.5, x.shape + (1,))
     shore = 28 + 12 * np.sin(x * 0.03) + 8 * np.sin(x * 0.09 + 1)
     depth = np.clip((shore - y) / 22, 0, 1)[..., None]
     arr = arr * (1 - depth) + (np.array([86, 176, 186], np.float32) * (1 - depth * 0.4)) * depth
@@ -139,19 +153,19 @@ def board_sand():
 
 def board_starlight():
     """Deep night sky: nebula haze and stars, for a bright, high-contrast field."""
-    W, H = BOARD_W, BOARD_H
-    f = fractal(W, H, 120, 91, 5)
-    g = fractal(W, H, 80, 95, 4)
-    arr = np.zeros((H, W, 3), np.float32)
+    W, H, K = BOARD_W, BOARD_H, BOARD_K
+    f = board_fractal(120, 91, 5)
+    g = board_fractal(80, 95, 4)
+    arr = np.zeros((H * K, W * K, 3), np.float32)
     arr[:] = np.array([14, 14, 40], np.float32)
     arr += np.clip(f - 0.46, 0, 1)[..., None] * np.array([190, 70, 200], np.float32)
     arr += np.clip(g - 0.5, 0, 1)[..., None] * np.array([40, 130, 220], np.float32)
     img = finish(arr)
     d = ImageDraw.Draw(img)
     rng = random.Random(97)
-    for _ in range(170):
+    for _ in range(170 * W // 320):
         px, py, r = rng.uniform(0, W), rng.uniform(0, H), rng.choice((0.4, 0.5, 0.7, 1.0))
-        d.ellipse([px - r, py - r, px + r, py + r], fill=(255, 250, 235, rng.randint(120, 255)))
+        d.ellipse([(px - r) * K, (py - r) * K, (px + r) * K, (py + r) * K], fill=(255, 250, 235, rng.randint(120, 255)))
     return img
 
 

@@ -1,8 +1,8 @@
-// Fruit Slicer 3DS: application loop, menus and the top-screen stereo scene.
+// The shared game: application flow and menus. Each port's main loop drives it through app.h.
 #include <stdio.h>
-#include <sys/stat.h>
 #include <string.h>
 
+#include "app.h"
 #include "audio.h"
 #include "blade.h"
 #include "common.h"
@@ -13,10 +13,20 @@
 #include "render.h"
 #include "sprites.h"
 
+#if PORT_3DS
+#include <sys/stat.h>
 #include "bgtop0.h"
+#endif
 #include "logo.h"
+#include "port_api.h"
 
 #define VERSION_STRING "0.3.0-alpha"
+
+#if PORT_TWO_SCREENS
+static constexpr float kSlideTop = 400, kSlideBottom = 320;
+#else
+static constexpr float kSlideTop = 900, kSlideBottom = 900;
+#endif
 
 enum Screen {
 	SCREEN_LOADING, SCREEN_TITLE, SCREEN_MODES, SCREEN_OPTIONS, SCREEN_SECTION, SCREEN_CREDITS, SCREEN_HOWTO,
@@ -34,7 +44,7 @@ static bool sNoSound = false;
 static float sTime = 0;
 static float sFps = 60;
 static u64 sLastTick = 0;
-static aptHookCookie sAptCookie;
+static bool sWasTouching = false;
 
 // ---------------------------------------------------------------- transitions
 // Menus slide sideways; anything entering or leaving a game fades through black.
@@ -106,6 +116,9 @@ static const Button kOptionButtons[] = {
 };
 static const Button kOnlyBack[] = {kBack};
 static const Button kResultButtons[] = {kBack, {20, 170, 134, 52, "Again"}, {166, 170, 134, 52, "Modes"}};
+#if PORT_PAUSE_BUTTON
+static const Button kPauseSign = {kFieldW - 34.0f, 0, 34, 34, nullptr};  // in field units, over the score sign
+#endif
 static const Button kPauseButtons[] = {kBack, {50, 44, 220, 56, "Resume"}, {50, 108, 220, 56, "Options"}, {50, 172, 220, 56, "Main Menu"}};
 
 static bool hit(const Button& b, int x, int y) {
@@ -144,7 +157,11 @@ static void drawHeader(const char* title) {
 }
 
 // Menus sit on the board chosen in Visuals, a little dimmed so that the signs stand out on it.
+#if PORT_TWO_SCREENS
 static void drawMenuBack() { gfx::image(SHEET_BOARD, 0, 0, 0, 320, 240, rgba(205, 205, 205)); }
+#else
+static void drawMenuBack() {}  // one screen, one board: it's already behind everything
+#endif
 
 // Press highlights, release on the same sign activates: a swipe that ends on a sign does nothing.
 static int touchButtons(const Button* btns, int n, const Input& in, bool wasTouching, int& focus) {
@@ -215,6 +232,11 @@ static void dpadNav(const Button* btns, int n, u32 keys, int& focus) {
 static int menuInput(const Button* btns, int n, Screen screen, const Input& in, bool wasTouching) {
 	int& focus = sFocus[screen];
 	dpadNav(btns, n, in.repeat, focus);
+#if PORT_MOUSE
+	if (in.hovering)
+		for (int i = 0; i < n; i++)
+			if (hit(btns[i], in.tx, in.ty)) focus = i;
+#endif
 	int tapped = touchButtons(btns, n, in, wasTouching, focus);
 	if (tapped < 0 && (in.down & KEY_A)) tapped = focus;
 	if (tapped >= 0) audio::click();
@@ -239,11 +261,15 @@ struct Row {
 
 static const char* const kBladeNames[kBladeCount] = {"Ember", "Azure", "Rose", "Mint", "Gold", "Rainbow"};
 static const char* const kBoardNames[kBoardCount] = {"Picnic Blanket", "Cutting Board", "Plate", "Marble", "Beach", "Starlight"};
+#if PORT_TWO_SCREENS
 static const char* const kSceneNames[kSceneCount] = {"Dusk Orchard", "Morning Meadow", "Moonlit Bay"};
+#endif
 static const char* const kArtNames[] = {"2D Stickers", "3D Models"};
 static const char* const kEffectNames[] = {"None", "Low", "Medium", "Full"};
 static const char* const kOffOn[] = {"Off", "On"};
+#if PORT_TWO_SCREENS
 static const char* const kBgNames[] = {"Simple", "Full"};
+#endif
 static const char* const kDetailNames[] = {"Low", "High"};
 static const char* const kSliceNames[] = {"Quick", "Exact"};
 static const char* const kDifficultyNames[DIFF_COUNT] = {"Easy", "Normal", "Hard", "Insane"};
@@ -261,22 +287,31 @@ static const Row kAudioRows[] = {
 	{ROW_ACTION, "Reset Audio", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_AUDIO, "Puts these back to their defaults.", ""},
 };
 static const Row kVisualRows[] = {
-	{ROW_CHOICE, "Art Style", &gSave.artStyle, 0, 1, kArtNames, 0, 0, ACT_NONE, "3D models or flat stickers.", "2D is lighter on an Old 3DS."},
+	{ROW_CHOICE, "Art Style", &gSave.artStyle, 0, 1, kArtNames, 0, 0, ACT_NONE, "3D models or flat stickers.", PORT_ART_HINT},
 	{ROW_CHOICE, "Board", &gSave.board, 0, kBoardCount - 1, kBoardNames, 0, 0, ACT_NONE, "What you slice over.", ""},
+#if PORT_TWO_SCREENS
 	{ROW_CHOICE, "Scenery", &gSave.scene, 0, kSceneCount - 1, kSceneNames, 0, 0, ACT_NONE, "The view on the top screen.", ""},
+#endif
 	{ROW_CHOICE, "Blade", &gSave.blade, 0, kBladeCount - 1, kBladeNames, 0, 0, ACT_NONE, "The colour of your slice.", ""},
 	{ROW_CHOICE, "Effects", &gSave.effects, 0, 3, kEffectNames, 0, 0, ACT_NONE, "Juice, sparks and rings.", "Lower saves the most speed."},
+#if PORT_3DS
 	{ROW_SLIDER, "3D Depth", &gSave.depth, 0, 100, nullptr, 0, 100, ACT_NONE, "How far things stand out,", "with the console's 3D slider."},
+#endif
 	{ROW_SLIDER, "Screen Shake", &gSave.shake, 0, 100, nullptr, 0, 100, ACT_NONE, "How hard big hits shake the field.", ""},
+#if PORT_TWO_SCREENS
 	{ROW_CHOICE, "Background", &gSave.bgDetail, 0, 1, kBgNames, 0, 0, ACT_NONE, "Simple draws fewer scenery layers", "and helps an Old 3DS."},
 	{ROW_CHOICE, "Top Screen Fruit", &gSave.topFruit, 0, 1, kOffOn, 0, 0, ACT_NONE, "High throws fly up onto the top", "screen, where 3D depth shows."},
-	{ROW_CHOICE, "3D Detail", &gSave.detail, 0, 1, kDetailNames, 0, 0, ACT_NONE, "Polygons per fruit, 3D style only.", "Low suits an Old 3DS."},
+#endif
+	{ROW_CHOICE, "3D Detail", &gSave.detail, 0, 1, kDetailNames, 0, 0, ACT_NONE, "Polygons per fruit, 3D style only.", PORT_DETAIL_HINT},
 	{ROW_CHOICE, "Slice Style", &gSave.sliceStyle, 0, 1, kSliceNames, 0, 0, ACT_NONE, "Exact cuts along your swipe.", "Quick uses ready-made halves."},
 	{ROW_CHOICE, "Transitions", &gSave.transitions, 0, 1, kOffOn, 0, 0, ACT_NONE, "Slides between menus.", ""},
-	{ROW_ACTION, "Reset Visuals", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_VISUALS, "Back to the best settings for this console.", ""},
+	PORT_EXTRA_VISUAL_ROWS
+	{ROW_ACTION, "Reset Visuals", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_VISUALS, PORT_RESET_HINT, ""},
 };
 static const Row kGameplayRows[] = {
-	{ROW_SLIDER, "Stylus Sensitivity", &gSave.stylus, 0, 100, nullptr, 0, 100, ACT_NONE, "Higher follows small, quick moves.", "Lower smooths out a shaky line."},
+#if PORT_HAS_SENSITIVITY
+	{ROW_SLIDER, PORT_SENSITIVITY_LABEL, &gSave.stylus, 0, 100, nullptr, 0, 100, ACT_NONE, PORT_SENSITIVITY_HINT, "Lower smooths out a shaky line."},
+#endif
 	{ROW_CHOICE, "Difficulty", &gSave.difficulty, 0, DIFF_COUNT - 1, kDifficultyNames, 0, 0, ACT_NONE, "Changes throw speed, how often", "fruit comes, and how many bombs."},
 	{ROW_SLIDER, "Fruit Speed", &gSave.fruitSpeed, 0, 100, nullptr, 70, 130, ACT_NONE, "How fast everything flies.", ""},
 	{ROW_SLIDER, "Bomb Amount", &gSave.bombs, 0, 100, nullptr, 0, 200, ACT_NONE, "More or fewer bombs than usual.", ""},
@@ -286,7 +321,9 @@ static const Row kGameplayRows[] = {
 	{ROW_ACTION, "Reset Gameplay", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_GAMEPLAY, "Puts these back to their defaults.", "Your scores stay."},
 };
 static const Row kDataRows[] = {
+#if PORT_3DS
 	{ROW_ACTION, "Speed Test", nullptr, 0, 0, nullptr, 0, 0, ACT_SPEED_TEST, "A 90 second test of this console.", "Results go in 3ds/FruitSlicer/bench.txt"},
+#endif
 	{ROW_ACTION, "Reset Scores", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_SCORES, "Erases best scores and totals.", "Settings stay."},
 	{ROW_ACTION, "Reset Everything", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_ALL, "Erases scores and all settings.", ""},
 };
@@ -373,9 +410,12 @@ static void adjustRow(const Row& r, int dir) {
 	else audio::click(0.6f);
 }
 
+#if PORT_3DS
 static void startSpeedTest();
+#endif
 
 static void rowAction(int index, const Row& r) {
+#if PORT_3DS
 	if (r.action == ACT_SPEED_TEST) {
 		audio::click();
 		if (sDirty) saveWrite();
@@ -383,6 +423,7 @@ static void rowAction(int index, const Row& r) {
 		fadeThen(startSpeedTest);
 		return;
 	}
+#endif
 	if (sArmed != index) {
 		sArmed = index;
 		audio::click();
@@ -527,6 +568,7 @@ static void updateSection(const Input& in, bool wasTouching) {
 }
 
 // ---------------------------------------------------------------- top-screen art
+#if PORT_TWO_SCREENS
 static void drawTopBackground() {
 	const float d = sTime;
 	// Layers sit behind the screen plane and slowly drift for life.
@@ -543,6 +585,7 @@ static void drawTopBackground() {
 		gfx::image(SHEET_BGTOP, bgtop0_near_idx, -12, 170, 424, 70);
 	}
 }
+#endif
 
 // A slowly turning fruit, drawn with whichever art style is chosen.
 static void drawHero(float x, float y, float scale, float depth) {
@@ -565,6 +608,7 @@ static void topPanel(float x, float y, float w, float h) {
 	gfx::image(SHEET_SPRITES, sprites_plank_idx, x, y, w, h, COL_PLANK);
 }
 
+#if PORT_3DS
 static void drawDebug() {
 	char buf[64];
 	gfx::setDepth(0);
@@ -578,8 +622,10 @@ static void drawDebug() {
 	snprintf(buf, sizeof buf, "TOUCH %.0f,%.0f BLADE %.0f,%.0f", sBlade.rawX, sBlade.rawY, sBlade.x, sBlade.y);
 	gfx::text(buf, 8, 218, 0.36f, rgba(160, 255, 160));
 }
+#endif
 
 // ---------------------------------------------------------------- speed test
+#if PORT_3DS
 struct BenchProfile {
 	const char* name;
 	u8 art, effects, detail, bg, slice;
@@ -735,6 +781,8 @@ static void benchUpdate(const Input& hw) {
 	}
 }
 
+#endif  // PORT_3DS
+
 // ---------------------------------------------------------------- screens: top
 static void drawTopContent(Screen screen) {
 	char buf[48];
@@ -747,7 +795,7 @@ static void drawTopContent(Screen screen) {
 			drawHero(200, 172, 1.25f, 0.8f);
 			if (sNoSound) {
 				gfx::setDepth(0.6f);
-				gfx::text("No sound: needs 3ds/dspfirm.cdc", 200, 222, 0.34f, rgba(255, 190, 150), ALIGN_CENTER);
+				gfx::text(PORT_NO_SOUND_TEXT, 200, 222, 0.34f, rgba(255, 190, 150), ALIGN_CENTER);
 			}
 			break;
 		case SCREEN_MODES: {
@@ -772,8 +820,8 @@ static void drawTopContent(Screen screen) {
 			static const char* const kLines[][2] = {
 				{"", "Back to the title"},
 				{"Sound, music and menu volume.", ""},
-				{"Art style, board, scenery, blade,", "effects and speed savers."},
-				{"Stylus, difficulty, and how the", "game plays."},
+				{PORT_VISUALS_HINT, "effects and speed savers."},
+				{PORT_GAMEPLAY_HINT, "game plays."},
 				{"Speed test, and resetting scores.", ""},
 			};
 			int f = sFocus[SCREEN_OPTIONS];
@@ -814,7 +862,9 @@ static void drawTopContent(Screen screen) {
 			} else if (r) {
 				gfx::text(r->line1, 200, 138, 0.38f, COL_CREAM, ALIGN_CENTER);
 				gfx::text(r->line2, 200, 156, 0.38f, COL_CREAM, ALIGN_CENTER);
+				#if PORT_3DS
 				if (r->value == &gSave.stylus) gfx::text("Also calibrate in System Settings.", 200, 174, 0.34f, COL_DIM, ALIGN_CENTER);
+#endif
 				rowValueText(*r, buf, sizeof buf);
 				gfx::text(buf, 200, 194, 0.5f, COL_CREAM, ALIGN_CENTER);
 			} else {
@@ -838,13 +888,17 @@ static void drawTopContent(Screen screen) {
 			gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 50, 0.62f, 0.62f);
 			drawHero(200, 164, 1.2f, 0.8f);
 			break;
+#if PORT_TWO_SCREENS
 		case SCREEN_GAME:
 			sGame.drawFieldTop();
 			sGame.drawHud();
 			break;
+#endif
 		case SCREEN_PAUSE:
+#if PORT_TWO_SCREENS
 			sGame.drawFieldTop();
 			sGame.drawHud();
+#endif
 			gfx::setDepth(1.8f);
 			gfx::text("PAUSED", 200, 130, 1.1f, COL_CREAM, ALIGN_CENTER);
 			break;
@@ -870,6 +924,7 @@ static void drawTopContent(Screen screen) {
 			gfx::text(buf, 200, 176, 0.44f, COL_CREAM, ALIGN_CENTER);
 			break;
 		}
+#if PORT_3DS
 		case SCREEN_BENCH:
 			if (!sBenchDone) {
 				sGame.drawFieldTop();
@@ -889,6 +944,7 @@ static void drawTopContent(Screen screen) {
 				gfx::text(sBenchSaved ? "Saved to 3ds/FruitSlicer/bench.txt" : "Could not save the results", 200, 190, 0.36f, COL_DIM, ALIGN_CENTER);
 			}
 			break;
+#endif
 		default:
 			break;
 	}
@@ -1000,7 +1056,7 @@ static void drawBottomContent(Screen screen) {
 				"If it runs dry, your combo resets.",
 				"Fill it for Frenzy: double points!",
 				"One long swipe scores a big bonus.",
-				"START pauses. B goes back.",
+				PORT_HOWTO_PAUSE,
 			};
 			drawMenuBack();
 			drawHeader("How to Play");
@@ -1013,24 +1069,31 @@ static void drawBottomContent(Screen screen) {
 			}
 			break;
 		}
+#if PORT_TWO_SCREENS
 		case SCREEN_GAME:
 			sGame.drawField(sBlade);
 			break;
+#endif
 		case SCREEN_PAUSE: {
+#if PORT_TWO_SCREENS
 			sGame.drawField(sBlade);
 			gfx::rect(0, 0, 320, 240, rgba(30, 18, 10, 150));
+#endif
 			int f = sFocus[SCREEN_PAUSE];
 			drawBackArrow(f == 0, sPressed == 0);
 			for (int i = 1; i < 4; i++) drawSign(kPauseButtons[i], kPauseButtons[i].label, f == i, sPressed == i);
 			break;
 		}
 		case SCREEN_RESULT: {
+#if PORT_TWO_SCREENS
 			sGame.drawField(sBlade);
+#endif
 			int f = sFocus[SCREEN_RESULT];
 			drawBackArrow(f == 0, sPressed == 0);
 			for (int i = 1; i < 3; i++) drawSign(kResultButtons[i], kResultButtons[i].label, f == i, sPressed == i);
 			break;
 		}
+#if PORT_3DS
 		case SCREEN_BENCH:
 			if (!sBenchDone) {
 				sGame.drawField(sBlade);
@@ -1044,6 +1107,7 @@ static void drawBottomContent(Screen screen) {
 				gfx::text("A or B: back", 160, 190, 0.42f, COL_ACCENT, ALIGN_CENTER);
 			}
 			break;
+#endif
 		default:
 			break;
 	}
@@ -1083,10 +1147,6 @@ static void pauseGame() {
 	sFocus[SCREEN_PAUSE] = 1;
 	sPressed = -1;
 	sBlade.reset();
-}
-
-static void aptHook(APT_HookType hook, void*) {
-	if (hook == APTHOOK_ONSUSPEND || hook == APTHOOK_ONSLEEP) sSuspended = true;
 }
 
 #ifdef AUTOTEST
@@ -1195,6 +1255,13 @@ static void updateFrame(const Input& in, bool wasTouching) {
 			break;
 		}
 		case SCREEN_GAME:
+#if PORT_PAUSE_BUTTON
+			if (in.touching && !wasTouching && hit(kPauseSign, in.tx, in.ty)) {
+				audio::click();
+				pauseGame();
+				break;
+			}
+#endif
 			sBlade.update(in);
 			sGame.update(sBlade);
 			sGame.kickParticles();
@@ -1248,14 +1315,17 @@ static void updateFrame(const Input& in, bool wasTouching) {
 			}
 			break;
 		}
+#if PORT_3DS
 		case SCREEN_BENCH:
 			benchUpdate(in);
 			break;
+#endif
 		default:
 			break;
 	}
 }
 
+#if PORT_TWO_SCREENS
 static void drawFrame() {
 	float e = sSlideT * sSlideT * (3 - 2 * sSlideT);  // eases in and out
 	gfx::beginFrame();
@@ -1264,9 +1334,9 @@ static void drawFrame() {
 		gfx::setBase(0, 0);
 		drawTopBackground();
 		if (sSliding) {
-			gfx::setBase(-sSlideDir * 400 * e, 0);
+			gfx::setBase(-sSlideDir * kSlideTop * e, 0);
 			drawTopContent(sSlideFrom);
-			gfx::setBase(sSlideDir * 400 * (1 - e), 0);
+			gfx::setBase(sSlideDir * kSlideTop * (1 - e), 0);
 			drawTopContent(sScreen);
 			gfx::setBase(0, 0);
 		} else {
@@ -1280,9 +1350,9 @@ static void drawFrame() {
 	}
 	gfx::beginBottom();
 	if (sSliding) {
-		gfx::setBase(-sSlideDir * 320 * e, 0);
+		gfx::setBase(-sSlideDir * kSlideBottom * e, 0);
 		drawBottomContent(sSlideFrom);
-		gfx::setBase(sSlideDir * 320 * (1 - e), 0);
+		gfx::setBase(sSlideDir * kSlideBottom * (1 - e), 0);
 		drawBottomContent(sScreen);
 		gfx::setBase(0, 0);
 	} else {
@@ -1291,17 +1361,63 @@ static void drawFrame() {
 	if (sFade > 0) gfx::rect(0, 0, 320, 240, rgba(0, 0, 0, (u8)(clampf(sFade, 0, 1) * 255)));
 	gfx::endFrame();
 }
+#else
+static bool showsField(Screen s) { return s == SCREEN_GAME || s == SCREEN_PAUSE || s == SCREEN_RESULT; }
+
+// One screen: the board, then the field and its score sign if a game is on, then the menu layout on top.
+static void drawFrame() {
+	float e = sSlideT * sSlideT * (3 - 2 * sSlideT);
+	bool field = showsField(sScreen) || (sSliding && showsField(sSlideFrom));
+	gfx::beginFrame();
+	gfx::drawBackdrop(field ? WHITE : rgba(205, 205, 205));
+	if (field) {
+		gfx::beginField();
+		sGame.drawField(sBlade);
+		sGame.drawHud();
+#if PORT_PAUSE_BUTTON
+		if (sScreen == SCREEN_GAME) {
+			gfx::image(SHEET_SPRITES, sprites_plank_idx, kPauseSign.x + 3, kPauseSign.y + 2, 28, 28, COL_PLANK);
+			gfx::rect(kPauseSign.x + 12, kPauseSign.y + 9, 3, 14, COL_CREAM);
+			gfx::rect(kPauseSign.x + 19, kPauseSign.y + 9, 3, 14, COL_CREAM);
+		}
+#endif
+		if (sScreen == SCREEN_PAUSE) gfx::rect(kFillX, 0, kFillW, 240, rgba(30, 18, 10, 150));
+	}
+	for (int pass = 0; pass < 2; pass++) {
+		if (pass == 0) gfx::beginTop(0);
+		else gfx::beginBottom();
+		auto content = pass == 0 ? drawTopContent : drawBottomContent;
+		float slide = pass == 0 ? kSlideTop : kSlideBottom;
+		if (sSliding) {
+			gfx::setBase(-sSlideDir * slide * e, 0);
+			content(sSlideFrom);
+			gfx::setBase(sSlideDir * slide * (1 - e), 0);
+			content(sScreen);
+			gfx::setBase(0, 0);
+		} else {
+			content(sScreen);
+		}
+	}
+	if (sFade > 0) gfx::fadeAll(clampf(sFade, 0, 1));
+	gfx::endFrame();
+}
+#endif
 
 // ---------------------------------------------------------------- loading screen
 static void drawLoading(float progress) {
 	gfx::beginFrame();
+#if !PORT_TWO_SCREENS
+	gfx::drawBackdrop(rgba(205, 205, 205));
+#endif
 	for (int eye = 0; eye < 2; eye++) {
 		if (!gfx::beginTop(eye)) continue;
+#if PORT_TWO_SCREENS
 		drawTopBackground();
+#endif
 		gfx::setDepth(1.0f);
 		gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 90);
 		gfx::setDepth(0.3f);
-		gfx::text(gIsNew3ds ? "Setting up for New 3DS" : "Setting up for Old 3DS", 200, 190, 0.38f, COL_CREAM, ALIGN_CENTER);
+		gfx::text(PORT_LOADING_TEXT, 200, 190, 0.38f, COL_CREAM, ALIGN_CENTER);
 	}
 	gfx::beginBottom();
 	drawMenuBack();
@@ -1312,14 +1428,14 @@ static void drawLoading(float progress) {
 	gfx::endFrame();
 }
 
-static void runLoading() {
+void app::showLoading() {
 	const int gfxSteps = gfx::loadStepCount();
 	const int audioSteps = audio::available() ? audio::loadStepCount() : 0;
 	const int total = gfxSteps + 1 + audioSteps;
 	int step = 0, frames = 0;
 	// Work happens one step per frame. It always lasts at least a second, so that the title's arrival reads
 	// as a moment and not a flicker.
-	while (aptMainLoop() && (step < total || frames < 60)) {
+	while (port::running() && (step < total || frames < 60)) {
 		if (step < gfxSteps) gfx::loadStep(step);
 		else if (step == gfxSteps) m3d::sync();
 		else if (step < total) audio::loadStep(step - gfxSteps - 1);
@@ -1330,19 +1446,13 @@ static void runLoading() {
 	}
 	audio::music(MUSIC_MENU);
 	sFade = 1;  // the title fades up out of black
+	sScreen = SCREEN_TITLE;
+#if PORT_3DS
+	sLastTick = osGetTime();
+#endif
 }
 
-int main() {
-	romfsInit();
-#ifdef AUTOTEST
-	consoleDebugInit(debugDevice_SVC);  // stderr goes to svcOutputDebugString, visible in Azahar's log
-#endif
-	osSetSpeedupEnable(true);           // New 3DS: 804 MHz + L2 cache; no effect on Old 3DS
-	APT_CheckNew3DS(&gIsNew3ds);
-	cfguInit();
-	u8 model = CFG_MODEL_3DS;
-	if (R_SUCCEEDED(CFGU_GetSystemModel(&model))) gHas3dScreen = model != CFG_MODEL_2DS && model != CFG_MODEL_N2DSXL;
-
+bool app::init() {
 	saveLoad();
 #ifdef TEST_ART
 	gSave.artStyle = TEST_ART;
@@ -1356,73 +1466,54 @@ int main() {
 #ifdef TEST_BOARD
 	gSave.board = TEST_BOARD;
 #endif
-	bool assetsOk = gfx::init();
-	if (!assetsOk) {
-		// Without romfs there is nothing to draw; bail out instead of crashing.
+	if (!gfx::init()) {
 		gfx::shutdown();
-		cfguExit();
-		romfsExit();
-		return 1;
+		return false;
 	}
-	hidSetRepeatParameters(20, 5);
 	m3d::init();
 	jobs::init();
 	bool audioOk = audio::init();
 	sNoSound = !audioOk;
-	aptHookCookie* cookie = &sAptCookie;
-	aptHook(cookie, aptHook, nullptr);
-	gRng.s = (u32)osGetTime() | 1;
 	DLOG("[boot] Fruit Slicer %s audio=%d new3ds=%d 3dscreen=%d\n", VERSION_STRING, audioOk, gIsNew3ds, gHas3dScreen);
+	return true;
+}
 
-	runLoading();
-	sScreen = SCREEN_TITLE;
-	sLastTick = osGetTime();
+void app::notifySuspended() { sSuspended = true; }
 
-	bool wasTouching = false;
-	while (aptMainLoop()) {
-		hidScanInput();
-		Input in{};
-		in.down = hidKeysDown();
-		in.held = hidKeysHeld();
-		in.repeat = hidKeysDownRepeat();
-		if (in.held & KEY_TOUCH) {
-			touchPosition tp;
-			hidTouchRead(&tp);
-			in.touching = true;
-			in.tx = tp.px;
-			in.ty = tp.py;
-		}
+bool app::inFieldView() { return sScreen == SCREEN_GAME; }
+
+bool app::frame(Input& in) {
 #ifdef AUTOTEST
-		autotestInput(in);
-		if (autotestDone()) break;
-#else
-		// START+SELECT from the title quits, for builds launched from the Homebrew Launcher.
-		if (sScreen == SCREEN_TITLE && (in.held & KEY_START) && (in.held & KEY_SELECT)) break;
+	autotestInput(in);
+	if (autotestDone()) return false;
+#elif PORT_3DS
+	// START+SELECT from the title quits, for builds launched from the Homebrew Launcher.
+	if (sScreen == SCREEN_TITLE && (in.held & KEY_START) && (in.held & KEY_SELECT)) return false;
 #endif
 
-		updateFrame(in, wasTouching);
-		wasTouching = in.touching;
+	updateFrame(in, sWasTouching);
+	sWasTouching = in.touching;
 
-		// New scenery, boards and models load here, between frames.
-		gfx::sync();
-		m3d::sync();
-		audio::update();
+	// New scenery, boards and models load here, between frames.
+	gfx::sync();
+	m3d::sync();
+	audio::update();
 
-		drawFrame();
-		if (sScreen == SCREEN_BENCH && !sBenchDone) benchMeasure();
+	drawFrame();
+#if PORT_3DS
+	if (sScreen == SCREEN_BENCH && !sBenchDone) benchMeasure();
 
-		u64 now = osGetTime();
-		if (now > sLastTick) sFps = lerpf(sFps, 1000.0f / (float)(now - sLastTick), 0.1f);
-		sLastTick = now;
-	}
+	u64 now = osGetTime();
+	if (now > sLastTick) sFps = lerpf(sFps, 1000.0f / (float)(now - sLastTick), 0.1f);
+	sLastTick = now;
+#endif
+	return true;
+}
 
+void app::shutdown() {
 	if (sDirty) saveWrite();
-	aptUnhook(cookie);
 	jobs::shutdown();
 	m3d::shutdown();
 	audio::shutdown();
 	gfx::shutdown();
-	cfguExit();
-	romfsExit();
-	return 0;
 }

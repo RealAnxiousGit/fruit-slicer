@@ -1,0 +1,33 @@
+// Everything the shared game needs to know about this port: Nintendo 3DS, two screens, stylus.
+#pragma once
+#include <3ds.h>
+#include <citro2d.h>
+#include <citro3d.h>
+
+#define PORT_3DS 1
+#define PORT_TWO_SCREENS 1
+#define PORT_HAS_SENSITIVITY 1
+#define PORT_PAUSE_BUTTON 0
+#define PORT_MOUSE 0
+#define PORT_SENSITIVITY_LABEL "Stylus Sensitivity"
+#define PORT_SENSITIVITY_HINT "Higher follows small, quick moves."
+#define PORT_ART_HINT "2D is lighter on an Old 3DS."
+#define PORT_DETAIL_HINT "Low suits an Old 3DS."
+#define PORT_RESET_HINT "Back to the best settings for this console."
+#define PORT_HOWTO_PAUSE "START pauses. B goes back."
+#define PORT_VISUALS_HINT "Art style, board, scenery, blade,"
+#define PORT_GAMEPLAY_HINT "Stylus, difficulty, and how the"
+#define PORT_LOADING_TEXT (gIsNew3ds ? "Setting up for New 3DS" : "Setting up for Old 3DS")
+#define PORT_NO_SOUND_TEXT "No sound: needs 3ds/dspfirm.cdc"
+#define PORT_DEFAULT_SENSITIVITY 40
+#define PORT_SETTINGS_FIELDS
+#define PORT_EXTRA_VISUAL_ROWS
+
+// The field fruit flies over, in game units.
+constexpr int kFieldW = 320;
+constexpr int kFieldH = 240;
+constexpr float kFieldTop = 0;     // nothing covers the field here: the score has its own screen
+constexpr float kFillX = 0;        // full-field washes cover this much
+constexpr float kFillW = 320;
+constexpr float kJumpReject = 150.0f;  // resistive panels spike when pressure changes
+constexpr float kCutReach = 1.0f;      // scales how close a swipe must pass

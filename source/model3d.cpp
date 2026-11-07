@@ -1,26 +1,13 @@
-#include "model3d.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "jobs.h"
+#include "model3d_internal.h"
+#include "port_api.h"
 #include "render.h"
 
 namespace m3d {
-
-struct Vertex {
-	float x, y, z;
-	s8 nx, ny, nz, pad;
-	u8 r, g, b, a;
-};
-
-struct PartData {
-	const Vertex* v;
-	const u16* idx;
-	u32 nv, ni, body;
-	u32 flesh, rim;
-};
 
 static PartData sParts[MESH_COUNT][3];
 static void* sBlob;
@@ -33,29 +20,21 @@ static constexpr int kCutSlots = 16;
 static constexpr int kCutMaxVerts = 2450;
 static Vertex* sCutVerts;
 static volatile u32 sCutCount[kCutSlots];
+static u32 sCutSurface[kCutSlots];
+static int sCutMesh[kCutSlots];
 static bool sCutUsed[kCutSlots];
 
-static DVLB_s* sDvlb;
-static void* sShaderData;
-static shaderProgram_s sProgram;
-static C3D_AttrInfo sAttr;
-static int sLocProj, sLocMv, sLocLight, sLocHalf, sLocShade;
 static bool sShaderOk;
 
-static bool loadFile(const char* path, void** out, u32* size, bool linear) {
-	FILE* f = fopen(path, "rb");
+static bool loadFile(const char* path, void** out, u32* size) {
+	port::AssetFile* f = port::assetOpen(path);
 	if (!f) return false;
-	fseek(f, 0, SEEK_END);
-	long n = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	void* p = linear ? linearAlloc(n) : malloc(n);
-	bool ok = p && fread(p, 1, n, f) == (size_t)n;
-	fclose(f);
+	long n = port::assetSize(f);
+	void* p = m3dport::alloc(n);
+	bool ok = p && port::assetRead(p, n, f) == (size_t)n;
+	port::assetClose(f);
 	if (!ok) {
-		if (p) {
-			if (linear) linearFree(p);
-			else free(p);
-		}
+		if (p) m3dport::release(p);
 		return false;
 	}
 	*out = p;
@@ -66,10 +45,10 @@ static bool loadFile(const char* path, void** out, u32* size, bool linear) {
 static bool loadMeshes(int lod) {
 	u32 size = 0;
 	void* blob = nullptr;
-	if (!loadFile(lod ? "romfs:/models/fruit_hi.bin" : "romfs:/models/fruit_lo.bin", &blob, &size, true)) return false;
+	if (!loadFile(lod ? "models/fruit_hi.bin" : "models/fruit_lo.bin", &blob, &size)) return false;
 	const u8* base = (const u8*)blob;
 	if (memcmp(base, "FSM1", 4) != 0 || *(const u32*)(base + 4) != MESH_COUNT) {
-		linearFree(blob);
+		m3dport::release(blob);
 		return false;
 	}
 	const u32* head = (const u32*)(base + 8);
@@ -97,40 +76,22 @@ static bool loadMeshes(int lod) {
 }
 
 bool init() {
-	u32 size = 0;
-	if (!loadFile("romfs:/gfx/fruit.shbin", &sShaderData, &size, false)) return false;
-	sDvlb = DVLB_ParseFile((u32*)sShaderData, size);
-	shaderProgramInit(&sProgram);
-	shaderProgramSetVsh(&sProgram, &sDvlb->DVLE[0]);
-	sLocProj = shaderInstanceGetUniformLocation(sProgram.vertexShader, "projection");
-	sLocMv = shaderInstanceGetUniformLocation(sProgram.vertexShader, "modelView");
-	sLocLight = shaderInstanceGetUniformLocation(sProgram.vertexShader, "light");
-	sLocHalf = shaderInstanceGetUniformLocation(sProgram.vertexShader, "halfVec");
-	sLocShade = shaderInstanceGetUniformLocation(sProgram.vertexShader, "shade");
-	AttrInfo_Init(&sAttr);
-	AttrInfo_AddLoader(&sAttr, 0, GPU_FLOAT, 3);
-	AttrInfo_AddLoader(&sAttr, 1, GPU_BYTE, 4);
-	AttrInfo_AddLoader(&sAttr, 2, GPU_UNSIGNED_BYTE, 4);
-	sShaderOk = true;
-	return true;
+	sShaderOk = m3dport::init();
+	return sShaderOk;
 }
 
 void shutdown() {
 	jobs::wait();
-	if (sCutVerts) linearFree(sCutVerts);
-	if (sRetiredBlob) linearFree(sRetiredBlob);
-	if (sBlob) linearFree(sBlob);
-	if (sDvlb) {
-		shaderProgramFree(&sProgram);
-		DVLB_Free(sDvlb);
-	}
-	if (sShaderData) free(sShaderData);
+	if (sCutVerts) m3dport::release(sCutVerts);
+	if (sRetiredBlob) m3dport::release(sRetiredBlob);
+	if (sBlob) m3dport::release(sBlob);
+	m3dport::shutdown();
 	sShaderOk = false;
 }
 
 void sync() {
 	if (sRetiredBlob && --sRetiredFrames <= 0) {
-		linearFree(sRetiredBlob);
+		m3dport::release(sRetiredBlob);
 		sRetiredBlob = nullptr;
 	}
 	if (!sShaderOk || sRetiredBlob) return;
@@ -156,68 +117,20 @@ void sync() {
 bool ready() { return sShaderOk && sBlob != nullptr; }
 bool usable() { return sShaderOk; }
 
-void begin(float screenW, float stereo) {
-	C2D_Flush();
-	C3D_BindProgram(&sProgram);
-	C3D_SetAttrInfo(&sAttr);
-	C3D_TexEnv* env = C3D_GetTexEnv(0);
-	C3D_TexEnvInit(env);
-	C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR);
-	C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
-	C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
-	C3D_CullFace(GPU_CULL_NONE);
-
-	C3D_Mtx ortho, shear, proj;
-	Mtx_OrthoTilt(&ortho, 0, screenW, 240, 0, 300, -300, true);
-	Mtx_Identity(&shear);
-	shear.r[0].z = stereo;  // each vertex shifts by its own z, so depth is true volume for this eye
-	Mtx_Multiply(&proj, &ortho, &shear);
-	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, sLocProj, &proj);
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, sLocShade, 0.62f, 0.5f, 0.32f, 0);
-}
-
-void end() {
-	C2D_Prepare();
-	C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
-}
-
-static void setPose(const Pose& p) {
-	C3D_Mtx mv;
-	float ox, oy;
-	gfx::getOffset(&ox, &oy);
-	Mtx_Identity(&mv);
-	Mtx_Translate(&mv, p.x + ox, p.y + oy, p.z, true);
-	if (p.tilt != 0) {
-		C3D_FVec axis = FVec3_New(p.axisX, p.axisY, 0);
-		Mtx_Rotate(&mv, axis, p.tilt, true);
-	}
-	Mtx_RotateZ(&mv, p.rz, true);
-	Mtx_RotateX(&mv, p.rx, true);
-	Mtx_RotateY(&mv, p.ry, true);
-	Mtx_Scale(&mv, p.scale, p.scale, p.scale);
-	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, sLocMv, &mv);
-	// Normals pick up the model's scale; shrinking the light by the same amount cancels it out.
-	float k = 1.0f / (p.scale > 0.01f ? p.scale : 0.01f);
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, sLocLight, -0.46f * k, -0.62f * k, 0.64f * k, 0);
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, sLocHalf, -0.25f * k, -0.34f * k, 0.9f * k, 0);
-}
+void begin(float screenW, float stereo) { m3dport::begin(screenW, stereo); }
+void end() { m3dport::end(); }
 
 void draw(int mesh, Part part, const Pose& pose) {
 	if (!sBlob) return;
 	const PartData& d = sParts[mesh][part];
 	if (d.ni == 0) return;
-	setPose(pose);
-	C3D_BufInfo* buf = C3D_GetBufInfo();
-	BufInfo_Init(buf);
-	BufInfo_Add(buf, d.v, sizeof(Vertex), 3, 0x210);
-	C3D_DrawElements(GPU_TRIANGLES, d.ni, C3D_UNSIGNED_SHORT, d.idx);
-	gfx::drawCallsLive++;
+	m3dport::drawIndexed(mesh, d, pose);
 }
 
 // ---------------------------------------------------------------- exact cuts
 int cutAcquire() {
 	if (!sCutVerts) {
-		sCutVerts = (Vertex*)linearAlloc(sizeof(Vertex) * kCutMaxVerts * kCutSlots);
+		sCutVerts = (Vertex*)m3dport::alloc(sizeof(Vertex) * kCutMaxVerts * kCutSlots);
 		if (!sCutVerts) return -1;
 	}
 	for (int i = 0; i < kCutSlots; i++) {
@@ -289,6 +202,9 @@ static void cutBuild(int handle, int mesh, float nx, float ny, float nz, float o
 			out[n++] = poly[k + 1];
 		}
 	}
+
+	sCutSurface[handle] = n;
+	sCutMesh[handle] = mesh;
 
 	// Close the fruit with a coloured face: rind ring, flesh and a lighter centre.
 	if (edges >= 3) {
@@ -385,12 +301,7 @@ void cutRequest(int handle, int mesh, float nx, float ny, float nz, float offset
 
 void drawCut(int handle, const Pose& pose) {
 	if (handle < 0 || sCutCount[handle] == 0) return;
-	setPose(pose);
-	C3D_BufInfo* buf = C3D_GetBufInfo();
-	BufInfo_Init(buf);
-	BufInfo_Add(buf, sCutVerts + handle * kCutMaxVerts, sizeof(Vertex), 3, 0x210);
-	C3D_DrawArrays(GPU_TRIANGLES, 0, sCutCount[handle]);
-	gfx::drawCallsLive++;
+	m3dport::drawCut(sCutMesh[handle], sCutVerts + handle * kCutMaxVerts, sCutCount[handle], sCutSurface[handle], pose);
 }
 
 }  // namespace m3d

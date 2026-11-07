@@ -1,0 +1,25 @@
+// What a port's sound hardware must do. All track and volume decisions stay in audio.cpp.
+#pragma once
+#include "common.h"
+
+struct Clip {
+	s16* pcm;
+	u32 samples;
+	u32 rate;
+};
+
+namespace audioport {
+bool init();  // false means no sound at all; the game still plays
+void shutdown();
+s16* alloc(u32 bytes);
+void release(s16* p);
+void ready(const s16* p, u32 bytes);  // this memory has finished being written
+void settle();                        // gives the hardware time to let go of replaced music
+void playSfx(const Clip& c, float left, float right, float rate);
+void musicStart(const Clip& c);
+void musicStop();
+void musicVolume(float v);
+void fuseStart(const Clip& c);
+void fuseMix(float left, float right);
+void fuseStop();
+}  // namespace audioport

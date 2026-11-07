@@ -157,8 +157,10 @@ static void autotestInput(Input& in) {
 			        (unsigned long)sGame.score, sGame.sliced, sGame.bestCombo, (unsigned long)sGame.best, sGame.newBest, sGame.strikes,
 			        (unsigned long)sGame.statWaves, (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames, sGame.finaleHits, (unsigned long)sGame.statFrenzies);
 			{
-				// Azahar buffers its log, so measurement runs read the result from the SD card.
-				FILE* f = fopen("sdmc:/3ds/FruitSlicer/bot.txt", "a");
+				// Emulators buffer their logs, so measurement runs read the result from a file.
+				char botPath[256];
+				port::dataPath(botPath, sizeof botPath, "bot.txt");
+				FILE* f = fopen(botPath, "a");
 				if (f) {
 					fprintf(f, "%s score=%lu sliced=%d combo=%d waves=%lu bombFrames=%lu overlapFrames=%lu frenzies=%lu resets=%lu finale=%d\n", kModes[sGame.mode].name, (unsigned long)sGame.score, sGame.sliced, sGame.bestCombo, (unsigned long)sGame.statWaves,
 					        (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames, (unsigned long)sGame.statFrenzies, (unsigned long)sGame.statResets, sGame.finaleHits);

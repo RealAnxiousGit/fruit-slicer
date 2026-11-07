@@ -162,7 +162,7 @@ void Game::launch(const Pending& p) {
 		o.ryv = gRng.range(-2.4f, 2.4f);
 		o.radius = p.kind == OBJ_BOMB ? 19 : 23;
 		o.hits = (p.kind == OBJ_FRUIT && p.fruit == kCoconut) ? 2 : 1;
-		audio::play(SFX_THROW, 0.3f, (p.x - 160) / 200.0f, gRng.range(0.9f, 1.15f));
+		audio::play(SFX_THROW, 0.3f, fieldPan(p.x), gRng.range(0.9f, 1.15f));
 #ifdef AUTOTEST
 		statThrows++;
 		if (feverT > 0) statFeverThrows++;
@@ -214,12 +214,12 @@ void Game::pickThrow(bool bomb, float delay, float& x, float& vx, float& vy) {
 	for (int i = 0; i < kTries; i++) {
 		// About half the throws leave the top of the board and carry on up the top screen in full view,
 		// peaking below the score sign, before falling back down onto the board.
-		float apexY = gRng.range(20, 90);
-		if (gSave.topFruit && gRng.unit() < 0.5f) apexY = gRng.range(-170, -60);
+		float apexY = gRng.range(kFieldTop + 20, kFieldTop + 90);
+		if (PORT_TWO_SCREENS && gSave.topFruit && gRng.unit() < 0.5f) apexY = gRng.range(-170, -60);
 		float cvy = -sqrtf(2.0f * gravity * (kSpawnY - apexY));
-		float cx = gRng.range(36, 284);
+		float cx = gRng.range(36, kFieldW - 36);
 		float air = -2.0f * cvy / gravity;
-		float cvx = clampf((gRng.range(50, 270) - cx) / air, -75, 75);
+		float cvx = clampf((gRng.range(50, kFieldW - 50) - cx) / air, -75, 75);
 		float c = kTries > 1 ? clearance(cx, cvx, cvy, delay, bomb) : 0;
 		if (c > bestClear) {
 			bestClear = c;
@@ -247,7 +247,7 @@ bool Game::spawnPattern(float d) {
 	switch (gRng.below(4)) {
 		case 0: {  // Row: rises level, so one straight swipe can take them all.
 			int n = 4 + (int)(d * 3) + gRng.below(2);
-			float gap = n > 1 ? 260.0f / (n - 1) : 0;
+			float gap = n > 1 ? (kFieldW - 60.0f) / (n - 1) : 0;
 			float wobble = gRng.range(-14, 14);
 			for (int i = 0; i < n; i++) queue(0, 30 + gap * i, wobble, vy, OBJ_FRUIT, gRng.below(kCoconut));
 			break;
@@ -256,7 +256,7 @@ bool Game::spawnPattern(float d) {
 			int n = 5 + (int)(d * 3);
 			for (int i = 0; i < n; i++) {
 				float t = n > 1 ? (float)i / (n - 1) : 0.5f;
-				queue(0.07f * i, 160 + (t - 0.5f) * 40, lerpf(-85, 85, t), vy * gRng.range(0.92f, 1.0f), OBJ_FRUIT, gRng.below(kCoconut));
+				queue(0.07f * i, kFieldW * 0.5f + (t - 0.5f) * 40, lerpf(-85, 85, t), vy * gRng.range(0.92f, 1.0f), OBJ_FRUIT, gRng.below(kCoconut));
 			}
 			break;
 		}
@@ -264,13 +264,13 @@ bool Game::spawnPattern(float d) {
 			int n = 6 + (int)(d * 2);
 			for (int i = 0; i < n; i++) {
 				bool left = i % 2 == 0;
-				queue(0.13f * i, left ? -14.0f : 334.0f, (left ? 1 : -1) * gRng.range(95, 130), vy * gRng.range(0.86f, 0.98f), OBJ_FRUIT, gRng.below(kCoconut));
+				queue(0.13f * i, left ? -14.0f : kFieldW + 14.0f, (left ? 1 : -1) * gRng.range(95, 130), vy * gRng.range(0.86f, 0.98f), OBJ_FRUIT, gRng.below(kCoconut));
 			}
 			break;
 		}
 		default: {  // Staircase: rising row, easy to catch with a diagonal stroke.
 			int n = 5 + (int)(d * 2);
-			for (int i = 0; i < n; i++) queue(0.1f * i, 34 + 252.0f * i / (n - 1), 0, vy, OBJ_FRUIT, gRng.below(kCoconut));
+			for (int i = 0; i < n; i++) queue(0.1f * i, 34 + (kFieldW - 68.0f) * i / (n - 1), 0, vy, OBJ_FRUIT, gRng.below(kCoconut));
 			break;
 		}
 	}
@@ -385,8 +385,8 @@ void Game::addPopup(const char* s, float x, float y, u32 color, float scale) {
 	Popup& p = popups[popupCursor];
 	popupCursor = (popupCursor + 1) % kMaxPopups;
 	snprintf(p.text, sizeof p.text, "%s", s);
-	p.x = clampf(x, 26, 294);
-	p.y = clampf(y, 24, 220);
+	p.x = clampf(x, 26, kFieldW - 26);
+	p.y = clampf(y, kFieldTop + 24, 220);
 	p.life = 0.9f;
 	p.color = color;
 	p.scale = scale;
@@ -430,7 +430,7 @@ void Game::addFever(float amount) {
 #endif
 		setCallout("FRUIT FRENZY! X2", hueColor(0.1f), 0.86f);
 		audio::play(SFX_FEVER, 1.0f);
-		addRing(160, 120, rgba(255, 220, 90), 5, 0.7f);
+		addRing(kFieldW * 0.5f, 120, rgba(255, 220, 90), 5, 0.7f);
 		if (gSave.effects != FX_NONE) {
 			flash = 0.45f;
 			flashColor = rgba(255, 210, 90);
@@ -493,7 +493,7 @@ void Game::addStrike(float x) {
 	if (maxStrikes == 0 || feverT > 0) return;
 	strikes++;
 	strikePulse = 1;
-	audio::play(SFX_STRIKE, 0.9f, (x - 160) / 200.0f);
+	audio::play(SFX_STRIKE, 0.9f, fieldPan(x));
 	addPopup("MISS", x, 214, rgba(255, 90, 90), 0.62f);
 	if (strikes >= maxStrikes) endGame();
 }
@@ -571,7 +571,7 @@ void Game::addHalves(const Obj& o, const FruitDef& def, const Blade& blade, floa
 
 void Game::sliceFruit(Obj& o, const Blade& blade) {
 	const FruitDef& def = o.kind == OBJ_GOLD ? kGold : kFruit[o.fruit];
-	float pan = (o.x - 160) / 200.0f;
+	float pan = fieldPan(o.x);
 	float dx = blade.x - blade.px, dy = blade.y - blade.py;
 	float len = sqrtf(dx * dx + dy * dy);
 	if (len < 0.01f) { dx = 1; dy = 0; len = 1; }
@@ -630,7 +630,7 @@ void Game::sliceFruit(Obj& o, const Blade& blade) {
 		award(5);
 		char buf[24];
 		snprintf(buf, sizeof buf, "COMBO %d +5", chain);
-		addPopup(buf, 160, 60, rgba(170, 240, 255), 0.6f);
+		addPopup(buf, kFieldW * 0.5f, kFieldTop + 60, rgba(170, 240, 255), 0.6f);
 	}
 
 	if (comboStroke != blade.strokeId && comboCount > 0) finishCombo();
@@ -656,7 +656,7 @@ void Game::hitBomb(Obj& o) {
 	emitSparks(o.x, o.y, rgba(255, 170, 60), juiceCount(42), 280);
 	emitSparks(o.x, o.y, rgba(255, 240, 200), juiceCount(16), 180);
 	addRing(o.x, o.y, rgba(255, 190, 90), 4, 0.45f);
-	audio::play(SFX_BOOM, 1.0f, (o.x - 160) / 200.0f);
+	audio::play(SFX_BOOM, 1.0f, fieldPan(o.x));
 	switch (mode) {
 		case MODE_ARCADE:
 		case MODE_COMBO:
@@ -682,7 +682,7 @@ void Game::hitBomb(Obj& o) {
 }
 
 void Game::sliceObj(Obj& o, const Blade& blade) {
-	float pan = (o.x - 160) / 200.0f;
+	float pan = fieldPan(o.x);
 	switch (o.kind) {
 		case OBJ_BOMB: hitBomb(o); return;
 		case OBJ_FRUIT:
@@ -723,7 +723,7 @@ void Game::testSlices(Blade& blade) {
 	// A resting stylus never cuts. Higher sensitivity lets smaller movements count.
 	if (dx * dx + dy * dy < lerpf(4.0f, 0.6f, gSave.stylus / 100.0f)) return;
 	if (blade.speed > 6 && blade.swishCooldown <= 0) {
-		float pan = (blade.x - 160) / 200.0f;
+		float pan = fieldPan(blade.x);
 		if (blade.speed > 17) audio::play(SFX_SHING, 0.34f, pan, gRng.range(0.95f, 1.08f));
 		else audio::play((Sfx)(SFX_SWISH0 + gRng.below(3)), 0.5f, pan, gRng.range(0.9f, 1.12f));
 		blade.swishCooldown = 0.2f;
@@ -733,7 +733,7 @@ void Game::testSlices(Blade& blade) {
 	bool cutFruit = false;
 	for (auto& o : objs) {
 		if (!o.on || o.kind == OBJ_BOMB || o.hitCooldown > 0) continue;
-		if (hitTest(o, blade, o.radius * (0.7f + gSave.forgiveness * 0.006f))) {
+		if (hitTest(o, blade, o.radius * (0.7f + gSave.forgiveness * 0.006f) * kCutReach)) {
 			sliceObj(o, blade);
 			cutFruit = true;
 			if (phase != PHASE_PLAY) return;
@@ -760,7 +760,7 @@ void Game::startFinale() {
 	phaseT = 0;
 	finaleOn = true;
 	finaleT = 0;
-	finaleX = 160;
+	finaleX = kFieldW * 0.5f;
 	finaleY = 300;
 	finaleTravel = kFinaleTravelPerHit;  // the first touch counts straight away
 	freezeT = doubleT = frenzyT = feverT = slowT = 0;
@@ -779,7 +779,7 @@ void Game::startFinale() {
 
 void Game::finaleHit(const Blade& blade) {
 	finaleHits++;
-	float pan = (finaleX - 160) / 200.0f;
+	float pan = fieldPan(finaleX);
 	float dx = blade.x - blade.px, dy = blade.y - blade.py;
 	float len = sqrtf(dx * dx + dy * dy);
 	if (len < 0.01f) len = 1;
@@ -996,7 +996,7 @@ void Game::update(Blade& blade) {
 				feverMeter -= kFeverDrain * (0.4f + gSave.frenzyDrain * 0.012f) * kDt;
 				if (feverMeter <= 0) {
 					feverMeter = 0;
-					if (chain >= 3) addPopup("COMBO LOST", 160, 40, rgba(255, 170, 120), 0.6f);
+					if (chain >= 3) addPopup("COMBO LOST", kFieldW * 0.5f, kFieldTop + 40, rgba(255, 170, 120), 0.6f);
 					chain = 0;
 #ifdef AUTOTEST
 					statResets++;
@@ -1043,12 +1043,12 @@ void Game::update(Blade& blade) {
 				if (frenzyTimer <= 0) {
 					frenzyTimer = 0.16f;
 					bool left = gRng.below(2);
-					float x = left ? -18.0f : 338.0f;
+					float x = left ? -18.0f : kFieldW + 18.0f;
 					float vy = -gRng.range(270, 350);
 					float vx = (left ? 1 : -1) * gRng.range(90, 150);
 					// Try the other edge if this arc would cross a bomb.
 					if (clearance(x, vx, vy, 0, false) < kWantClearance) {
-						x = 320 - x;
+						x = kFieldW - x;
 						vx = -vx;
 					}
 					queue(0, x, vx, vy, OBJ_FRUIT, gRng.below(kCoconut));
@@ -1077,7 +1077,7 @@ void Game::update(Blade& blade) {
 		const Obj* bomb = nullptr;
 		for (const auto& o : objs)
 			if (o.on && o.kind == OBJ_BOMB && o.y < 250) bomb = &o;
-		audio::fuse(bomb != nullptr && phase == PHASE_PLAY, bomb ? (bomb->x - 160) / 200.0f : 0);
+		audio::fuse(bomb != nullptr && phase == PHASE_PLAY, bomb ? fieldPan(bomb->x) : 0);
 
 #ifdef AUTOTEST
 		bool anyBomb = false, overlap = false;
@@ -1136,7 +1136,7 @@ int Game::activeParticles() const {
 const Obj* Game::botTarget(bool wantBomb) const {
 	const Obj* bestO = nullptr;
 	for (const auto& o : objs) {
-		if (!o.on || o.y > 225 || o.y < 15 || o.x < 15 || o.x > 305) continue;
+		if (!o.on || o.y > 225 || o.y < 15 || o.x < 15 || o.x > kFieldW - 15) continue;
 		if (o.hitCooldown > 0) continue;
 		bool isBomb = o.kind == OBJ_BOMB;
 		if (isBomb != wantBomb) continue;
@@ -1162,7 +1162,7 @@ void Game::drawObjects3D(bool top, float ox, float oy) const {
 	if (!any) return;
 
 	jobs::wait();  // any cuts asked for this frame must be finished before the GPU sees them
-	m3d::begin(top ? 400 : 320, gfx::stereoPerZ());
+	m3d::begin(top ? 400 : kFieldW, gfx::stereoPerZ());
 	for (const auto& h : halves) {
 		if (!h.on || !onThisScreen(h.y, 30, top, oy)) continue;
 		m3d::Pose pose = {h.x + ox, h.y + oy, kFruitZ, h.rx, h.ry, h.rot, 1, h.axisX, h.axisY, h.tilt};
@@ -1206,9 +1206,11 @@ void Game::drawObjects2D(bool top, float ox, float oy) const {
 
 void Game::drawField(const Blade& blade) const {
 	const bool solid = use3D();
-	gfx::image(SHEET_BOARD, 0, -6, -6, 332, 252);
-	if (freezeT > 0) gfx::rect(0, 0, 320, 240, rgba(120, 200, 255, 46));
-	if (feverT > 0) gfx::rect(0, 0, 320, 240, withAlpha(hueColor(elapsed * 0.25f), 0.13f + sinf(elapsed * 7) * 0.03f));
+#if PORT_TWO_SCREENS
+	gfx::image(SHEET_BOARD, 0, -6, -6, 332, 252);  // one screen ports draw the board behind everything
+#endif
+	if (freezeT > 0) gfx::rect(kFillX, 0, kFillW, 240, rgba(120, 200, 255, 46));
+	if (feverT > 0) gfx::rect(kFillX, 0, kFillW, 240, withAlpha(hueColor(elapsed * 0.25f), 0.13f + sinf(elapsed * 7) * 0.03f));
 
 	for (const auto& s : splats) {
 		if (!s.on) continue;
@@ -1256,8 +1258,8 @@ void Game::drawField(const Blade& blade) const {
 	if (finaleOn && finaleT > kFinaleRise) {
 		// Time left, as a bar along the top of the field.
 		float left = 1 - (finaleT - kFinaleRise) / kFinaleWindow;
-		gfx::rect(30, 8, 260, 8, rgba(16, 10, 34, 190));
-		gfx::rect(30, 8, 260 * clampf(left, 0, 1), 8, left < 0.3f ? rgba(255, 90, 80) : rgba(255, 210, 90));
+		gfx::rect(kFieldW * 0.5f - 130, kFieldTop + 8, 260, 8, rgba(16, 10, 34, 190));
+		gfx::rect(kFieldW * 0.5f - 130, kFieldTop + 8, 260 * clampf(left, 0, 1), 8, left < 0.3f ? rgba(255, 90, 80) : rgba(255, 210, 90));
 	}
 	for (const auto& r : rings) {
 		if (!r.on) continue;
@@ -1277,9 +1279,10 @@ void Game::drawField(const Blade& blade) const {
 		if (!p.on) continue;
 		gfx::text(p.text, p.x, p.y - 12, p.scale, withAlpha(p.color, clampf(p.life * 2.5f, 0, 1)), ALIGN_CENTER);
 	}
-	if (flash > 0) gfx::rect(0, 0, 320, 240, withAlpha(flashColor, clampf(flash, 0, 1)));
+	if (flash > 0) gfx::rect(kFillX, 0, kFillW, 240, withAlpha(flashColor, clampf(flash, 0, 1)));
 }
 
+#if PORT_TWO_SCREENS
 void Game::drawFieldTop() const {
 	if (!gSave.topFruit) return;
 	if (use3D()) drawObjects3D(true, kTopOffsetX, kTopOffsetY);
@@ -1398,3 +1401,85 @@ void Game::drawHud() const {
 		gfx::text(callout, 200, phase == PHASE_FINALE ? 88 : 120, s, withAlpha(calloutColor, clampf(calloutT * 2.5f, 0, 1)), ALIGN_CENTER);
 	}
 }
+#else
+void Game::drawFieldTop() const {}
+
+// One screen: a slim score sign across the top of the field, with the meter beneath it.
+void Game::drawHud() const {
+	char buf[32];
+	const float right = kFieldW - (PORT_PAUSE_BUTTON ? 38 : 10);
+	gfx::image(SHEET_SPRITES, sprites_plank_idx, 2, 1, kFieldW - 4, 29, COL_PLANK);
+
+	float pulse = 1.0f + clampf(scorePulse, 0, 1) * 0.16f;
+	snprintf(buf, sizeof buf, "%lu", (unsigned long)score);
+	gfx::text(buf, 12, 3 - (pulse - 1) * 10, 0.58f * pulse, feverT > 0 ? hueColor(elapsed * 0.6f) : COL_ACCENT);
+	float px = 12 + gfx::textWidth(buf, 0.58f) + 10;
+	if (chain >= 2) {
+		snprintf(buf, sizeof buf, "COMBO %d", chain);
+		gfx::text(buf, px, 9, 0.32f, feverIdle > kFeverGrace ? COL_DIM : COL_CREAM);
+		px += gfx::textWidth(buf, 0.32f) + 10;
+	}
+	if (comboCount >= 2) {
+		snprintf(buf, sizeof buf, "SWIPE X%d", comboCount);
+		gfx::text(buf, px, 9, 0.32f, hueColor(comboCount * 0.09f));
+	}
+
+	float rx = right;
+	if (timeLeft > 0 || mode == MODE_ARCADE || mode == MODE_ZEN || mode == MODE_FRENZY || mode == MODE_COMBO) {
+		int secs = (int)ceilf(timeLeft);
+		snprintf(buf, sizeof buf, "%d:%02d", secs / 60, secs % 60);
+		bool urgent = secs <= 10 && phase == PHASE_PLAY;
+		gfx::text(buf, rx, 5, 0.46f, urgent ? rgba(255, 110, 100) : COL_CREAM, ALIGN_RIGHT);
+		rx -= 62;
+	}
+	if (maxStrikes > 0) {
+		for (int i = 0; i < maxStrikes; i++) {
+			bool used = i < strikes;
+			float s = 0.5f + (used && i == strikes - 1 ? clampf(strikePulse, 0, 1) * 0.4f : 0);
+			gfx::sprite(SHEET_SPRITES, used ? sprites_pip_on_idx : sprites_pip_off_idx, rx - 8 - (maxStrikes - 1 - i) * 17, 15, s, s);
+		}
+		rx -= maxStrikes * 17 + 6;
+	}
+	snprintf(buf, sizeof buf, "BEST %lu", (unsigned long)(score > best ? score : best));
+	gfx::text(buf, rx, 9, 0.3f, COL_DIM, ALIGN_RIGHT);
+
+	const float bx = 12, by = 28, bw = kFieldW - 24;
+	gfx::rect(bx - 1, by - 1, bw + 2, 6, gfx::themeBar());
+	if (feverT > 0) {
+		gfx::rect(bx, by, bw * clampf(feverT / kFrenzySeconds, 0, 1), 4, hueColor(elapsed * 0.7f));
+		gfx::text("FRUIT FRENZY X2", kFieldW * 0.5f, by + 6, 0.3f, hueColor(elapsed * 0.7f), ALIGN_CENTER);
+	} else {
+		bool draining = feverIdle > kFeverGrace && feverMeter > 0;
+		gfx::rect(bx, by, bw * clampf(feverMeter, 0, 1), 4, draining ? COL_DIM : COL_ACCENT);
+	}
+
+	struct Meter { float t, max; int spr; };
+	const Meter meters[] = {{freezeT, 6, sprites_pw_freeze_idx}, {doubleT, 8, sprites_pw_double_idx}, {frenzyT, 5, sprites_pw_frenzy_idx}};
+	float mx = 12;
+	for (const auto& m : meters) {
+		if (m.t <= 0) continue;
+		gfx::sprite(SHEET_SPRITES, m.spr, mx + 8, 44, 0.36f, 0.36f);
+		gfx::rect(mx + 20, 41, 50, 6, rgba(0, 0, 0, 120));
+		gfx::rect(mx + 20, 41, 50 * clampf(m.t / m.max, 0, 1), 6, COL_CREAM);
+		mx += 80;
+	}
+
+	const float cx = kFieldW * 0.5f;
+	if (phase == PHASE_FINALE && finaleHits > 0) {
+		snprintf(buf, sizeof buf, "%d", finaleHits);
+		float s = 1.1f + clampf(finaleHits * 0.01f, 0, 0.5f);
+		gfx::text(buf, cx, 48, s, hueColor(finaleHits * 0.025f), ALIGN_CENTER);
+	}
+	if (phase == PHASE_READY) {
+		bool go = phaseT > 0.9f;
+		float s = go ? 1.8f : 1.2f + 0.1f * sinf(phaseT * 8);
+		gfx::text(go ? "GO!" : "READY", cx, 118 - s * 20, s, go ? rgba(140, 240, 150) : rgba(255, 230, 140), ALIGN_CENTER);
+	} else if (calloutT > 0) {
+		float in = clampf((1.4f - calloutT) * 8, 0, 1);
+		float s = calloutSize + (1 - in) * 0.5f;
+		float w = gfx::textWidth(callout, s);
+		if (w > kFieldW - 20) s *= (kFieldW - 20) / w;
+		gfx::text(callout, cx, phase == PHASE_FINALE ? 40 : 96, s, withAlpha(calloutColor, clampf(calloutT * 2.5f, 0, 1)), ALIGN_CENTER);
+	}
+}
+#endif

@@ -3,7 +3,6 @@
 #include "render.h"
 
 static constexpr float kTrailLife = 0.17f;
-static constexpr float kJumpReject = 150.0f;  // resistive panels spike when pressure changes
 static constexpr float kMaxHalfWidth = 4.2f;
 
 void Blade::reset() {
@@ -54,7 +53,7 @@ void Blade::update(const Input& in) {
 	// almost none when fast keeps the blade under the stylus.
 	float dx = rawX - x, dy = rawY - y;
 	float dist = sqrtf(dx * dx + dy * dy);
-	// Stylus Sensitivity sets how much of that smoothing there is. The panel's own accuracy can't
+	// The sensitivity slider sets how much of that smoothing there is. The panel's own accuracy can't
 	// change, but less filtering means the blade follows smaller, quicker movements.
 	const float sensitivity = gSave.stylus / 100.0f;
 	const float floorAlpha = 0.2f + 0.6f * sensitivity;

@@ -46,6 +46,13 @@ void setShake(float dx, float dy);
 void setBase(float dx, float dy);
 void getOffset(float* x, float* y);  // base + shake, without the stereo shift
 
+#if !PORT_TWO_SCREENS
+// One screen: the board behind everything, the field in its own view, and a fade over all of it.
+void drawBackdrop(u32 tint);
+void beginField();
+void fadeAll(float alpha);
+#endif
+
 // Test hook: draws both eyes as if the 3D slider were all the way up, even on a 2DS.
 void forceStereo(bool on);
 
