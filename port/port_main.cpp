@@ -179,7 +179,7 @@ int main(int, char**) {
 #else
 		int steps = 1;
 #endif
-#ifndef AUTOTEST
+#if !defined(AUTOTEST) || defined(TEST_REALTIME)  // test builds run flat out unless asked to keep real time
 		Uint64 now = SDL_GetTicksNS();
 		owed += now - last;
 		last = now;

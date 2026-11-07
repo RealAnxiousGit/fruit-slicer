@@ -33,3 +33,4 @@
 #define sprites_pw_wide_idx 30
 #define sprites_pw_shield_idx 31
 #define sprites_pw_time_idx 32
+#define sprites_ic_note_idx 33

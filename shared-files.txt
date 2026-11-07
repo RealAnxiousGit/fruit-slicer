@@ -27,3 +27,4 @@ source/shop.h
 source/progress.cpp
 source/progress.h
 source/practice.cpp
+source/beat.cpp

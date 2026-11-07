@@ -44,6 +44,7 @@ def sprite_list():
         ("ic_one", g.spr_icon("one")), ("ic_mine", g.spr_icon("mine")), ("ic_chain", g.spr_icon("chain")),
         ("coin", g.spr_coin()), ("coin_back", g.spr_coin(True)), ("coin_rim", g.spr_coin_rim()),
         ("pw_magnet", g.spr_power("magnet")), ("pw_wide", g.spr_power("wide")), ("pw_shield", g.spr_power("shield")), ("pw_time", g.spr_power("time")),
+        ("ic_note", g.spr_icon("note")),
     ]
 
 

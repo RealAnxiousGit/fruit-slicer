@@ -228,6 +228,15 @@ void musicRate(float factor) {
 	SDL_UnlockMutex(sLock);
 }
 
+float musicTime() {
+	SDL_LockMutex(sLock);
+	// The mixer runs a chunk ahead of the speakers; what the player hears is about half a chunk behind.
+	float t = sMusic.on && sMusicBase > 0 ? (float)(sMusic.pos / (sMusicBase * kRate)) - 0.5f * kChunk / kRate : -1.0f;
+	if (sMusic.on && t < 0 && sMusic.samples) t += (float)(sMusic.samples / (sMusicBase * kRate));
+	SDL_UnlockMutex(sLock);
+	return t;
+}
+
 void musicStop() {
 	SDL_LockMutex(sLock);
 	sMusic.on = false;
