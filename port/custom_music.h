@@ -1,6 +1,6 @@
 // Custom Music (Windows, Linux and Android only): the player's own songs, from a "Custom Music" folder
 // beside the save. Each one is played in Beat Slice once its beat has been found, by the Beat Tool's
-// analysis and any nudges the player makes. Ogg Vorbis and 16-bit WAV are read.
+// analysis and any nudges the player makes. MP3, Ogg Vorbis, FLAC and 16-bit WAV are read.
 #pragma once
 
 namespace custom {

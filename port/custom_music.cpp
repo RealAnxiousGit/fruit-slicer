@@ -14,7 +14,7 @@
 #include "custom_music.h"
 #include "port.h"
 #include "port_api.h"
-#include "vorbis_port.h"
+#include "song_decoder.h"
 
 namespace custom {
 struct Song {
@@ -104,14 +104,14 @@ void scan() {
 		const char* f = list[i];
 		if (strchr(f, '/') || strchr(f, '\\') || strlen(f) >= sizeof sSongs[0].file) continue;
 		const bool wav = endsWith(f, ".wav");
-		if (!wav && !endsWith(f, ".ogg")) continue;
+		if (!wav && !endsWith(f, ".ogg") && !endsWith(f, ".mp3") && !endsWith(f, ".flac")) continue;
 		Song& s = sSongs[sCount++];
 		memset(&s, 0, sizeof s);
 		snprintf(s.file, sizeof s.file, "%s", f);
 		snprintf(s.path, sizeof s.path, "%s%s", sFolder, f);
 		s.wav = wav;
 		// The game's lettering covers plain letters, numbers and punctuation; anything else becomes a dash.
-		size_t len = strlen(f) - 4, o = 0;
+		size_t len = (size_t)(strrchr(f, '.') - f), o = 0;  // up to the extension
 		for (size_t k = 0; k < len && o < sizeof s.name - 1; k++) {
 			unsigned char c = (unsigned char)f[k];
 			if (c >= 0x80 && (c & 0xC0) == 0x80) continue;  // the rest of a UTF-8 letter
@@ -186,7 +186,7 @@ struct Analysis {
 	float result = 0;  // what analyzeStep reports once finished
 	unsigned char* data = nullptr;
 	size_t size = 0;
-	vorbis::Decoder* dec = nullptr;
+	songdec::Decoder* dec = nullptr;
 	int ch = 1, rate = 44100;
 	unsigned frames = 0, done = 0;
 	size_t wavAt = 0;
@@ -397,7 +397,7 @@ static bool finish(float* bpmOut, float* firstOut) {
 }
 
 void analyzeCancel() {
-	if (sA.dec) vorbis::close(sA.dec);
+	if (sA.dec) songdec::close(sA.dec);
 	SDL_free(sA.data);
 	free(sA.flux);
 	sA = Analysis{};
@@ -419,7 +419,7 @@ bool analyzeStart(int i) {
 		ok = wavShape(sA.data, sA.size, &sA.ch, &sA.rate, &sA.wavAt, &bytes);
 		sA.frames = ok ? (unsigned)(bytes / (2 * sA.ch)) : 0;
 	} else {
-		sA.dec = vorbis::open(sA.data, (int)sA.size, &sA.ch, &sA.rate, &sA.frames);
+		sA.dec = songdec::open(sA.data, (int)sA.size, &sA.ch, &sA.rate, &sA.frames);
 		ok = sA.dec && sA.ch >= 1 && sA.ch <= 2 && sA.rate >= 8000;
 	}
 	if (!ok || sA.frames == 0) {
@@ -437,7 +437,7 @@ float analyzeStep() {
 	while (SDL_GetTicksNS() < until) {
 		int got;
 		if (sA.dec) {
-			got = vorbis::read(sA.dec, chunk, sA.ch, 4096);
+			got = songdec::read(sA.dec, chunk, sA.ch, 4096);
 		} else {
 			const unsigned left = sA.frames - sA.done;
 			got = (int)(left < 4096 ? left : 4096);

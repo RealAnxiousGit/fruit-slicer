@@ -137,6 +137,7 @@ Programming by Claude. Prompt engineering by RealAnxiousGit.
 
 - [SDL 3](https://libsdl.org) (zlib license)
 - [stb_vorbis](https://github.com/nothings/stb) by Sean Barrett (public domain or MIT), which plays the Shop music
+- [dr_mp3 and dr_flac](https://github.com/mackron/dr_libs) by David Reid (public domain or MIT-0), which play MP3 and FLAC songs in Custom Music
 - [CMake](https://cmake.org), [Ninja](https://ninja-build.org), GCC and [MinGW-w64](https://www.mingw-w64.org)
 - [Android SDK and NDK](https://developer.android.com), [Gradle](https://gradle.org) and the Android Emulator
 - [appimagetool](https://github.com/AppImage/appimagetool)
