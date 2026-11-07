@@ -24,3 +24,6 @@ tools/gen_audio.py
 source/splash_lines.inc
 source/shop.cpp
 source/shop.h
+source/progress.cpp
+source/progress.h
+source/practice.cpp

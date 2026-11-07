@@ -27,11 +27,13 @@
 #define PORT_NO_SOUND_TEXT "No sound device found"
 #if PORT_ANDROID
 #define PORT_HOWTO_PAUSE "The pause sign stops the game."
+#define PORT_PRACTICE_SKIP "Pause to skip the lessons"
 #define PORT_CONFIRM_TEXT "Tap again to confirm"
 #define PORT_GAMEPLAY_HINT "Touch, difficulty, and how the"
 #define PORT_DEFAULT_SENSITIVITY 70
 #else
 #define PORT_HOWTO_PAUSE "Escape pauses and goes back."
+#define PORT_PRACTICE_SKIP "Escape to skip the lessons"
 #define PORT_CONFIRM_TEXT "Press again to confirm"
 #define PORT_GAMEPLAY_HINT "Difficulty, and how the"
 #define PORT_DEFAULT_SENSITIVITY 75

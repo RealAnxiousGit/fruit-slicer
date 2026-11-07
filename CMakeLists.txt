@@ -10,6 +10,8 @@ endif()
 
 option(AUTOTEST "Build the self-playing test bot" OFF)
 set(TESTDEFS "" CACHE STRING "Extra defines for test builds")
+# Developer tools, such as coins on demand in Options. Never on for release builds.
+option(DEV_TOOLS "Build the developer tools into Options" OFF)
 
 # SDL3 is built in, so players never need to install anything.
 include(FetchContent)
@@ -49,6 +51,9 @@ if(MINGW)
 endif()
 if(AUTOTEST)
   target_compile_definitions(${GAME_TARGET} PRIVATE AUTOTEST ${TESTDEFS})
+endif()
+if(DEV_TOOLS)
+  target_compile_definitions(${GAME_TARGET} PRIVATE DEV_TOOLS)
 endif()
 if(NOT ANDROID)
   add_custom_command(TARGET ${GAME_TARGET} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/romfs $<TARGET_FILE_DIR:${GAME_TARGET}>/romfs)

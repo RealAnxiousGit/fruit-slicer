@@ -18,6 +18,8 @@ android {
         externalNativeBuild {
             cmake {
                 arguments "-DANDROID_PLATFORM=android-21", "-DANDROID_STL=c++_static"
+                // gradlew assembleRelease -PdevTools: developer tools in Options. Never for releases.
+                if (project.hasProperty('devTools')) arguments "-DDEV_TOOLS=ON"
                 abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
                 targets "main"
             }
