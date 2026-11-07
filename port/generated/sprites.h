@@ -26,3 +26,6 @@
 #define sprites_ic_one_idx 23
 #define sprites_ic_mine_idx 24
 #define sprites_ic_chain_idx 25
+#define sprites_coin_idx 26
+#define sprites_coin_back_idx 27
+#define sprites_coin_rim_idx 28

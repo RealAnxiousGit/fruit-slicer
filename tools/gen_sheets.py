@@ -42,6 +42,7 @@ def sprite_list():
         ("plank_focus", g.spr_plank_focus()), ("knob", g.spr_knob()), ("arrow", g.spr_arrow()), ("arrow_back", g.spr_arrow(True)),
         ("post", g.spr_post()), ("ic_clock", g.spr_icon("clock")), ("ic_leaf", g.spr_icon("leaf")), ("ic_fast", g.spr_icon("fast")),
         ("ic_one", g.spr_icon("one")), ("ic_mine", g.spr_icon("mine")), ("ic_chain", g.spr_icon("chain")),
+        ("coin", g.spr_coin()), ("coin_back", g.spr_coin(True)), ("coin_rim", g.spr_coin_rim()),
     ]
 
 

@@ -46,6 +46,73 @@ bool running() {
 }
 }  // namespace port
 
+// ---------------------------------------------------------------- controllers
+// Any pad SDL knows: Xbox, PlayStation, Switch and generic. Confirm and Back follow the pad's own labels,
+// so A confirms on a Switch pad and Cross on a PlayStation one.
+static SDL_Gamepad* sPad;
+static u32 sPadHeld;      // menu buttons held on the pad
+static u32 sStickDirs;    // directions the left stick is pushed past the menu threshold
+static float sDirRepeat;  // seconds until a held direction repeats
+
+static u32 padBits(SDL_Gamepad* pad, Uint8 button) {
+	switch (button) {
+		case SDL_GAMEPAD_BUTTON_DPAD_UP: return KEY_UP;
+		case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return KEY_DOWN;
+		case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return KEY_LEFT;
+		case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return KEY_RIGHT;
+		case SDL_GAMEPAD_BUTTON_START: return KEY_START;
+		case SDL_GAMEPAD_BUTTON_BACK: return KEY_SELECT;
+		case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return KEY_L;
+		case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return KEY_R;
+		default: break;
+	}
+	switch (SDL_GetGamepadButtonLabel(pad, (SDL_GamepadButton)button)) {
+		case SDL_GAMEPAD_BUTTON_LABEL_A: case SDL_GAMEPAD_BUTTON_LABEL_CROSS: return KEY_A;
+		case SDL_GAMEPAD_BUTTON_LABEL_B: case SDL_GAMEPAD_BUTTON_LABEL_CIRCLE: return KEY_B;
+		default: break;
+	}
+	if (button == SDL_GAMEPAD_BUTTON_SOUTH) return KEY_A;
+	if (button == SDL_GAMEPAD_BUTTON_EAST) return KEY_B;
+	return 0;
+}
+
+static float axis(SDL_GamepadAxis a) { return sPad ? SDL_GetGamepadAxis(sPad, a) / 32767.0f : 0; }
+
+// Once a frame: the sticks and the trigger, and the left stick as menu directions with key-like repeat.
+static void readPad(Input& in, float dt) {
+	if (!sPad) return;
+	float lx = axis(SDL_GAMEPAD_AXIS_LEFTX), ly = axis(SDL_GAMEPAD_AXIS_LEFTY);
+	float sx = lx + axis(SDL_GAMEPAD_AXIS_RIGHTX), sy = ly + axis(SDL_GAMEPAD_AXIS_RIGHTY);
+	in.stickX = sx < -1 ? -1 : (sx > 1 ? 1 : sx);
+	in.stickY = sy < -1 ? -1 : (sy > 1 ? 1 : sy);
+	in.stickSlice = axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.35f;
+	u32 dirs = sPadHeld & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT);  // the D-pad repeats like the stick
+	if (lx < -0.6f) dirs |= KEY_LEFT;
+	if (lx > 0.6f) dirs |= KEY_RIGHT;
+	if (ly < -0.6f) dirs |= KEY_UP;
+	if (ly > 0.6f) dirs |= KEY_DOWN;
+	u32 fresh = dirs & ~sStickDirs;
+	if (fresh) {
+		in.down |= fresh;
+		in.repeat |= fresh;
+		sDirRepeat = 0.4f;
+	} else if (dirs) {
+		sDirRepeat -= dt;
+		if (sDirRepeat <= 0) {
+			in.repeat |= dirs;
+			sDirRepeat = 0.11f;
+		}
+	}
+	sStickDirs = dirs;
+	in.held |= sPadHeld | dirs;
+}
+
+static void openPad(SDL_JoystickID id) {
+	if (sPad) return;
+	sPad = SDL_OpenGamepad(id);
+	if (sPad) fprintf(stderr, "[pad] %s\n", SDL_GetGamepadName(sPad) ? SDL_GetGamepadName(sPad) : "?");
+}
+
 static u32 keyBits(SDL_Keycode k) {
 	switch (k) {
 		case SDLK_UP: case SDLK_W: return KEY_UP;
@@ -72,6 +139,7 @@ int main(int, char**) {
 		fprintf(stderr, "[boot] %s\n", SDL_GetError());
 		return 1;
 	}
+	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) fprintf(stderr, "[pad] no controller support: %s\n", SDL_GetError());
 	// The full look by default, except on a phone with little memory: it starts on the light settings.
 	gIsNew3ds = !gfx::lowMemory();
 	gHas3dScreen = false;
@@ -183,6 +251,33 @@ int main(int, char**) {
 						else held = false;
 					}
 					break;
+				case SDL_EVENT_GAMEPAD_ADDED:
+					openPad(e.gdevice.which);
+					break;
+				case SDL_EVENT_GAMEPAD_REMOVED:
+					if (sPad && SDL_GetGamepadID(sPad) == e.gdevice.which) {
+						// Unplugged mid-run: the game pauses, and any other pad still plugged in takes over.
+						SDL_CloseGamepad(sPad);
+						sPad = nullptr;
+						sPadHeld = sStickDirs = 0;
+						app::notifySuspended();
+						int n = 0;
+						SDL_JoystickID* ids = SDL_GetGamepads(&n);
+						if (ids && n > 0) openPad(ids[0]);
+						SDL_free(ids);
+					}
+					break;
+				case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+					if (sPad && e.gbutton.which == SDL_GetGamepadID(sPad)) {
+						u32 b = padBits(sPad, e.gbutton.button);
+						in.down |= b;
+						in.repeat |= b;
+						sPadHeld |= b;
+					}
+					break;
+				case SDL_EVENT_GAMEPAD_BUTTON_UP:
+					if (sPad && e.gbutton.which == SDL_GetGamepadID(sPad)) sPadHeld &= ~padBits(sPad, e.gbutton.button);
+					break;
 				case SDL_EVENT_WINDOW_FOCUS_LOST:
 				case SDL_EVENT_DID_ENTER_BACKGROUND:
 					held = false;
@@ -194,6 +289,7 @@ int main(int, char**) {
 			}
 		}
 		in.held = keysHeld;
+		readPad(in, steps / 60.0f);
 		float rx = mx, ry = my;
 		SDL_RenderCoordinatesFromWindow(gfx::renderer(), mx, my, &rx, &ry);
 		rx *= gfx::renderScaleNow();  // Render Scale draws at another size than the window
@@ -287,9 +383,7 @@ void vibrate(float strength, int ms) {
 		}
 	}
 	if (motor) SDL_PlayHapticRumble(motor, strength, (Uint32)ms);
-#else
-	(void)strength;
-	(void)ms;
 #endif
+	if (sPad) SDL_RumbleGamepad(sPad, (Uint16)(strength * 65535), (Uint16)(strength * 0.6f * 65535), (Uint32)ms);
 }
 }  // namespace port

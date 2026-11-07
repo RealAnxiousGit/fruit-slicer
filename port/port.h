@@ -107,3 +107,10 @@ namespace port {
 void vibrate(float strength, int ms);  // the phone's motor or a controller's rumble, if Vibration is on
 }
 #define PORT_VIBRATE(strength, ms) port::vibrate(strength, ms)
+#define PORT_STICK_HINT "Hold: slices while RT is held."
+#define PORT_CONTROLS_HINT "Controller slicing,"
+#if PORT_ANDROID
+#define PORT_VIBRATION_HINT "The phone or controller buzzes"
+#else
+#define PORT_VIBRATION_HINT "The controller rumbles"
+#endif
