@@ -55,11 +55,15 @@ constexpr u32 C2D_Color32(u8 r, u8 g, u8 b, u8 a) { return (u32)r | ((u32)g << 8
 // The renderer choices this platform offers, in the order the Visuals row shows them.
 extern const char* const kRendererNames[];
 extern const int kRendererCount;
-#define PORT_SETTINGS_FIELDS u8 renderer;
+// Display and graphics settings. They live in the save's fixed port block (32 bytes).
+#define PORT_SETTINGS_FIELDS 	u8 renderer;      /* index into kRendererNames */ 	u8 windowMode;    /* 0 windowed, 1 borderless fullscreen, 2 exclusive fullscreen */ 	u8 vsync;         /* 0 off (frame cap), 1 on */ 	u8 preset;        /* 0 Performance, 1 Quality, 2 Beautiful, 3 Custom */ 	u8 texQuality;    /* 0 low, 1 medium, 2 high */ 	u8 shadowQuality; /* 0 off, 1 simple, 2 soft */ 	u8 ambientOcc;    /* 0 off, 1 on */ 	u8 bloom;         /* 0 off, 1 low, 2 high */ 	u8 renderScale;   /* 0 75%, 1 100%, 2 125% */ 	u8 hwChecked;     /* the first-start hardware check has picked a preset */ 	u16 winW, winH;   /* windowed size, 0 = default */ 	u16 fsW, fsH, fsHz; /* exclusive fullscreen mode, 0 = desktop mode */
 #define PORT_CREDITS_TOOLS_1 "SDL 3, CMake, Ninja, GCC, MinGW-w64"
 #define PORT_CREDITS_TOOLS_2 "Android SDK and NDK, Gradle, appimagetool"
-#define PORT_RESET_VISUALS gSave.renderer = 0;
-#define PORT_CHECK_SETTINGS if (gSave.renderer >= kRendererCount) gSave.renderer = 0;
+#define PORT_RESET_VISUALS
+#define PORT_RESET_DISPLAY 	gSave.renderer = 0; gSave.windowMode = 0; gSave.vsync = 1; gSave.preset = 1; 	gSave.texQuality = 2; gSave.shadowQuality = 2; gSave.ambientOcc = 1; gSave.bloom = 1; gSave.renderScale = 1; 	gSave.winW = gSave.winH = 0; gSave.fsW = gSave.fsH = gSave.fsHz = 0;
+// 0.4 universal saves had the renderer right after the 60 shared bytes.
+#define PORT_UPGRADE_V4(data, size) if ((size) > 60) gSave.renderer = (data)[60];
+#define PORT_CHECK_SETTINGS 	if (gSave.renderer >= kRendererCount) gSave.renderer = 0; 	if (gSave.windowMode > 2) gSave.windowMode = 0; 	gSave.vsync &= 1; gSave.ambientOcc &= 1; gSave.hwChecked &= 1; 	if (gSave.preset > 3) gSave.preset = 1; 	if (gSave.texQuality > 2) gSave.texQuality = 2; 	if (gSave.shadowQuality > 2) gSave.shadowQuality = 2; 	if (gSave.bloom > 2) gSave.bloom = 1; 	if (gSave.renderScale > 2) gSave.renderScale = 1;
 #define PORT_EXTRA_VISUAL_ROWS {ROW_CHOICE, "Renderer", &gSave.renderer, 0, (u8)(kRendererCount - 1), kRendererNames, 0, 0, ACT_NONE, "How the game draws. Takes effect", "the next time the game starts."},
 
 // The field fruit flies over, in game units: 16:9, the same height as the 3DS field.
