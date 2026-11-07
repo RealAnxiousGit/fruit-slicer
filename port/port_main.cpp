@@ -46,20 +46,6 @@ bool running() {
 }
 }  // namespace port
 
-static void toggleFullscreen() {
-	SDL_Window* w = gfx::window();
-	SDL_SetWindowFullscreen(w, (SDL_GetWindowFlags(w) & SDL_WINDOW_FULLSCREEN) == 0);
-}
-
-// The game runs 60 steps a second. On a 60 Hz screen vsync keeps time; on any other, a timer does.
-static bool chooseVsync() {
-	const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(gfx::window()));
-	float hz = mode && mode->refresh_rate > 0 ? mode->refresh_rate : 60;
-	bool use = hz > 58 && hz < 62 && !SDL_getenv("FRUIT_SLICER_NO_VSYNC");
-	SDL_SetRenderVSync(gfx::renderer(), use ? 1 : 0);
-	return use;
-}
-
 static u32 keyBits(SDL_Keycode k) {
 	switch (k) {
 		case SDLK_UP: case SDLK_W: return KEY_UP;
@@ -99,7 +85,7 @@ int main(int, char**) {
 	}
 	gRng.s = (u32)SDL_GetTicks() | 0x51CE0001u;
 
-	bool useVsync = chooseVsync();
+	port::displayStart();
 
 	app::showLoading();
 
@@ -117,9 +103,6 @@ int main(int, char**) {
 	const char* shotDir = SDL_getenv("FRUIT_SLICER_SHOTS");
 	u32 frameNo = 0;
 #endif
-#ifdef AUTOTEST
-	useVsync = false;
-#endif
 
 	while (port::running()) {
 		// The game always advances 60 steps a second of real time, however fast frames can be shown.
@@ -132,7 +115,7 @@ int main(int, char**) {
 		Uint64 now = SDL_GetTicksNS();
 		owed += now - last;
 		last = now;
-		if (useVsync && owed > kStep * 3 / 4 && owed < kStep * 5 / 4) owed = kStep;  // vsync's small jitter isn't a missed frame
+		if (port::gVsyncOn && owed > kStep * 3 / 4 && owed < kStep * 5 / 4) owed = kStep;  // vsync's small jitter isn't a missed frame
 		steps = (int)(owed / kStep);
 		if (steps == 0) {
 			SDL_DelayPrecise(kStep - owed);
@@ -155,11 +138,15 @@ int main(int, char**) {
 					break;
 				case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
 				case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
-					useVsync = chooseVsync();  // moved to a screen with another refresh rate
+					port::applyVsync();  // moved to a screen with another refresh rate
 					break;
 				case SDL_EVENT_KEY_DOWN: {
 					if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT))) {
-						if (!e.key.repeat) toggleFullscreen();
+						if (!e.key.repeat) port::toggleFullscreen();
+						break;
+					}
+					if (e.key.key == SDLK_F3) {
+						if (!e.key.repeat) port::toggleOverlay();
 						break;
 					}
 					u32 b = keyBits(e.key.key);

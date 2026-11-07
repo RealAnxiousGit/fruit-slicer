@@ -18,3 +18,12 @@ void requestShot(const char* path);      // saves the next finished frame
 float presentMs();                       // test builds: how long showing the last frame took
 unsigned trisDrawn();                    // test builds: triangles in the last frame
 }  // namespace gfx
+
+// port/display.cpp, for this port's own code.
+namespace port {
+extern bool gVsyncOn;       // V-Sync is keeping time, so the main loop can trust the frame rate
+void displayStart();        // the saved display mode, once the renderer exists
+void toggleFullscreen();    // F11 and Alt+Enter
+void toggleOverlay();       // F3
+void drawOverlay();         // the F3 readout, last thing before a frame is shown
+}  // namespace port

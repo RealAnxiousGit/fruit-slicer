@@ -12,7 +12,7 @@
 const char* const kRendererNames[] = {"DirectX", "OpenGL", "Vulkan", "Software"};
 static const char* const kDrivers[] = {"direct3d11", "opengl", "vulkan", "software"};
 #elif PORT_ANDROID
-const char* const kRendererNames[] = {"OpenGL", "Vulkan", "Software"};
+const char* const kRendererNames[] = {"OpenGL ES", "Vulkan", "Software"};
 static const char* const kDrivers[] = {"opengles2", "vulkan", "software"};
 #else
 const char* const kRendererNames[] = {"OpenGL", "Vulkan", "Software"};
@@ -33,6 +33,7 @@ static float sClipX0, sClipY0, sClipX1 = 1280, sClipY1 = 720;  // where drawing 
 static float sBaseX, sBaseY, sShakeX, sShakeY;
 static bool sShaking;
 static char sShotPath[300];
+static char sNotice[96];
 
 struct Sheet {
 	SDL_Texture* tex;
@@ -133,7 +134,12 @@ static bool loadSheet(SheetId id, const char* path, const SheetRect* rects) {
 }
 
 bool init() {
-	Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+	int choice = gSave.renderer < kRendererCount ? gSave.renderer : 0;
+	const char* forced = SDL_getenv("FRUIT_SLICER_RENDERER");
+	const char* driver = forced ? forced : kDrivers[choice];
+	// Software draws every pixel on the CPU, so on a scaled screen it gets a window of plain pixels instead.
+	Uint32 flags = SDL_WINDOW_RESIZABLE;
+	if (strcmp(driver, "software") != 0) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #if PORT_ANDROID
 	flags |= SDL_WINDOW_FULLSCREEN;
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
@@ -144,14 +150,21 @@ bool init() {
 		return false;
 	}
 	SDL_SetWindowMinimumSize(sWindow, 640, 360);
-	int choice = gSave.renderer < kRendererCount ? gSave.renderer : 0;
-	const char* forced = SDL_getenv("FRUIT_SLICER_RENDERER");
-	const char* driver = forced ? forced : kDrivers[choice];
 	sRenderer = SDL_CreateRenderer(sWindow, driver);
 	if (!sRenderer) {
 		// Not every machine has every API, so a bad choice must never stop the game from starting.
+		// The others are tried in the menu's order, and the one that works becomes the setting.
 		fprintf(stderr, "[gfx] %s unavailable: %s\n", driver, SDL_GetError());
-		sRenderer = SDL_CreateRenderer(sWindow, nullptr);
+		for (int i = 0; i < kRendererCount && !sRenderer; i++) {
+			if (!forced && i == choice) continue;
+			sRenderer = SDL_CreateRenderer(sWindow, kDrivers[i]);
+			if (sRenderer && !forced) {
+				snprintf(sNotice, sizeof sNotice, "%s would not start, so the game uses %s.", kRendererNames[choice], kRendererNames[i]);
+				gSave.renderer = (u8)i;
+				saveWrite();
+			}
+		}
+		if (!sRenderer) sRenderer = SDL_CreateRenderer(sWindow, nullptr);
 	}
 	if (!sRenderer) {
 		fprintf(stderr, "[gfx] no renderer: %s\n", SDL_GetError());
@@ -233,6 +246,7 @@ void beginFrame() {
 
 void endFrame() {
 	flush();
+	port::drawOverlay();
 	if (sShotPath[0]) {
 		SDL_Surface* s = SDL_RenderReadPixels(sRenderer, nullptr);
 		if (s) {
@@ -467,3 +481,7 @@ void fadeAll(float alpha) {
 	pushTris(nullptr, v, 6);
 }
 }  // namespace gfx
+
+namespace port {
+const char* notice() { return gfx::sNotice[0] ? gfx::sNotice : nullptr; }
+}  // namespace port

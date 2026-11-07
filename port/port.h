@@ -64,7 +64,6 @@ extern const int kRendererCount;
 // 0.4 universal saves had the renderer right after the 60 shared bytes.
 #define PORT_UPGRADE_V4(data, size) if ((size) > 60) gSave.renderer = (data)[60];
 #define PORT_CHECK_SETTINGS 	if (gSave.renderer >= kRendererCount) gSave.renderer = 0; 	if (gSave.windowMode > 2) gSave.windowMode = 0; 	gSave.vsync &= 1; gSave.ambientOcc &= 1; gSave.hwChecked &= 1; 	if (gSave.preset > 3) gSave.preset = 1; 	if (gSave.texQuality > 2) gSave.texQuality = 2; 	if (gSave.shadowQuality > 2) gSave.shadowQuality = 2; 	if (gSave.bloom > 2) gSave.bloom = 1; 	if (gSave.renderScale > 2) gSave.renderScale = 1;
-#define PORT_EXTRA_VISUAL_ROWS {ROW_CHOICE, "Renderer", &gSave.renderer, 0, (u8)(kRendererCount - 1), kRendererNames, 0, 0, ACT_NONE, "How the game draws. Takes effect", "the next time the game starts."},
 
 // The field fruit flies over, in game units: 16:9, the same height as the 3DS field.
 constexpr int kFieldW = 427;
@@ -78,3 +77,21 @@ constexpr float kCutReach = 1.2f;    // a fingertip is wider than the point it r
 #else
 constexpr float kCutReach = 1.0f;
 #endif
+
+// Display settings, done by port/display.cpp. The shared Options menu shows them in a Display section.
+#define PORT_HAS_DISPLAY 1
+#if PORT_ANDROID
+#define PORT_DISPLAY_HINT "How the game draws."
+#else
+#define PORT_DISPLAY_HINT "Window, resolution and V-Sync."
+#endif
+namespace port {
+extern const char* gResNames[];  // the Resolution row's choices
+extern u8 gResChoice;
+int resolutionCount();    // rebuilds the choices for the chosen Display Mode
+bool displayApply();      // makes the window match the settings; true if anything changed
+void displayRevert();     // back to how it was before the last apply
+void displayDiscard();    // forgets a mode or resolution that was picked but never applied
+void applyVsync();
+const char* notice();     // something the player should know since starting, or null
+}  // namespace port
