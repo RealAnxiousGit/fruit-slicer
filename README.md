@@ -2,7 +2,7 @@
 
 A free, fan-made fruit-slicing arcade game for Windows, Linux and Android. Swipe to cut fruit out of the air, chain combos and stay away from the bombs. A two-screen version for the Nintendo 3DS lives at [fruit-slicer-3ds](https://github.com/RealAnxiousGit/fruit-slicer-3ds), built from the same game code.
 
-**Status: Alpha.** Tested on Windows 11 on all four renderers, on Linux under WSL, and on a real Android phone as well as the Android emulator. Native Linux desktops and more phones are still untested, so reports are welcome.
+**Version 1.0.0.** Tested on Windows 11 on all four renderers, on Linux under WSL, and on a real Android phone as well as the Android emulator. Native Linux desktops and more phones are still untested, so reports are welcome.
 
 All screenshots are from the Windows version.
 
@@ -29,6 +29,8 @@ Get the files from the [Releases](https://github.com/RealAnxiousGit/fruit-slicer
 
 The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or something similar.
 
+**Updates:** from 1.0 on, the game can check GitHub for a newer release, once a day and only if you say yes on the first start (Options > Scores and Data changes it, and has Check Now). Nothing about you is sent. It shows what's new, downloads the update and installs it: Windows and Linux replace the game's files after you restart, and Android hands the new APK to the system installer. 0.4 has no update check, so update from 0.4 by hand. Your scores and settings carry over.
+
 ## Controls
 
 | Windows and Linux | Action |
@@ -42,9 +44,19 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 
 | Android | Action |
 | --- | --- |
-| Finger | Swipe to slice. Tap anything in a menu, and drag a settings list to scroll. |
+| Finger | Swipe to slice. Swipe across a menu fruit to pick it, and drag a settings list to scroll. |
 | Pause sign, top left | Open the pause menu. Resume carries on. |
 | Back | Pause, and go back one menu. On the title screen, leave the game. |
+
+| Controller (any SDL-supported pad) | Action |
+| --- | --- |
+| Left stick | Move the blade point. Hold the right trigger to slice, or set Stick Slicing to Flick and slice with fast moves. |
+| D-pad | Move the selector, change a setting |
+| A (Cross) | Select |
+| B (Circle) | Go back |
+| Start | Pause |
+
+**Menus** are fruit: swipe across one to slice it and pick it. With a mouse, a click works too. The selector and Enter or A slice the selected fruit. The GitHub, X and YouTube icons in the title's bottom-left corner open those pages in your browser.
 
 ## Modes
 
@@ -57,6 +69,12 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | Sudden Death | One miss or one bomb ends the run. Fruit is worth double. |
 | Minefield | Bombs take over as the run goes on. Missed fruit is free, and one bomb ends the run. |
 | Combo Rush | 45 seconds of big fruit patterns. Swipe bonuses are doubled and bombs cost 10 points, your combo and half the Frenzy meter. Ends on the Sunburst Fruit. |
+| Daily Fruit | 60 seconds, the same run for everyone that day on every platform, with no server. A calendar keeps your daily scores and streak, and each day's first run pays a coin bonus. |
+| Beat Slice | 60 seconds to music. Fruit is thrown as usual, but only slices on the beat score, and a streak of them scores more. The board's edges glow when a slice will count. Pick any track you own from the track list. |
+
+**Practice:** the first Play starts a short, skippable lesson run (a slice, a three-fruit swipe, a coconut, a bomb, a coin, the Frenzy meter and a menu fruit). How to Play replays it.
+
+**Custom Music** (Windows, Linux and Android): put your own `.mp3`, `.ogg`, `.flac` or 16-bit `.wav` songs in the `Custom Music` folder next to your save (Android: `Android/data/com.realanxiousgit.fruitslicer/files/Custom Music`). They appear in Beat Slice's track list, and the game listens for the beat when you pick one. If it's off, Beat Tool lets you fix it by ear: slower, faster, half, double, earlier, later, a click track and the bar start.
 
 **Scoring:** 1 point per fruit, 3 for a coconut and 5 for a rare golden star fruit. The COMBO count on the sign rises with every fruit, and each 15 adds a 5-point bonus. A bomb or an empty Frenzy meter resets it. A missed fruit does not.
 
@@ -70,18 +88,33 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 
 **Difficulty:** Easy, Normal, Hard and Insane change how fast fruit is thrown and how many bombs come with it. Easy throws the fewest bombs. Hard and Insane can throw two bombs in one wave (never in Sudden Death), and in Minefield bombs make up as much as two thirds of the throws on Insane.
 
+## Coins, Shop, Journal and Stats
+
+**Coins** spin through the air now and then. Slicing one is worth 5 points and 5 coins, and every 100 points of a run pays 1 more. A coin is never a strike, and a missed one costs nothing. The run's coins show under the score; your total shows in the menus and the pause menu.
+
+**Shop:** spend coins on board themes (Night Picnic, Beach Towel, Kitchen Counter, Snowfall, Autumn Leaves), blade trails (Ink, Flame, Rainbow, Ribbon, Sparkle, Comet) and six recorded music tracks. Items are tried on while selected, and bought items are equipped from the Shop or Options.
+
+**Fruit Journal:** a sticker book with a page for every fruit and how many you've sliced. Milestones of 10, 50, 250 and 1000 pay coins.
+
+**Stats:** fruit sliced, coins earned, time played, favourite mode, longest combo and Daily streak, plus the best score in every mode.
+
+**Slow motion:** a 10-fruit swipe slows time for a moment. Calm Effects turns it off.
+
 ## Options
 
 | Section | Settings |
 | --- | --- |
 | Audio | Sound Effects, Music and Menu Sounds sliders. Menu Music and Game Music each choose Auto or a track. |
-| Visuals | Art Style (3D Models or 2D Stickers), Board, Blade, Effects, Screen Shake, 3D Detail, Slice Style, Transitions and Renderer. |
+| Visuals | Art Style (3D Models or 2D Stickers), Board, Blade, Trail, Effects, 3D Detail, Slice Style and Transitions. |
+| Display | Display Mode (windowed, borderless or fullscreen), Resolution with a revert countdown, V-Sync, Renderer, and Graphics: Performance, Quality or Beautiful, or your own mix of Textures, Shadows, Ambient Occlusion, Bloom, Effects, 3D Detail and Render Scale. Android has V-Sync, Renderer and Graphics. |
 | Gameplay | Difficulty (Easy, Normal, Hard, Insane), Fruit Speed, Bomb Amount, Slice Forgiveness, Frenzy Drain and Misses Allowed. Android adds Touch Sensitivity. |
-| Scores and Data | Reset scores or everything. |
+| Accessibility | UI Scale, Larger Text, High Contrast, Colour-blind Mode, Calm Effects, Screen Shake, Slice Assist, Game Speed, Sound Captions and, with a mouse, Slice Without Holding. |
+| Controls | Stick Slicing (Hold or Flick), Point Speed, Snap Assist and Vibration. |
+| Scores and Data | Check for Updates, Check Now, and reset scores or everything. |
 
-**Renderers:** Windows offers DirectX, OpenGL, Vulkan and Software. Linux and Android offer OpenGL, Vulkan and Software. Software always uses the 2D stickers. If a renderer can't start on your machine, the game picks one that can.
+**Renderers and graphics:** Windows offers DirectX, OpenGL, Vulkan and Software. Linux and Android offer OpenGL, Vulkan and Software. A fresh install starts on DirectX on Windows and OpenGL elsewhere, and a quick hardware check on the first start picks a Graphics preset. Software always uses the 2D stickers. If a renderer can't start on your machine, the game picks one that can.
 
-Scores and settings are saved in `%APPDATA%\RealAnxiousGit\FruitSlicer` on Windows and `~/.local/share/RealAnxiousGit/FruitSlicer` on Linux. Android keeps them in the app's private storage. 0.4.0 uses a new save format, so everyone starts with default settings and no scores. Saves from earlier versions are not carried over.
+Scores and settings are saved in `%APPDATA%\RealAnxiousGit\FruitSlicer` on Windows and `~/.local/share/RealAnxiousGit/FruitSlicer` on Linux. Android keeps them in the app's private storage. Saves from 0.4 carry over to 1.0: scores and settings are kept, and coins start at 0.
 
 ## Build from source
 
