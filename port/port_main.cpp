@@ -203,6 +203,17 @@ int main(int, char**) {
 		in.tx = tx;
 		in.ty = ty;
 		in.touching = held;
+#if PORT_MOUSE
+		// Slice Without Holding: during a game, a moving mouse counts as a held button. A short grace
+		// keeps one swipe in one piece when a frame passes with no motion event.
+		static int movingFrames = 0;
+		if (gSave.sliceNoHold && app::inFieldView()) {
+			movingFrames = moved ? 4 : (movingFrames > 0 ? movingFrames - 1 : 0);
+			if (movingFrames > 0) in.touching = true;
+		} else {
+			movingFrames = 0;
+		}
+#endif
 		in.hovering = moved && !held;
 		moved = false;
 		if (releaseAfter) held = false;
@@ -254,3 +265,31 @@ int main(int, char**) {
 	SDL_Quit();
 	return 0;
 }
+
+// Vibration: the phone's own motor. Controllers rumble through SDL's gamepad API instead.
+namespace port {
+void vibrate(float strength, int ms) {
+	if (!gSave.vibration) return;
+#if PORT_ANDROID
+	static SDL_Haptic* motor = nullptr;
+	static bool tried = false;
+	if (!tried) {
+		tried = true;
+		if (SDL_InitSubSystem(SDL_INIT_HAPTIC)) {
+			int n = 0;
+			SDL_HapticID* ids = SDL_GetHaptics(&n);
+			if (ids && n > 0) motor = SDL_OpenHaptic(ids[0]);
+			SDL_free(ids);
+			if (motor && !SDL_InitHapticRumble(motor)) {
+				SDL_CloseHaptic(motor);
+				motor = nullptr;
+			}
+		}
+	}
+	if (motor) SDL_PlayHapticRumble(motor, strength, (Uint32)ms);
+#else
+	(void)strength;
+	(void)ms;
+#endif
+}
+}  // namespace port

@@ -60,7 +60,7 @@ extern const int kRendererCount;
 #define PORT_CREDITS_TOOLS_1 "SDL 3, CMake, Ninja, GCC, MinGW-w64"
 #define PORT_CREDITS_TOOLS_2 "Android SDK and NDK, Gradle, appimagetool"
 #define PORT_RESET_VISUALS
-#define PORT_RESET_DISPLAY 	gSave.renderer = 0; gSave.windowMode = 0; gSave.vsync = 1; gSave.preset = 1; 	gSave.texQuality = 2; gSave.shadowQuality = 2; gSave.ambientOcc = 1; gSave.bloom = 1; gSave.renderScale = 1; gSave.hwChecked = 0; 	gSave.winW = gSave.winH = 0; gSave.fsW = gSave.fsH = gSave.fsHz = 0;
+#define PORT_RESET_DISPLAY 	gSave.effects = FX_FULL; gSave.detail = 1; gSave.renderer = 0; gSave.windowMode = 0; gSave.vsync = 1; gSave.preset = 1; 	gSave.texQuality = 2; gSave.shadowQuality = 2; gSave.ambientOcc = 1; gSave.bloom = 1; gSave.renderScale = 1; gSave.hwChecked = 0; 	gSave.winW = gSave.winH = 0; gSave.fsW = gSave.fsH = gSave.fsHz = 0;
 // 0.4 universal saves had the renderer right after the 60 shared bytes.
 #define PORT_UPGRADE_V4(data, size) if ((size) > 60) gSave.renderer = (data)[60]; gSave.hwChecked = 1; gSave.preset = 3;
 #define PORT_CHECK_SETTINGS 	if (gSave.renderer >= kRendererCount) gSave.renderer = 0; 	if (gSave.windowMode > 2) gSave.windowMode = 0; 	gSave.vsync &= 1; gSave.ambientOcc &= 1; gSave.hwChecked &= 1; 	if (gSave.preset > 3) gSave.preset = 1; 	if (gSave.texQuality > 2) gSave.texQuality = 2; 	if (gSave.shadowQuality > 2) gSave.shadowQuality = 2; 	if (gSave.bloom > 2) gSave.bloom = 1; 	if (gSave.renderScale > 2) gSave.renderScale = 1;
@@ -103,3 +103,7 @@ const char* notice();     // something the player should know since starting, or
 #define PORT_SHADOWS (gSave.shadowQuality)  // 0 off, 1 simple, 2 soft
 #define PORT_BLOOM (gSave.bloom)            // 0 off, 1 low, 2 high
 #define PORT_AMBIENT_OCC (gSave.ambientOcc)
+namespace port {
+void vibrate(float strength, int ms);  // the phone's motor or a controller's rumble, if Vibration is on
+}
+#define PORT_VIBRATE(strength, ms) port::vibrate(strength, ms)

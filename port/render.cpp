@@ -502,6 +502,12 @@ void tri(float x0, float y0, u32 c0, float x1, float y1, u32 c1, float x2, float
 // One board fills the whole window, whatever its shape, behind everything else.
 void drawBackdrop(u32 tint) {
 	const Sheet& s = sSheets[SHEET_BOARD];
+	if (gSave.highContrast) {
+		flush();
+		SDL_SetRenderDrawColor(sRenderer, 16, 16, 20, 255);
+		SDL_RenderClear(sRenderer);
+		return;
+	}
 	if (!s.tex) return;
 	float a = sWinW / s.w, b = sWinH / s.h, k = a > b ? a : b;
 	float w = s.w * k, h = s.h * k;
