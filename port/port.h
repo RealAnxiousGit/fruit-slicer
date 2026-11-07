@@ -60,9 +60,9 @@ extern const int kRendererCount;
 #define PORT_CREDITS_TOOLS_1 "SDL 3, CMake, Ninja, GCC, MinGW-w64"
 #define PORT_CREDITS_TOOLS_2 "Android SDK and NDK, Gradle, appimagetool"
 #define PORT_RESET_VISUALS
-#define PORT_RESET_DISPLAY 	gSave.renderer = 0; gSave.windowMode = 0; gSave.vsync = 1; gSave.preset = 1; 	gSave.texQuality = 2; gSave.shadowQuality = 2; gSave.ambientOcc = 1; gSave.bloom = 1; gSave.renderScale = 1; 	gSave.winW = gSave.winH = 0; gSave.fsW = gSave.fsH = gSave.fsHz = 0;
+#define PORT_RESET_DISPLAY 	gSave.renderer = 0; gSave.windowMode = 0; gSave.vsync = 1; gSave.preset = 1; 	gSave.texQuality = 2; gSave.shadowQuality = 2; gSave.ambientOcc = 1; gSave.bloom = 1; gSave.renderScale = 1; gSave.hwChecked = 0; 	gSave.winW = gSave.winH = 0; gSave.fsW = gSave.fsH = gSave.fsHz = 0;
 // 0.4 universal saves had the renderer right after the 60 shared bytes.
-#define PORT_UPGRADE_V4(data, size) if ((size) > 60) gSave.renderer = (data)[60];
+#define PORT_UPGRADE_V4(data, size) if ((size) > 60) gSave.renderer = (data)[60]; gSave.hwChecked = 1; gSave.preset = 3;
 #define PORT_CHECK_SETTINGS 	if (gSave.renderer >= kRendererCount) gSave.renderer = 0; 	if (gSave.windowMode > 2) gSave.windowMode = 0; 	gSave.vsync &= 1; gSave.ambientOcc &= 1; gSave.hwChecked &= 1; 	if (gSave.preset > 3) gSave.preset = 1; 	if (gSave.texQuality > 2) gSave.texQuality = 2; 	if (gSave.shadowQuality > 2) gSave.shadowQuality = 2; 	if (gSave.bloom > 2) gSave.bloom = 1; 	if (gSave.renderScale > 2) gSave.renderScale = 1;
 
 // The field fruit flies over, in game units: 16:9, the same height as the 3DS field.
@@ -81,9 +81,9 @@ constexpr float kCutReach = 1.0f;
 // Display settings, done by port/display.cpp. The shared Options menu shows them in a Display section.
 #define PORT_HAS_DISPLAY 1
 #if PORT_ANDROID
-#define PORT_DISPLAY_HINT "How the game draws."
+#define PORT_DISPLAY_HINT "Renderer"
 #else
-#define PORT_DISPLAY_HINT "Window, resolution and V-Sync."
+#define PORT_DISPLAY_HINT "Window, resolution, V-Sync"
 #endif
 namespace port {
 extern const char* gResNames[];  // the Resolution row's choices
@@ -93,5 +93,13 @@ bool displayApply();      // makes the window match the settings; true if anythi
 void displayRevert();     // back to how it was before the last apply
 void displayDiscard();    // forgets a mode or resolution that was picked but never applied
 void applyVsync();
+void applyPreset(int preset);  // Performance, Quality or Beautiful
+void matchPreset();       // names the preset the graphics settings match, or Custom
+void applyGraphics();     // after a graphics row changes: textures reload if their quality did
 const char* notice();     // something the player should know since starting, or null
 }  // namespace port
+#define PORT_DISPLAY_HINT2 "and graphics quality."
+// How the shared game draws a few things, from the Display section's graphics settings.
+#define PORT_SHADOWS (gSave.shadowQuality)  // 0 off, 1 simple, 2 soft
+#define PORT_BLOOM (gSave.bloom)            // 0 off, 1 low, 2 high
+#define PORT_AMBIENT_OCC (gSave.ambientOcc)

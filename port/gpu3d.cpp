@@ -42,7 +42,7 @@ static constexpr float kWhiteV = 0.995f;
 static SDL_Texture* loadDetail(const char* name) {
 	char path[64];
 	snprintf(path, sizeof path, "tex/%s.png", name);
-	SDL_Surface* src = gfx::halveForLowMemory(gfx::loadPng(path));
+	SDL_Surface* src = gfx::halveForQuality(gfx::loadPng(path), 2);
 	if (!src) return nullptr;
 	SDL_Surface* rgb = SDL_ConvertSurface(src, SDL_PIXELFORMAT_RGBA32);
 	SDL_DestroySurface(src);
@@ -75,6 +75,17 @@ void shutdown() {
 	for (auto& t : sTex) {
 		if (t) SDL_DestroyTexture(t);
 		t = nullptr;
+	}
+}
+
+// Texture Quality changed. Called between frames, so no batch still points at the old skins.
+void reloadTextures() {
+	if (gfx::softwareRenderer()) return;
+	for (int i = 0; i < m3d::MESH_COUNT; i++) {
+		SDL_Texture* t = loadDetail(kTexNames[i]);
+		if (!t) continue;  // keep the old skin rather than none
+		if (sTex[i]) SDL_DestroyTexture(sTex[i]);
+		sTex[i] = t;
 	}
 }
 
@@ -167,7 +178,10 @@ static inline const Lit& lit(const Vertex* v, u32 i) {
 	h = h * h;
 	h = h * h;
 	h = h * h;
-	float shade = (0.62f + 0.5f * diff) / 255.0f, high = 0.32f * h;
+	float ambient = 0.62f;
+	// Ambient occlusion: less of the room's light reaches the parts of a fruit that face the board.
+	if (gSave.ambientOcc) ambient *= 0.8f + 0.2f * (0.5f - 0.5f * wy);
+	float shade = (ambient + 0.5f * diff) / 255.0f, high = 0.32f * h;
 	l.c.r = clampf(q.r * shade + high, 0, 1);
 	l.c.g = clampf(q.g * shade + high, 0, 1);
 	l.c.b = clampf(q.b * shade + high, 0, 1);

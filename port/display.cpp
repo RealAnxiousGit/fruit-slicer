@@ -16,6 +16,7 @@ constexpr int kMaxRes = 24;
 const char* gResNames[kMaxRes] = {"1280 x 720"};
 u8 gResChoice;
 bool gVsyncOn;
+void applyGraphics();
 static char sResText[kMaxRes][24];
 static u16 sResW[kMaxRes], sResH[kMaxRes], sResHz[kMaxRes];
 static int sResCount;
@@ -196,6 +197,7 @@ void applyVsync() {
 
 // At start, after the renderer: the window takes the saved mode.
 void displayStart() {
+	applyGraphics();  // remembers the Texture Quality the art was loaded at
 	resolutionCount();
 	if (gSave.windowMode != 0 || gSave.winW) showNow();
 	else {
@@ -262,5 +264,80 @@ void drawOverlay() {
 	SDL_SetRenderDrawColor(r, 160, 255, 160, 255);
 	SDL_RenderDebugText(r, 4, 4, sOverlayText);
 	SDL_SetRenderScale(r, 1, 1);
+}
+}  // namespace port
+
+// ---------------------------------------------------------------- graphics presets
+namespace port {
+struct Preset {
+	u8 tex, shadow, ao, bloom, effects, detail, scale;
+};
+// Performance draws fewer pixels and skips the extras; Beautiful draws more pixels than the screen has.
+static const Preset kPresets[3] = {
+	{1, 0, 0, 0, FX_LOW, 0, 0},
+	{2, 1, 1, 1, FX_FULL, 1, 1},
+	{2, 2, 1, 2, FX_FULL, 1, 2},
+};
+static u8 sLoadedTex = 255;
+static char sNotice[96];
+
+void setNotice(const char* text) { snprintf(sNotice, sizeof sNotice, "%s", text); }
+const char* notice() { return sNotice[0] ? sNotice : nullptr; }
+
+void applyGraphics() {
+	if (sLoadedTex != gSave.texQuality) {
+		if (sLoadedTex != 255) gfx::reloadTextures();
+		sLoadedTex = gSave.texQuality;
+	}
+}
+
+void matchPreset() {
+	gSave.preset = 3;
+	for (int i = 0; i < 3; i++) {
+		const Preset& p = kPresets[i];
+		if (gSave.texQuality == p.tex && gSave.shadowQuality == p.shadow && gSave.ambientOcc == p.ao && gSave.bloom == p.bloom &&
+		    gSave.effects == p.effects && gSave.detail == p.detail && gSave.renderScale == p.scale)
+			gSave.preset = (u8)i;
+	}
+}
+
+void applyPreset(int i) {
+	if (i < 0 || i > 2) return;
+	const Preset& p = kPresets[i];
+	gSave.texQuality = p.tex;
+	gSave.shadowQuality = p.shadow;
+	gSave.ambientOcc = p.ao;
+	gSave.bloom = p.bloom;
+	gSave.effects = p.effects;
+	gSave.detail = p.detail;
+	gSave.renderScale = p.scale;
+	gSave.preset = (u8)i;
+	applyGraphics();
+}
+
+// The first start picks Quality, or Performance where the computer can't hold 60 frames a second with
+// room to spare: the Software renderer, a phone short on memory, or a slow title screen.
+void hardwareCheck(float workMs) {
+#ifdef AUTOTEST
+	(void)workMs;
+	return;
+#else
+	if (gSave.hwChecked) return;
+	static int frames = 0;
+	static float total = 0;
+	int pick = -1;
+	if (gfx::softwareRenderer() || gfx::lowMemory()) {
+		pick = 0;
+	} else if (++frames > 60) {  // the first second still has loading in it
+		total += workMs;
+		if (frames >= 60 + 180) pick = total / 180 > 8 ? 0 : 1;
+	}
+	if (pick < 0) return;
+	applyPreset(pick);
+	gSave.hwChecked = 1;
+	saveWrite();
+	fprintf(stderr, "[gfx] first start: %s graphics\n", pick ? "Quality" : "Performance");
+	if (pick == 0) setNotice("Graphics set to Performance for this device.");
+#endif
 }
 }  // namespace port

@@ -7,7 +7,7 @@ SDL_Renderer* renderer();
 SDL_Window* window();
 bool softwareRenderer();
 bool lowMemory();  // a phone with under 3 GB: pictures load at half size
-SDL_Surface* halveForLowMemory(SDL_Surface* s);
+SDL_Surface* halveForQuality(SDL_Surface* s, int keepFrom);  // half size below this Texture Quality (or on a phone short on memory)
 void pushTris(SDL_Texture* tex, const SDL_Vertex* v, int count);
 SDL_Vertex* reserveTris(SDL_Texture* tex, int count);  // room for this many vertices, to fill before the next draw
 void toScreen(float x, float y, float* sx, float* sy);
@@ -27,3 +27,14 @@ void toggleFullscreen();    // F11 and Alt+Enter
 void toggleOverlay();       // F3
 void drawOverlay();         // the F3 readout, last thing before a frame is shown
 }  // namespace port
+namespace port {
+void setNotice(const char* text);
+void hardwareCheck(float workMs);  // each frame until the first-start check has picked a preset
+}  // namespace port
+namespace gfx {
+void reloadTextures();     // after Texture Quality changes
+float renderScaleNow();    // what Render Scale is drawing at this frame
+}  // namespace gfx
+namespace m3dport {
+void reloadTextures();
+}

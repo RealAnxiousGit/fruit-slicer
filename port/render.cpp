@@ -33,7 +33,6 @@ static float sClipX0, sClipY0, sClipX1 = 1280, sClipY1 = 720;  // where drawing 
 static float sBaseX, sBaseY, sShakeX, sShakeY;
 static bool sShaking;
 static char sShotPath[300];
-static char sNotice[96];
 
 struct Sheet {
 	SDL_Texture* tex;
@@ -102,8 +101,11 @@ bool lowMemory() {
 #endif
 }
 
-SDL_Surface* halveForLowMemory(SDL_Surface* s) {
-	if (!s || !lowMemory()) return s;
+// Texture Quality: Low halves the 2D art and the 3D skins, Medium only the 3D skins. A phone short on
+// memory always gets Low.
+SDL_Surface* halveForQuality(SDL_Surface* s, int keepFrom) {
+	int quality = lowMemory() ? 0 : gSave.texQuality;
+	if (!s || quality >= keepFrom) return s;
 	SDL_Surface* half = SDL_ScaleSurface(s, s->w / 2, s->h / 2, SDL_SCALEMODE_LINEAR);
 	if (!half) return s;
 	SDL_DestroySurface(s);
@@ -115,7 +117,7 @@ static bool loadSheet(SheetId id, const char* path, const SheetRect* rects) {
 	if (!s) return false;
 	// Coordinates stay in full-size pixels, since a half-size sheet covers the same 0 to 1. Text stays sharp.
 	const float fullW = (float)s->w, fullH = (float)s->h;
-	if (id != SHEET_FONT && id != SHEET_LOGO) s = halveForLowMemory(s);
+	if (id != SHEET_FONT && id != SHEET_LOGO) s = halveForQuality(s, 1);
 	SDL_Texture* t = SDL_CreateTextureFromSurface(sRenderer, s);
 	Sheet& sh = sSheets[id];
 	if (t) {
@@ -159,7 +161,9 @@ bool init() {
 			if (!forced && i == choice) continue;
 			sRenderer = SDL_CreateRenderer(sWindow, kDrivers[i]);
 			if (sRenderer && !forced) {
-				snprintf(sNotice, sizeof sNotice, "%s would not start, so the game uses %s.", kRendererNames[choice], kRendererNames[i]);
+				char note[96];
+				snprintf(note, sizeof note, "%s would not start, so the game uses %s.", kRendererNames[choice], kRendererNames[i]);
+				port::setNotice(note);
 				gSave.renderer = (u8)i;
 				saveWrite();
 			}
@@ -196,6 +200,14 @@ bool init() {
 int loadStepCount() { return 1; }
 void loadStep(int) { sync(); }
 
+void reloadTextures() {
+	loadSheet(SHEET_SPRITES, "gfx/sprites.png", kRectsSprites);
+	loadSheet(SHEET_FRUIT, "gfx/fruit.png", kRectsFruit);
+	sLoadedBoard = -1;
+	sync();
+	m3dport::reloadTextures();
+}
+
 void sync() {
 	if (sLoadedBoard == gSave.board) return;
 	char path[40];
@@ -230,9 +242,36 @@ void getOffset(float* x, float* y) {
 	*y = sBaseY + (sShaking ? sShakeY : 0);
 }
 
+// Render Scale: anything but 100% draws into a texture of that size, which is then stretched to the window.
+static SDL_Texture* sTarget;
+static int sTargetW, sTargetH;
+static float sRenderScale = 1;
+float renderScaleNow() { return sRenderScale; }
+
 void beginFrame() {
 	int w = 1280, h = 720;
 	SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h);
+	static const float kScales[] = {0.75f, 1.0f, 1.25f};
+	float want = kScales[gSave.renderScale < 3 ? gSave.renderScale : 1];
+	sRenderScale = 1;
+	if (want != 1) {
+		int tw = (int)(w * want), th = (int)(h * want);
+		if (!sTarget || tw != sTargetW || th != sTargetH) {
+			if (sTarget) SDL_DestroyTexture(sTarget);
+			sTarget = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, tw, th);
+			if (sTarget) SDL_SetTextureScaleMode(sTarget, SDL_SCALEMODE_LINEAR);
+			sTargetW = tw;
+			sTargetH = th;
+		}
+		if (sTarget && SDL_SetRenderTarget(sRenderer, sTarget)) {
+			sRenderScale = want;
+			w = tw;
+			h = th;
+		}
+	} else if (sTarget) {
+		SDL_DestroyTexture(sTarget);
+		sTarget = nullptr;
+	}
 	sWinW = (float)w;
 	sWinH = (float)h;
 	sClipX0 = sClipY0 = 0;
@@ -246,6 +285,11 @@ void beginFrame() {
 
 void endFrame() {
 	flush();
+	if (sRenderScale != 1) {
+		SDL_SetRenderTarget(sRenderer, nullptr);
+		SDL_SetRenderClipRect(sRenderer, nullptr);
+		SDL_RenderTexture(sRenderer, sTarget, nullptr, nullptr);
+	}
 	port::drawOverlay();
 	if (sShotPath[0]) {
 		SDL_Surface* s = SDL_RenderReadPixels(sRenderer, nullptr);
@@ -482,6 +526,3 @@ void fadeAll(float alpha) {
 }
 }  // namespace gfx
 
-namespace port {
-const char* notice() { return gfx::sNotice[0] ? gfx::sNotice : nullptr; }
-}  // namespace port

@@ -196,6 +196,8 @@ int main(int, char**) {
 		in.held = keysHeld;
 		float rx = mx, ry = my;
 		SDL_RenderCoordinatesFromWindow(gfx::renderer(), mx, my, &rx, &ry);
+		rx *= gfx::renderScaleNow();  // Render Scale draws at another size than the window
+		ry *= gfx::renderScaleNow();
 		int tx = 0, ty = 0;
 		gfx::windowToGame(rx, ry, app::inFieldView(), &tx, &ty);
 		in.tx = tx;
@@ -230,7 +232,9 @@ int main(int, char**) {
 #endif
 		}
 #endif
+		Uint64 frameFrom = SDL_GetTicksNS();
 		if (!app::frame(in, steps)) break;
+		port::hardwareCheck((SDL_GetTicksNS() - frameFrom) / 1e6f - gfx::presentMs());
 #ifdef TEST_SHOTS
 		workNs += SDL_GetTicksNS() - workFrom;
 		presentTotal += gfx::presentMs();
