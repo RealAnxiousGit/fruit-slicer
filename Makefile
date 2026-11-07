@@ -67,13 +67,14 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 export ROMFS_T3XFILES	:=	$(patsubst %.t3s, $(GFXBUILD)/%.t3x, $(GFXFILES))
-export _3DSXDEPS	:=	$(addprefix $(CURDIR)/,$(ROMFS_T3XFILES))
+export ROMFS_SHADER	:=	$(GFXBUILD)/fruit.shbin
+export _3DSXDEPS	:=	$(addprefix $(CURDIR)/,$(ROMFS_T3XFILES) $(ROMFS_SHADER))
 export _3DSXFLAGS	+=	--smdh=$(CURDIR)/$(TARGET).smdh --romfs=$(CURDIR)/$(ROMFS)
 export APP_ICON		:=	$(TOPDIR)/$(ICON)
 
 .PHONY: all clean cia
 
-all: $(BUILD) $(GFXBUILD) $(ROMFS_T3XFILES) $(HFILES_BUILD)
+all: $(BUILD) $(GFXBUILD) $(ROMFS_T3XFILES) $(ROMFS_SHADER)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 $(BUILD):
@@ -85,6 +86,10 @@ $(GFXBUILD):
 $(GFXBUILD)/%.t3x: $(GRAPHICS)/%.t3s | $(BUILD) $(GFXBUILD)
 	@echo tex3ds $(notdir $<)
 	@cd $(GRAPHICS) && tex3ds -i $(notdir $<) -H $(CURDIR)/$(BUILD)/$*.h -d $(CURDIR)/$(BUILD)/$*.d -o $(CURDIR)/$@
+
+$(ROMFS_SHADER): source/fruit.v.pica | $(GFXBUILD)
+	@echo picasso $(notdir $<)
+	@picasso -o $@ $<
 
 clean:
 	@rm -rf $(BUILD) $(GFXBUILD) $(TARGET).3dsx $(TARGET).smdh $(TARGET).elf $(TARGET).cia meta/banner.bnr meta/icon.icn

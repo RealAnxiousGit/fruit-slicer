@@ -14,13 +14,22 @@ enum Sfx {
 enum Music { MUSIC_NONE = -1, MUSIC_MENU, MUSIC_PLAY, MUSIC_ZEN, MUSIC_COUNT };
 
 namespace audio {
-// Loads every clip into linear memory up front; returns false if ndsp is unavailable.
+// Starts the DSP; returns false if ndsp is unavailable. Sound effects then load one per loadStep,
+// so the loading screen can show real progress. A music track loads a little each frame, so
+// starting one never stalls the game. It begins playing once it has all arrived.
 bool init();
+int loadStepCount();
+void loadStep(int i);
+void update();  // once per frame: reads music in, and frees a replaced track when it's safe
 void shutdown();
 bool available();
 // pan is -1 (left) to +1 (right). pitch multiplies the playback rate, so one clip can vary.
 void play(Sfx s, float volume = 1.0f, float pan = 0.0f, float pitch = 1.0f);
-void music(Music m);
+void click(float volume = 1.0f);  // menu sound, on its own volume slider
+void music(Music m);        // what the current screen wants; the player's track choice applies on top
+void preview(Music m);      // plays what that screen would, for the settings rows
+void reapply();             // back to the current screen's track after a preview or a changed choice
+const char* trackName(int i);
 void refreshVolumes();
 // The sizzle that plays while a bomb is in the air.
 void fuse(bool on, float pan = 0.0f);

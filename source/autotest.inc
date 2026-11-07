@@ -1,5 +1,12 @@
 // Test-only bot, compiled with `make AUTOTEST=1`. It presses what a player presses: all of its
-// input goes through the same Input struct as the hardware. It plays every mode, then quits.
+// input goes through the same Input struct as the hardware. It walks the menus, plays every mode, then quits.
+//   BOT_ONLY=n   measure one mode with hands off
+//   BOT_TOUR     stop on each menu for a few seconds, for screenshots, and don't play
+//   TEST_ART=n   start with this art style
+//   TEST_SPEED   run the Speed Test once, then quit
+//   BOT_SHOTS    skip the menu walk and go straight to playing, for screenshots
+//   BOT_PLAY     with BOT_ONLY, play that mode normally instead of keeping hands off
+//   TEST_SEEKBOMB  with BOT_ONLY, aim for bombs
 #ifdef BOT_ONLY
 static int sBotMode = BOT_ONLY;
 #else
@@ -12,26 +19,82 @@ static int sBotTapFrames = 0;
 static bool sBotDone = false;
 static int sBotTapX, sBotTapY;
 static u32 sBotModeFrames = 0;
-#ifdef BOT_ONLY
-static bool sBotOptionsDone = true;
+#if defined(BOT_ONLY) || defined(TEST_SPEED) || defined(BOT_SHOTS)
+static int sBotMenuStep = 100;
 #else
-static bool sBotOptionsDone = false;
+static int sBotMenuStep = 0;
 #endif
-static int sBotOptionsStep = 0;
 
 static bool autotestDone() { return sBotDone; }
 
-static void botTap(Input& in, const Button& b) {
+static void botTap(const Button& b) {
 	sBotTapX = (int)(b.x + b.w / 2);
 	sBotTapY = (int)(b.y + b.h / 2);
 	sBotTapFrames = 8;
+}
+
+static void botTapXY(int x, int y) {
+	sBotTapX = x;
+	sBotTapY = y;
+	sBotTapFrames = 8;
+}
+
+#ifdef BOT_TOUR
+static constexpr int kBotDwell = 200;
+#else
+static constexpr int kBotDwell = 30;
+#endif
+
+static void autotestMenus(Input& in) {
+	// A scripted walk: title, each top-level screen, each settings section and its controls.
+	if (sBotPhaseFrames < kBotDwell || sSliding || sFade > 0) return;
+	sBotPhaseFrames = 0;
+	const float firstRowY = kListTop + kRowH * 0.5f;
+	switch (sBotMenuStep++) {
+		case 0: botTap(kTitleButtons[3]); return;   // How to Play
+		case 1: botTap(kBack); return;
+		case 2: botTap(kTitleButtons[2]); return;   // Credits
+		case 3: botTap(kBack); return;
+		case 4: botTap(kTitleButtons[1]); return;   // Options
+		case 5: botTap(kOptionButtons[1]); return;  // Audio
+		case 6: botTapXY((int)kTrackX1, (int)firstRowY); return;  // drag-free slider tap
+		case 7: botTapXY((int)((kTrackX0 + kTrackX1) / 2), (int)firstRowY); return;
+		case 8: botTap(kBack); return;
+		case 9: botTap(kOptionButtons[2]); return;  // Visuals
+		case 10: botTapXY(231, (int)(firstRowY + kRowH)); return;  // Board: next
+		case 11: botTapXY(231, (int)(firstRowY + kRowH * 2)); return;  // Scenery: next
+		case 12: botTapXY(231, (int)(firstRowY + kRowH * 3)); return;  // Blade: next
+		case 13: botTapXY(231, (int)(firstRowY + kRowH * 4)); return;  // Effects: wraps round
+		case 14: botTap(kBack); return;
+		case 15: botTap(kOptionButtons[3]); return;  // Gameplay
+		case 16: botTapXY(231, (int)(firstRowY + kRowH)); return;  // Difficulty
+		case 17: botTap(kBack); return;
+		case 18: botTap(kOptionButtons[4]); return;  // Scores and Data
+		case 19: botTap(kBack); return;
+		case 20: botTap(kBack); return;              // back to the title
+#ifdef BOT_TOUR
+		case 21: botTap(kTitleButtons[0]); return;   // Play
+		case 22: {
+			sBotPhaseFrames = -60;
+			sBotDone = sBotMenuStep > 40;
+			return;
+		}
+		default:
+			if (sBotMenuStep > 26) sBotDone = true;
+			return;
+#else
+		default:
+			sBotMenuStep = 100;
+			return;
+#endif
+	}
 	(void)in;
 }
 
 static void autotestInput(Input& in) {
 	in = Input{};
 	sBotPhaseFrames++;
-	static Screen lastScreen = SCREEN_MENU;
+	static Screen lastScreen = SCREEN_LOADING;
 	if (sScreen != lastScreen) {
 		lastScreen = sScreen;
 		sBotPhaseFrames = 0;
@@ -47,14 +110,32 @@ static void autotestInput(Input& in) {
 		return;
 	}
 
+#ifdef TEST_SPEED
+	static bool started = false;
+	if (!started && sScreen == SCREEN_TITLE && sBotPhaseFrames > 60) {
+		started = true;
+		startSpeedTest();
+		return;
+	}
+	if (sScreen == SCREEN_BENCH && sBenchDone) sBotDone = true;
+	return;
+#endif
+
+	if (sBotMenuStep < 100 && sScreen != SCREEN_GAME) {
+		autotestMenus(in);
+		return;
+	}
+
 	switch (sScreen) {
-		case SCREEN_MENU:
-			if (sBotPhaseFrames < 45) return;
+		case SCREEN_TITLE:
+			if (sBotPhaseFrames < 30 || sSliding || sFade > 0) return;
 			sBotPhaseFrames = 0;
-			if (!sBotOptionsDone) {
-				botTap(in, kMenuButtons[7]);
-				return;
-			}
+			botTap(kTitleButtons[0]);
+			return;
+
+		case SCREEN_MODES:
+			if (sBotPhaseFrames < 45 || sSliding || sFade > 0) return;
+			sBotPhaseFrames = 0;
 #ifdef BOT_ONLY
 			if (sBotMode != BOT_ONLY) {
 #else
@@ -66,60 +147,42 @@ static void autotestInput(Input& in) {
 			}
 			fprintf(stderr, "[bot] starting %s\n", kModes[sBotMode].name);
 			sBotModeFrames = 0;
-			botTap(in, kMenuButtons[sBotMode]);
+			botTap(kModeButtons[sBotMode + 1]);
 			return;
-
-		case SCREEN_OPTIONS: {
-			if (sBotPhaseFrames < 24) return;
-			sBotPhaseFrames = 0;
-			// Cycle each setting all the way round, so the save ends where it started.
-			static const u8 kSeq[] = {
-				OPT_BOARD, OPT_BOARD, OPT_BOARD, OPT_BOARD, OPT_BOARD, OPT_BOARD,
-				OPT_SCENE, OPT_SCENE, OPT_SCENE,
-				OPT_BLADE, OPT_BLADE, OPT_BLADE, OPT_BLADE, OPT_BLADE, OPT_BLADE,
-				OPT_JUICE, OPT_JUICE, OPT_JUICE, OPT_DEPTH, OPT_DEPTH, OPT_DEPTH,
-				OPT_SHAKE, OPT_SHAKE,
-				OPT_SOUND, OPT_SOUND, OPT_SOUND, OPT_SOUND, OPT_SOUND,
-				OPT_MUSIC, OPT_MUSIC, OPT_MUSIC, OPT_MUSIC, OPT_MUSIC,
-			};
-			constexpr int kSteps = sizeof kSeq / sizeof kSeq[0];
-			if (sBotOptionsStep < kSteps) {
-				botTap(in, kOptButtons[kSeq[sBotOptionsStep++]]);
-				return;
-			}
-			fprintf(stderr, "[bot] options exercised blade=%d board=%d scene=%d sfx=%d music=%d\n", gSave.blade, gSave.board, gSave.scene, gSave.sfx, gSave.music);
-			sBotOptionsDone = true;
-			botTap(in, kOptButtons[OPT_BACK]);
-			return;
-		}
 
 		case SCREEN_RESULT:
 			if (sBotPhaseFrames < 80) return;
 			sBotPhaseFrames = 0;
-			fprintf(stderr, "[bot] result mode=%s score=%lu sliced=%d combo=%d best=%lu newBest=%d strikes=%d waves=%lu bombFrames=%lu overlapFrames=%lu finaleHits=%d\n", kModes[sGame.mode].name,
+			fprintf(stderr, "[bot] result mode=%s score=%lu sliced=%d combo=%d best=%lu newBest=%d strikes=%d waves=%lu bombFrames=%lu overlapFrames=%lu finaleHits=%d frenzies=%lu\n", kModes[sGame.mode].name,
 			        (unsigned long)sGame.score, sGame.sliced, sGame.bestCombo, (unsigned long)sGame.best, sGame.newBest, sGame.strikes,
-			        (unsigned long)sGame.statWaves, (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames, sGame.finaleHits);
+			        (unsigned long)sGame.statWaves, (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames, sGame.finaleHits, (unsigned long)sGame.statFrenzies);
 			{
 				// Azahar buffers its log, so measurement runs read the result from the SD card.
 				FILE* f = fopen("sdmc:/3ds/FruitSlicer/bot.txt", "a");
 				if (f) {
-					fprintf(f, "%s waves=%lu bombFrames=%lu overlapFrames=%lu\n", kModes[sGame.mode].name, (unsigned long)sGame.statWaves, (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames);
+					fprintf(f, "%s score=%lu sliced=%d combo=%d waves=%lu bombFrames=%lu overlapFrames=%lu frenzies=%lu resets=%lu finale=%d\n", kModes[sGame.mode].name, (unsigned long)sGame.score, sGame.sliced, sGame.bestCombo, (unsigned long)sGame.statWaves,
+					        (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames, (unsigned long)sGame.statFrenzies, (unsigned long)sGame.statResets, sGame.finaleHits);
+					fprintf(f, "  elapsed=%.1f throws=%lu feverThrows=%lu feverTime=%.1f bombHits=%lu dropped=%lu peakObjs=%lu\n", sGame.elapsed, (unsigned long)sGame.statThrows, (unsigned long)sGame.statFeverThrows, sGame.statFeverTime,
+					        (unsigned long)sGame.statBombHits, (unsigned long)sGame.statDropped, (unsigned long)sGame.statPeakObjs);
 					fclose(f);
 				}
 			}
 			sBotMode++;
-			botTap(in, kResultButtons[1]);
+			botTap(kResultButtons[2]);
 			return;
 
 		case SCREEN_PAUSE:
 			if (sBotPhaseFrames < 40) return;
 			sBotPhaseFrames = 0;
 			fprintf(stderr, "[bot] resume from pause\n");
-			botTap(in, kPauseButtons[0]);
+			botTap(kPauseButtons[1]);
 			return;
 
 		case SCREEN_GAME:
 			break;
+
+		default:
+			return;
 	}
 
 	sBotModeFrames++;
@@ -137,7 +200,9 @@ static void autotestInput(Input& in) {
 		in.ty = 112 + (int)(cosf(sBotModeFrames * 0.31f) * 18);
 		return;
 	}
-#ifdef BOT_ONLY
+#if defined(TEST_SEEKBOMB)
+	bool suicide = true;  // always goes for bombs, to prove what a bomb costs in this mode
+#elif defined(BOT_ONLY) && !defined(BOT_PLAY)
 	// Measurement run: keep hands off so every throw flies its whole path, then end the game.
 	if (sBotModeFrames < 7200) return;
 	bool suicide = true;

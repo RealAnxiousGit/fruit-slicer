@@ -11,3 +11,4 @@ romfs/gfx/
 dist/
 .tools/
 __pycache__/
+graphify-out/

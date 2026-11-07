@@ -8,22 +8,46 @@ inline u32 withAlpha(u32 c, float a) {
 	return (c & 0x00FFFFFFu) | ((u32)v << 24);
 }
 
+// Text stays cream everywhere. Sign colour and the one accent follow the board chosen in Visuals.
+#define COL_CREAM 0xFFD2F0FFu   // 255, 240, 210
+#define COL_DIM 0xFFB4CADCu     // 220, 202, 180
+#define COL_ACCENT gfx::themeAccent()
+#define COL_PLANK gfx::themePlank()
+
 enum Align { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT };
-enum SheetId { SHEET_SPRITES, SHEET_FONT, SHEET_BGTOP, SHEET_BGBOT, SHEET_LOGO, SHEET_COUNT };
+enum SheetId { SHEET_SPRITES, SHEET_FONT, SHEET_LOGO, SHEET_BGTOP, SHEET_BOARD, SHEET_FRUIT, SHEET_COUNT };
 
 namespace gfx {
+// Loads the little that the loading screen itself needs. The rest arrives through loadStep().
 bool init();
+int loadStepCount();
+void loadStep(int i);
 void shutdown();
-// Swaps the top-screen scenery. The old texture is freed a few frames later, once the GPU is done.
-void setScene(int scene);
+u32 themePlank();   // sign colour for the chosen board
+u32 themeAccent();  // highlight colour for the chosen board
+u32 themeBar();     // dark strip colour for the chosen board
+
+// Keeps the chosen scenery and board loaded, and the 2D fruit sheet only while the 2D art style
+// needs it. Replaced textures are freed a few frames later, once the GPU is done with them.
+void sync();
+
 void beginFrame();
 void endFrame();
 // eye: 0 = left, 1 = right. Returns false if that eye does not need drawing.
 bool beginTop(int eye);
 void beginBottom();
+bool onTop();
 // Stereo plane for following top-screen draws: >0 pops out, <0 sinks behind the screen.
 void setDepth(float depth);
+// Sideways shift per unit of model z for the eye being drawn, used by the 3D fruit.
+float stereoPerZ();
 void setShake(float dx, float dy);
+// Moves everything drawn from now on; screen transitions slide with this.
+void setBase(float dx, float dy);
+void getOffset(float* x, float* y);  // base + shake, without the stereo shift
+
+// Test hook: draws both eyes as if the 3D slider were all the way up, even on a 2DS.
+void forceStereo(bool on);
 
 void sprite(SheetId sheet, int idx, float x, float y, float sx = 1, float sy = 1, float rot = 0, u32 color = WHITE);
 void image(SheetId sheet, int idx, float x, float y, float w, float h, u32 color = WHITE);

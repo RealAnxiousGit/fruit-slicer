@@ -3,6 +3,14 @@
 #include <citro2d.h>
 #include <citro3d.h>
 #include <math.h>
+#include <stdio.h>
+
+// Logging costs real time on a console and even more in an emulator, so release builds drop it.
+#ifdef AUTOTEST
+#define DLOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define DLOG(...) ((void)0)
+#endif
 
 constexpr float kPi = 3.14159265f;
 constexpr float kDt = 1.0f / 60.0f;
@@ -29,7 +37,7 @@ struct Rng {
 };
 extern Rng gRng;
 
-enum Mode { MODE_CLASSIC, MODE_ARCADE, MODE_ZEN, MODE_BLITZ, MODE_SUDDEN, MODE_MINEFIELD, MODE_COMBO, MODE_COUNT };
+enum Mode { MODE_CLASSIC, MODE_ARCADE, MODE_ZEN, MODE_FRENZY, MODE_SUDDEN, MODE_MINEFIELD, MODE_COMBO, MODE_COUNT };
 
 struct ModeInfo {
 	const char* name;
@@ -41,26 +49,52 @@ extern const ModeInfo kModes[MODE_COUNT];
 constexpr int kBoardCount = 6;
 constexpr int kSceneCount = 3;
 constexpr int kBladeCount = 6;
-constexpr int kVolumeLevels = 5;  // 0 = off, 4 = full
 
-// Save data (save.cpp)
+enum ArtStyle { ART_2D, ART_3D };
+enum Effects { FX_NONE, FX_LOW, FX_MEDIUM, FX_FULL };
+enum Difficulty { DIFF_EASY, DIFF_NORMAL, DIFF_HARD, DIFF_INSANE, DIFF_COUNT };
+
+static constexpr int kTrackCount = 8;
+
+// Save data (save.cpp). Sliders hold 0..100.
 struct Settings {
 	u32 best[MODE_COUNT];
 	u32 totalFruit;
 	u32 bestCombo;
-	u8 sfx, music;   // volume levels
-	u8 blade, board, scene;
-	u8 juice;        // 0 low, 1 normal, 2 extra
-	u8 depth;        // 0 off, 1 normal, 2 strong
+	// Audio
+	u8 sfx, music, menuSfx;
+	u8 menuTrack, gameTrack;  // 0 lets the game choose, otherwise 1 + a track
+	// Visuals
+	u8 artStyle, board, scene, blade;
+	u8 effects;
+	u8 depth;       // 3D depth; 50 is the normal strength
 	u8 shake;
+	u8 bgDetail;    // 0 simple, 1 full
+	u8 topFruit;    // 1: throws can fly up onto the top screen
+	u8 detail;      // 3D model detail: 0 low, 1 high
+	u8 sliceStyle;  // 0 ready-made halves, 1 cut along the actual swipe
+	u8 transitions;
+	// Gameplay
+	u8 stylus;
+	u8 difficulty;
+	u8 fruitSpeed;   // 50 is normal
+	u8 bombs;        // 50 is normal
+	u8 forgiveness;  // 50 is normal
+	u8 frenzyDrain;  // 50 is normal
+	u8 misses;       // 1..5, Classic only
 };
 extern Settings gSave;
+void saveDefaults(bool keepScores, int section);  // section: -1 all, 0 audio, 1 visuals, 2 gameplay
 void saveLoad();
 void saveWrite();
 
+// Console facts, worked out once at boot.
+extern bool gIsNew3ds;
+extern bool gHas3dScreen;
+
 // One frame of player input, from the hardware or the AUTOTEST bot.
 struct Input {
-	u32 down, held;
+	u32 down, held, repeat;
 	bool touching;
 	int tx, ty;
 };

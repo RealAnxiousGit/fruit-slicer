@@ -12,6 +12,7 @@ Requires Pillow and numpy. Output is deterministic.
 import math
 import os
 import random
+import shutil
 import sys
 
 import numpy as np
@@ -484,6 +485,102 @@ def spr_panel():
     return shrink(img)
 
 
+# ---------------------------------------------------------------- orchard signs
+def spr_plank():
+    """A hand-cut sign in pale neutral grain. The game tints it to suit the chosen board."""
+    w, h = 256, 56
+    yy, xx = np.mgrid[0:h * SS, 0:w * SS]
+    y, x = yy / SS, xx / SS
+    grain = np.sin(y * 0.85 + np.sin(x * 0.028) * 2.4) * 0.5 + np.sin(y * 2.3 + np.sin(x * 0.05 + 1) * 3) * 0.28
+    light = 1 + grain * 0.1 + 0.16 * (1 - y / h) - 0.12 * (y / h)
+    arr = np.zeros((h * SS, w * SS, 4), np.uint8)
+    for c in range(3):
+        arr[..., c] = np.clip(214 * light, 0, 255)
+    arr[..., 3] = 255
+    img = Image.fromarray(arr, "RGBA")
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([3 * SS, 3 * SS, (w - 3) * SS, (h - 4) * SS], 7 * SS, fill=255)
+    img.putalpha(mask)
+    d = ImageDraw.Draw(img)
+    d.line([8 * SS, 6 * SS, (w - 8) * SS, 6 * SS], fill=(255, 255, 255, 110), width=SS)  # worn top edge
+    for x0 in (10, w - 10):
+        for y0 in (12, h - 13):
+            el(d, x0, y0, 2.0, 2.0, (58, 40, 30, 255))
+            el(d, x0 - 0.4, y0 - 0.5, 0.8, 0.8, (214, 196, 170, 255))
+    return shrink(sticker(img, 1.2))
+
+
+def spr_plank_focus():
+    """White outline of the plank, tinted with the accent to show which sign has focus."""
+    w, h = 256, 56
+    img = canvas(w, h)
+    ImageDraw.Draw(img).rounded_rectangle([0, 0, w * SS - 1, h * SS - 1], 9 * SS, outline=(255, 255, 255, 255), width=3 * SS)
+    return shrink(img)
+
+
+def spr_knob():
+    img = canvas(32)
+    d = ImageDraw.Draw(img)
+    el(d, 16, 16, 12, 12, (150, 98, 54, 255))
+    el(d, 16, 15, 9, 9, (186, 130, 78, 255))
+    el(d, 16, 15, 3, 3, (110, 70, 40, 255))
+    return shrink(sticker(img, 1.4))
+
+
+def spr_arrow(back=False):
+    """A chunky painted arrow. `back` adds the stem used by every back button."""
+    img = canvas(32)
+    d = ImageDraw.Draw(img)
+    white = (255, 255, 255, 255)
+    tip = 6 if back else 9
+    d.line([(tip + 10) * SS, 6 * SS, tip * SS, 16 * SS, (tip + 10) * SS, 26 * SS], fill=white, width=5 * SS, joint="curve")
+    for p in ((tip + 10, 6), (tip, 16), (tip + 10, 26)):
+        el(d, p[0], p[1], 2.5, 2.5, white)
+    if back:
+        d.line([tip * SS, 16 * SS, 27 * SS, 16 * SS], fill=white, width=5 * SS)
+        el(d, 27, 16, 2.5, 2.5, white)
+    return shrink(img)
+
+
+def spr_post():
+    w, h = 20, 128
+    arr = np.zeros((h, w, 4), np.uint8)
+    for x in range(w):
+        t = abs(x - w / 2) / (w / 2)
+        arr[:, x, 0] = arr[:, x, 1] = arr[:, x, 2] = int(214 - 80 * t)
+    arr[..., 3] = 255
+    return Image.fromarray(arr, "RGBA")
+
+
+def spr_icon(kind):
+    """Small painted marks for the game-mode signs; each one names that mode's main rule."""
+    img = canvas(32)
+    d = ImageDraw.Draw(img)
+    cream = (255, 240, 210, 255)
+    if kind == "clock":
+        d.ellipse([5 * SS, 5 * SS, 27 * SS, 27 * SS], outline=cream, width=3 * SS)
+        d.line([16 * SS, 16 * SS, 16 * SS, 10 * SS], fill=cream, width=2 * SS)
+        d.line([16 * SS, 16 * SS, 21 * SS, 18 * SS], fill=cream, width=2 * SS)
+    elif kind == "leaf":
+        leaf(d, 7, 25, -45, 25, (150, 214, 110, 255))
+    elif kind == "fast":
+        for x in (8, 17):
+            d.line([x * SS, 7 * SS, (x + 8) * SS, 16 * SS, x * SS, 25 * SS], fill=cream, width=4 * SS, joint="curve")
+    elif kind == "one":
+        d.line([16 * SS, 6 * SS, 16 * SS, 26 * SS], fill=(240, 90, 80, 255), width=6 * SS)
+        d.line([10 * SS, 11 * SS, 16 * SS, 6 * SS], fill=(240, 90, 80, 255), width=5 * SS)
+    elif kind == "mine":
+        for i in range(8):
+            a = i * math.pi / 4
+            d.line([16 * SS, 16 * SS, (16 + math.cos(a) * 13) * SS, (16 + math.sin(a) * 13) * SS], fill=(44, 40, 60, 255), width=3 * SS)
+        el(d, 16, 16, 9, 9, (58, 52, 76, 255))
+        el(d, 16, 16, 3, 3, (240, 90, 80, 255))
+    elif kind == "chain":
+        for x in (10, 22):
+            d.ellipse([(x - 6) * SS, 10 * SS, (x + 6) * SS, 22 * SS], outline=cream, width=3 * SS)
+    return shrink(img)
+
+
 def spr_crack():
     img = canvas(CELL)
     d = ImageDraw.Draw(img)
@@ -680,37 +777,15 @@ from gen_backgrounds import bg_top, bg_boards  # noqa: E402
 
 # ---------------------------------------------------------------- meta art
 def meta_art():
-    sheet = {s[0]: fruit_images(s) for s in FRUITS}
-    icon = Image.new("RGBA", (48, 48), (44, 34, 92, 255))
-    d = ImageDraw.Draw(icon)
-    d.rectangle([0, 24, 48, 48], fill=(150, 66, 128, 255))
-    left, right = sheet["orange"][1], sheet["orange"][2]
-    s = 46
-    icon.alpha_composite(left.resize((s, s), Image.LANCZOS).rotate(24, Image.BICUBIC), (-3, 2))
-    icon.alpha_composite(right.resize((s, s), Image.LANCZOS).rotate(24, Image.BICUBIC), (6, -2))
-    d = ImageDraw.Draw(icon)
-    d.line([4, 44, 44, 4], fill=(255, 255, 255, 255), width=2)
-    icon.save(path("meta", "icon.png"))
-
-    W, H = 256, 128
+    from gen_meta import build_meta
     sky, far, mid, near = bg_top(0, hill_layer, v_gradient, spr_soft)
-    box = (84, 56, 84 + W, 56 + H)
-    banner = sky.crop(box)
-    banner.alpha_composite(far.crop((84, 0, 84 + W, 120)), (0, 62))
-    banner.alpha_composite(mid.crop((84, 0, 84 + W, 90)), (0, 80))
-    logo = spr_logo()
-    lw = 214
-    lh = logo.height * lw // logo.width
-    banner.alpha_composite(logo.resize((lw, lh), Image.LANCZOS), ((W - lw) // 2, 6))
-    positions = [("apple", 16, 72), ("melon", 96, 76), ("berry", 176, 74)]
-    for name, x, y in positions:
-        banner.alpha_composite(sheet[name][0], (x, y))
-    banner.convert("RGBA").save(path("meta", "banner.png"))
+    build_meta(sky, far, mid, spr_logo())
 
 
 # ---------------------------------------------------------------- sheets
 def write_sheet(name, images, fmt="rgba8", extra=""):
     lines = [f"--atlas -f {fmt} -z auto --border transparent{extra}"]
+    shutil.rmtree(os.path.join(ROOT, "gfx", "png", name), ignore_errors=True)
     for key, img in images:
         rel = f"png/{name}/{key}.png"
         img.save(path("gfx", "png", name, key + ".png"))
@@ -720,12 +795,15 @@ def write_sheet(name, images, fmt="rgba8", extra=""):
 
 
 def build_graphics():
-    sprites = []
+    # The 2D fruit is its own sheet, so that the 3D art style never has to keep it in memory.
+    fruit = []
     for spec in FRUITS:
         whole, left, right = fruit_images(spec)
-        sprites += [(spec[0], whole), (spec[0] + "_l", left), (spec[0] + "_r", right)]
-    sprites += [
-        ("bomb", spr_bomb()),
+        fruit += [(spec[0], whole), (spec[0] + "_l", left), (spec[0] + "_r", right)]
+    fruit += [("bomb", spr_bomb()), ("sunburst", spr_sunburst())]
+    write_sheet("fruit", fruit)
+
+    sprites = [
         ("pw_freeze", spr_power("freeze")),
         ("pw_double", spr_power("double")),
         ("pw_frenzy", spr_power("frenzy")),
@@ -735,17 +813,28 @@ def build_graphics():
         ("glow", spr_soft(48)),
         ("ring", spr_ring()),
         ("crack", spr_crack()),
-        ("sunburst", spr_sunburst()),
         ("pip_on", spr_pip(True)),
         ("pip_off", spr_pip(False)),
-        ("button", spr_button()),
         ("panel", spr_panel()),
+        ("plank", spr_plank()),
+        ("plank_focus", spr_plank_focus()),
+        ("knob", spr_knob()),
+        ("arrow", spr_arrow()),
+        ("arrow_back", spr_arrow(True)),
+        ("post", spr_post()),
+        ("ic_clock", spr_icon("clock")),
+        ("ic_leaf", spr_icon("leaf")),
+        ("ic_fast", spr_icon("fast")),
+        ("ic_one", spr_icon("one")),
+        ("ic_mine", spr_icon("mine")),
+        ("ic_chain", spr_icon("chain")),
     ]
     write_sheet("sprites", sprites)
     write_sheet("logo", [("logo", spr_logo())])
 
+    # Luminance + alpha keeps the white fill tintable and the dark outline dark, at half the memory.
     glyphs = font_glyphs()
-    write_sheet("font", [(f"g{i:02d}", g[1]) for i, g in enumerate(glyphs)])
+    write_sheet("font", [(f"g{i:02d}", g[1]) for i, g in enumerate(glyphs)], fmt="la8")
     index = [-1] * 96
     adv = [0] * 96
     for i, (ch, _, a) in enumerate(glyphs):
@@ -758,10 +847,12 @@ def build_graphics():
         f.write("static const signed char kFontIndex[96] = {" + ",".join(map(str, index)) + "};\n")
         f.write("static const unsigned char kFontAdvance[96] = {" + ",".join(map(str, adv)) + "};\n")
 
+    # One sheet per scene and board: only the chosen one is ever in memory.
     for i in range(3):
         sky, far, mid, near = bg_top(i, hill_layer, v_gradient, spr_soft)
-        write_sheet(f"bgtop{i}", [("sky", sky), ("far", far), ("mid", mid), ("near", near)])
-    write_sheet("bgbot", [(f"board{i}", b) for i, b in enumerate(bg_boards())], fmt="rgb565")
+        write_sheet(f"bgtop{i}", [("sky", sky), ("far", far), ("mid", mid), ("near", near)], fmt="rgba5551")
+    for i, b in enumerate(bg_boards()):
+        write_sheet(f"board{i}", [("board", b)], fmt="rgb565")
 
 
 if __name__ == "__main__":

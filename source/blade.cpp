@@ -54,13 +54,17 @@ void Blade::update(const Input& in) {
 	// almost none when fast keeps the blade under the stylus.
 	float dx = rawX - x, dy = rawY - y;
 	float dist = sqrtf(dx * dx + dy * dy);
-	float alpha = clampf(0.45f + dist / 20.0f, 0.45f, 1.0f);
+	// Stylus Sensitivity sets how much of that smoothing there is. The panel's own accuracy can't
+	// change, but less filtering means the blade follows smaller, quicker movements.
+	const float sensitivity = gSave.stylus / 100.0f;
+	const float floorAlpha = 0.2f + 0.6f * sensitivity;
+	float alpha = clampf(floorAlpha + dist / 20.0f, floorAlpha, 1.0f);
 	x += dx * alpha;
 	y += dy * alpha;
 	float mx = x - px, my = y - py;
 	speed = sqrtf(mx * mx + my * my);
 
-	if (speed < 0.35f) return;  // ignore sub-pixel drift for the trail
+	if (speed < lerpf(0.9f, 0.15f, sensitivity)) return;  // ignore tiny drift for the trail
 
 	// Keep the last three samples and insert one Catmull-Rom midpoint for curvature.
 	if (hn == 3) {

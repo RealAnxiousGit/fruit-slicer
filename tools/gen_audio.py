@@ -13,7 +13,7 @@ import numpy as np
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SFX_RATE = 32000
-MUSIC_RATE = 22050
+MUSIC_RATE = 16000  # the mix rolls off above 3.2 kHz, so this loses nothing and saves memory
 
 
 def path(*parts):
@@ -397,7 +397,30 @@ def pad_note(freq, dur, rate=MUSIC_RATE):
     return s * np.sin(np.linspace(0, np.pi, len(t))) ** 1.4
 
 
-def compose_calm(bpm, bars, chords, scale, seed, note_chance, pad_level=0.22, melody_level=0.34, tail=0.45, shaker=0.0):
+def pluck_note(freq, dur, rate=MUSIC_RATE):
+    """A soft plucked string: quick attack, overtones that die away first."""
+    t = np.arange(int(dur * rate)) / rate
+    s = sum(np.sin(2 * np.pi * freq * h * t) * a * np.exp(-t * d) for h, a, d in ((1, 1.0, 2.0), (2, 0.42, 4.0), (3, 0.2, 7.0), (4, 0.08, 11.0)))
+    return s * np.minimum(1, t / 0.004)
+
+
+def bowl_note(freq, dur, rate=MUSIC_RATE):
+    """A struck metal bowl: slightly inharmonic partials with a very long, slowly beating ring."""
+    t = np.arange(int(dur * rate)) / rate
+    s = sum(np.sin(2 * np.pi * freq * h * t) * a * np.exp(-t * d) for h, a, d in ((1, 1.0, 0.7), (1.004, 0.7, 0.8), (2.71, 0.28, 1.5), (5.15, 0.08, 3.0)))
+    return s * np.minimum(1, t / 0.03)
+
+
+def flute_note(freq, dur, rate=MUSIC_RATE):
+    """A breathy wooden flute: slow swell, gentle vibrato that arrives late."""
+    t = np.arange(int(dur * rate)) / rate
+    vib = 0.006 * np.minimum(1, t / 1.2) * np.sin(2 * np.pi * 4.6 * t)
+    phase = 2 * np.pi * freq * np.cumsum(1 + vib) / rate
+    s = np.sin(phase) + 0.12 * np.sin(2 * phase)
+    return s * np.sin(np.linspace(0, np.pi, len(t))) ** 0.7
+
+
+def compose_calm(bpm, bars, chords, scale, seed, note_chance, pad_level=0.22, melody_level=0.34, tail=0.45, shaker=0.0, lead=felt_note, arp_level=0.14, breeze=0.0):
     """Slow chords and a sparse melody. Everything wraps, including reverb, so the loop is seamless."""
     rate = MUSIC_RATE
     rng = random.Random(seed)
@@ -419,7 +442,8 @@ def compose_calm(bpm, bars, chords, scale, seed, note_chance, pad_level=0.22, me
         # A slow, gently rolled arpeggio.
         for i, m in enumerate(ch):
             when = t0 + i * beat * rng.choice((0.5, 1.0)) + rng.uniform(-0.012, 0.012)
-            put(felt_note(mtof(m + 12), beat * 4), when, 0.14 * rng.uniform(0.75, 1.0))
+            if arp_level > 0:
+                put(felt_note(mtof(m + 12), beat * 4), when, arp_level * rng.uniform(0.75, 1.0))
 
     # Sparse melody that breathes, with room between phrases.
     idx = len(scale) // 2
@@ -428,7 +452,7 @@ def compose_calm(bpm, bars, chords, scale, seed, note_chance, pad_level=0.22, me
         if step % 16 > 11 or rng.random() > note_chance:
             continue
         idx = max(0, min(len(scale) - 1, idx + rng.choice((-2, -1, -1, 1, 1, 2))))
-        put(felt_note(mtof(scale[idx]), beat * 5), when + rng.uniform(-0.01, 0.01), melody_level * rng.uniform(0.65, 1.0))
+        put(lead(mtof(scale[idx]), beat * 5), when + rng.uniform(-0.01, 0.01), melody_level * rng.uniform(0.65, 1.0))
 
     if shaker > 0:
         nr = np.random.default_rng(seed)
@@ -436,6 +460,13 @@ def compose_calm(bpm, bars, chords, scale, seed, note_chance, pad_level=0.22, me
         hat = band(nr.normal(0, 1, ln), 3500, 9000, rate) * np.sin(np.linspace(0, np.pi, ln)) ** 2
         for step in range(bars * 8):
             put(hat, step * beat / 2, shaker * (1.0 if step % 2 else 0.55))
+
+    if breeze > 0:
+        # Air moving through leaves: filtered noise, swelling a whole number of times per loop.
+        nr = np.random.default_rng(seed + 2)
+        air = band(nr.normal(0, 1, n), 300, 1800, rate)
+        air = air / (np.max(np.abs(air)) or 1)
+        mix = mix + air * breeze * (0.6 + 0.4 * np.sin(2 * np.pi * 3 * np.arange(n) / n))
 
     # Circular reverb keeps the tail wrapping into the start of the loop.
     nr = np.random.default_rng(seed + 1)
@@ -507,15 +538,34 @@ def build_audio():
     write_pcm("music_menu", compose_calm(62, 8, menu, [72, 74, 76, 79, 81, 84, 86, 88], 5, 0.42), MUSIC_RATE)
     write_pcm("music_play", compose_calm(84, 8, play, [74, 76, 78, 81, 83, 86, 88, 90], 12, 0.5, 0.18, 0.3, 0.35, 0.018), MUSIC_RATE)
     write_pcm("music_zen", compose_calm(50, 8, zen, [72, 74, 79, 81, 84, 86, 91], 31, 0.3, 0.26, 0.26, 0.6), MUSIC_RATE)
+    # Calm.
+    meadow = [[55, 59, 62, 66], [52, 55, 59, 62], [60, 64, 67, 71], [62, 66, 69, 72]]
+    lantern = [[53, 57, 60, 64], [50, 53, 57, 60], [58, 62, 65, 69], [60, 64, 67, 70]]
+    write_pcm("music_meadow", compose_calm(56, 8, meadow, [71, 74, 76, 78, 79, 83, 86], 41, 0.4), MUSIC_RATE)
+    write_pcm("music_lantern", compose_calm(68, 8, lantern, [69, 72, 74, 77, 79, 81, 84], 52, 0.46, 0.2, 0.3, 0.38, 0.012, pluck_note), MUSIC_RATE)
+    # Zen: open fifths, five-note scales and a lot of air.
+    moss = [[50, 57, 62], [55, 62, 67], [47, 54, 62], [52, 59, 64]]
+    bamboo = [[45, 52, 57], [41, 48, 57], [43, 50, 55], [40, 47, 52]]
+    clouds = [[48, 55, 62], [53, 60, 65], [50, 57, 64], [46, 53, 60]]
+    write_pcm("music_moss", compose_calm(44, 8, moss, [74, 76, 78, 81, 83, 86], 63, 0.2, 0.26, 0.22, 0.65, 0.0, bowl_note, 0.07), MUSIC_RATE)
+    write_pcm("music_bamboo", compose_calm(48, 8, bamboo, [69, 72, 74, 76, 79, 81], 74, 0.26, 0.2, 0.3, 0.55, 0.0, flute_note, 0.0, 0.05), MUSIC_RATE)
+    write_pcm("music_clouds", compose_calm(40, 8, clouds, [72, 74, 79, 81, 84, 86], 85, 0.12, 0.3, 0.2, 0.7, 0.0, bowl_note, 0.05, 0.03), MUSIC_RATE)
 
-    # Three-second banner jingle for the HOME Menu.
-    rate = 22050
-    jingle = np.zeros(int(2.9 * rate))
-    for i, m in enumerate((72, 76, 79, 84)):
-        sig = bell(mtof(m), 1.4, rate) * 0.8
-        p = int(i * 0.16 * rate)
-        jingle[p:p + len(sig)] += sig
-    jingle = norm(jingle, 0.8) * np.minimum(1, np.linspace(6, 0, len(jingle)))
+    # The HOME Menu banner sound: two quick slices, a clean finishing cut, then a bright little jingle.
+    # Banner sound can be at most three seconds long.
+    rate = 44100
+    n = np.zeros(n_of(2.8))
+    place(n, swish(21, 0.17, 800, 3600), 0.02, 0.8)
+    place(n, cut_juicy(22), 0.08, 0.75)
+    place(n, swish(23, 0.15, 1000, 4200), 0.36, 0.8)
+    place(n, cut_crisp(24), 0.42, 0.75)
+    place(n, swish(25, 0.21, 650, 2900), 0.72, 0.9)
+    place(n, cut_melon(26), 0.8, 0.9)
+    place(n, shing(), 0.8, 0.55)
+    place(n, seq([72, 76, 79, 84, 88], 0.11, 1.2), 1.02, 0.75)
+    n = reverb_tail(n, 0.8, 0.22)[:n_of(2.8)]
+    n = norm(n, 0.82) * np.minimum(1, np.linspace(9, 0, len(n)))
+    jingle = np.interp(np.arange(int(len(n) * rate / s)) * s / rate, np.arange(len(n)), n)
     with wave.open(path("meta", "banner.wav"), "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)

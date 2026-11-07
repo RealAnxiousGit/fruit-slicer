@@ -1,91 +1,159 @@
 // Fruit Slicer 3DS: application loop, menus and the top-screen stereo scene.
 #include <stdio.h>
+#include <sys/stat.h>
 #include <string.h>
 
 #include "audio.h"
 #include "blade.h"
 #include "common.h"
+#include "fruit.h"
 #include "game.h"
+#include "jobs.h"
+#include "model3d.h"
 #include "render.h"
 #include "sprites.h"
 
-#include "bgbot.h"
 #include "bgtop0.h"
 #include "logo.h"
 
-#define VERSION_STRING "0.2.0-alpha"
+#define VERSION_STRING "0.3.0-alpha"
 
-enum Screen { SCREEN_MENU, SCREEN_OPTIONS, SCREEN_GAME, SCREEN_PAUSE, SCREEN_RESULT };
+enum Screen {
+	SCREEN_LOADING, SCREEN_TITLE, SCREEN_MODES, SCREEN_OPTIONS, SCREEN_SECTION, SCREEN_CREDITS, SCREEN_HOWTO,
+	SCREEN_GAME, SCREEN_PAUSE, SCREEN_RESULT, SCREEN_BENCH, SCREEN_COUNT
+};
 
-static Screen sScreen = SCREEN_MENU;
+static Screen sScreen = SCREEN_LOADING;
 static Game sGame;  // static storage: all gameplay pools are allocated once at load time
 static Blade sBlade;
-static int sMenuSel = 0;
-static int sOptSel = 0;
+static int sFocus[SCREEN_COUNT];
 static int sPressed = -1;
-static int sResultSel = 0;
-static int sPauseSel = 0;
-static bool sResetArmed = false;
 static bool sShowDebug = false;
 static bool sSuspended = false;
+static bool sNoSound = false;
 static float sTime = 0;
 static float sFps = 60;
 static u64 sLastTick = 0;
 static aptHookCookie sAptCookie;
 
+// ---------------------------------------------------------------- transitions
+// Menus slide sideways; anything entering or leaving a game fades through black.
+static constexpr float kSlideTime = 0.22f;
+static constexpr float kFadeTime = 0.18f;
+static bool sSliding = false;
+static float sSlideT = 0;
+static Screen sSlideFrom = SCREEN_TITLE;
+static float sSlideDir = 1;
+static float sFade = 0;       // 0 clear, 1 black
+static bool sFadingOut = false;
+static void (*sFadeAction)() = nullptr;
+
+static void goTo(Screen to, float dir) {
+	sPressed = -1;
+	// These menus open on their first real choice, not on the back arrow.
+	if ((to == SCREEN_MODES || to == SCREEN_OPTIONS) && sFocus[to] == 0) sFocus[to] = 1;
+	if (!gSave.transitions) {
+		sScreen = to;
+		return;
+	}
+	sSlideFrom = sScreen;
+	sScreen = to;
+	sSlideDir = dir;
+	sSliding = true;
+	sSlideT = 0;
+}
+
+static void fadeThen(void (*action)()) {
+	sPressed = -1;
+	if (!gSave.transitions) {
+		action();
+		return;
+	}
+	sFadeAction = action;
+	sFadingOut = true;
+}
+
+static inline bool inputBlocked() { return sSliding || sFadingOut || sFade > 0.5f; }
+
+// ---------------------------------------------------------------- signs
 struct Button {
 	float x, y, w, h;
 	const char* label;
 };
 
-static const Button kMenuButtons[] = {
-	{6, 6, 150, 52, "Classic"},        {164, 6, 150, 52, "Arcade"},
-	{6, 64, 150, 52, "Zen"},           {164, 64, 150, 52, "Blitz"},
-	{6, 122, 150, 52, "Sudden Death"}, {164, 122, 150, 52, "Minefield"},
-	{6, 180, 150, 52, "Combo Rush"},   {164, 180, 150, 52, "Options"},
-};
-static constexpr int kMenuCount = 8;
-static const u32 kModeTints[] = {0xFF4A7AF2u, 0xFF3AA4F5u, 0xFFB0A84Au, 0xFF8C5AE8u, 0xFF4C50D8u, 0xFF6A6A6Au, 0xFFC0609Au, 0xFF9A7A5Au};
+static const Button kBack = {6, 5, 46, 34, nullptr};
 
-static const Button kResultButtons[] = {{20, 170, 134, 52, "Again"}, {166, 170, 134, 52, "Menu"}};
-static const Button kPauseButtons[] = {{50, 66, 220, 52, "Resume"}, {50, 130, 220, 52, "Quit"}};
-
-enum OptionId { OPT_SOUND, OPT_MUSIC, OPT_BOARD, OPT_SCENE, OPT_BLADE, OPT_JUICE, OPT_DEPTH, OPT_SHAKE, OPT_RESET, OPT_BACK, OPT_COUNT };
-static constexpr int kOptCount = OPT_COUNT;
-static const Button kOptButtons[kOptCount] = {
-	{6, 4, 150, 44, nullptr},   {164, 4, 150, 44, nullptr},
-	{6, 51, 150, 44, nullptr},  {164, 51, 150, 44, nullptr},
-	{6, 98, 150, 44, nullptr},  {164, 98, 150, 44, nullptr},
-	{6, 145, 150, 44, nullptr}, {164, 145, 150, 44, nullptr},
-	{6, 192, 150, 44, nullptr}, {164, 192, 150, 44, nullptr},
+static const Button kTitleButtons[] = {
+	{40, 14, 240, 80, "Play"},
+	{22, 102, 134, 54, "Options"},
+	{164, 102, 134, 54, "Credits"},
+	{60, 166, 200, 46, "How to Play"},
 };
-static const char* const kBladeNames[kBladeCount] = {"Ember", "Azure", "Rose", "Mint", "Gold", "Rainbow"};
-static const char* const kBoardNames[kBoardCount] = {"Picnic Blanket", "Cutting Board", "Plate", "Marble", "Beach", "Starlight"};
-static const char* const kSceneNames[kSceneCount] = {"Dusk Orchard", "Morning Meadow", "Moonlit Bay"};
-static const char* const kVolumeNames[kVolumeLevels] = {"Off", "Low", "Medium", "High", "Full"};
-static const char* const kJuiceNames[] = {"Low", "Normal", "Extra"};
-static const char* const kDepthNames[] = {"Off", "Normal", "Strong"};
+// Index 0 of every list below is its back arrow, so D-pad and touch treat it like any other sign.
+static const Button kModeButtons[] = {
+	kBack,
+	{8, 46, 148, 44, "Classic"},        {164, 46, 148, 44, "Arcade"},
+	{8, 94, 148, 44, "Zen"},            {164, 94, 148, 44, "Frenzy"},
+	{8, 142, 148, 44, "Sudden Death"},  {164, 142, 148, 44, "Minefield"},
+	{86, 190, 148, 44, "Combo Rush"},
+};
+static const Button kOptionButtons[] = {
+	kBack,
+	{36, 46, 248, 44, "Audio"},
+	{36, 94, 248, 44, "Visuals"},
+	{36, 142, 248, 44, "Gameplay"},
+	{36, 190, 248, 44, "Scores and Data"},
+};
+static const Button kOnlyBack[] = {kBack};
+static const Button kResultButtons[] = {kBack, {20, 170, 134, 52, "Again"}, {166, 170, 134, 52, "Modes"}};
+static const Button kPauseButtons[] = {kBack, {50, 44, 220, 56, "Resume"}, {50, 108, 220, 56, "Options"}, {50, 172, 220, 56, "Main Menu"}};
 
 static bool hit(const Button& b, int x, int y) {
 	return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
 }
 
-static void drawButton(const Button& b, const char* label, u32 tint, bool selected, bool pressed, float textScale = 0.56f) {
-	float dy = pressed ? 2 : 0;
-	if (selected) gfx::image(SHEET_SPRITES, sprites_button_idx, b.x - 3, b.y - 3 + dy, b.w + 6, b.h + 6, rgba(255, 236, 150));
-	gfx::image(SHEET_SPRITES, sprites_button_idx, b.x, b.y + dy, b.w, b.h, tint);
-	gfx::text(label, b.x + b.w * 0.5f, b.y + b.h * 0.5f - 20 * textScale - 1 + dy, textScale, WHITE, ALIGN_CENTER);
+static u32 withDim(u32 c) {
+	u8 r = c & 255, g = (c >> 8) & 255, b = (c >> 16) & 255;
+	return rgba(r * 4 / 5, g * 4 / 5, b * 4 / 5);
 }
 
-// Shared tap handling: press highlights, release inside activates. Returns the activated index or -1.
-static int handleButtons(const Button* btns, int n, const Input& in, bool wasTouching) {
+static void drawPlank(float x, float y, float w, float h, bool focused, bool pressed) {
+	float dy = pressed ? 2 : 0;
+	gfx::image(SHEET_SPRITES, sprites_plank_idx, x, y + dy, w, h, pressed ? withDim(COL_PLANK) : COL_PLANK);
+	if (focused) gfx::image(SHEET_SPRITES, sprites_plank_focus_idx, x - 2, y - 2 + dy, w + 4, h + 4, COL_ACCENT);
+}
+
+static void drawSign(const Button& b, const char* label, bool focused, bool pressed, float scale = 0.56f, int icon = -1) {
+	drawPlank(b.x, b.y, b.w, b.h, focused, pressed);
+	float dy = pressed ? 2 : 0;
+	float w = gfx::textWidth(label, scale);
+	float room = b.w - (icon >= 0 ? 52 : 22);
+	if (w > room) scale *= room / w;
+	float cx = b.x + b.w * 0.5f + (icon >= 0 ? 12 : 0);
+	if (icon >= 0) gfx::sprite(SHEET_SPRITES, icon, b.x + 21, b.y + b.h * 0.5f + dy, 0.8f, 0.8f);
+	gfx::text(label, cx, b.y + b.h * 0.5f - 20 * scale - 1 + dy, scale, COL_CREAM, ALIGN_CENTER);
+}
+
+static void drawBackArrow(bool focused, bool pressed) {
+	drawPlank(kBack.x, kBack.y, kBack.w, kBack.h, focused, pressed);
+	gfx::sprite(SHEET_SPRITES, sprites_arrow_back_idx, kBack.x + kBack.w * 0.5f, kBack.y + kBack.h * 0.5f + (pressed ? 2 : 0), 0.8f, 0.8f, 0, COL_CREAM);
+}
+
+static void drawHeader(const char* title) {
+	gfx::text(title, 186, 8, 0.62f, COL_CREAM, ALIGN_CENTER);
+}
+
+// Menus sit on the board chosen in Visuals, a little dimmed so that the signs stand out on it.
+static void drawMenuBack() { gfx::image(SHEET_BOARD, 0, 0, 0, 320, 240, rgba(205, 205, 205)); }
+
+// Press highlights, release on the same sign activates: a swipe that ends on a sign does nothing.
+static int touchButtons(const Button* btns, int n, const Input& in, bool wasTouching, int& focus) {
 	int result = -1;
 	if (in.touching) {
-		// A press must begin on a button and stay on it; a swipe that ends on one does nothing.
 		if (!wasTouching) {
 			sPressed = -1;
 			for (int i = 0; i < n; i++)
-				if (hit(btns[i], in.tx, in.ty)) sPressed = i;
+				if (hit(btns[i], in.tx, in.ty)) sPressed = focus = i;
 		} else if (sPressed >= 0 && !hit(btns[sPressed], in.tx, in.ty)) {
 			sPressed = -1;
 		}
@@ -96,231 +164,923 @@ static int handleButtons(const Button* btns, int n, const Input& in, bool wasTou
 	return result;
 }
 
-static void dpadGrid(int& sel, int count, u32 down, int cols) {
-	if (down & KEY_DOWN) sel = (sel + cols) < count ? sel + cols : count - 1;
-	if ((down & KEY_UP) && sel - cols >= 0) sel -= cols;
-	if ((down & KEY_RIGHT) && (sel % cols) + 1 < cols && sel + 1 < count) sel++;
-	if ((down & KEY_LEFT) && (sel % cols) > 0) sel--;
+static bool sameRow(const Button& a, const Button& b) {
+	float top = a.y > b.y ? a.y : b.y;
+	float bottom = (a.y + a.h < b.y + b.h) ? a.y + a.h : b.y + b.h;
+	return bottom - top > (a.h < b.h ? a.h : b.h) * 0.25f;
 }
 
-// ---------------------------------------------------------------- top-screen background
+// Lower ranks are tried first: the nearest sign ahead, then past the edge to the far end behind.
+static float wrapRank(float along) {
+	return along > 0 ? along : 10000 + along;
+}
+
+// Left and right stay within the row and wrap around it; a sign alone in its row stays put.
+// Up and down go to the next row, or wrap to the far row, and land on the closest sign in it.
+static void dpadNav(const Button* btns, int n, u32 keys, int& focus) {
+	int dx = (keys & KEY_RIGHT) ? 1 : ((keys & KEY_LEFT) ? -1 : 0);
+	int dy = (keys & KEY_DOWN) ? 1 : ((keys & KEY_UP) ? -1 : 0);
+	if (dx == 0 && dy == 0) return;
+	const Button& c = btns[focus];
+	float cx = c.x + c.w * 0.5f, cy = c.y + c.h * 0.5f;
+	int best = -1;
+	float bestRank = 1e9f;
+	for (int i = 0; i < n; i++) {
+		if (i == focus || sameRow(btns[i], c) != (dy == 0)) continue;
+		float along = dy != 0 ? (btns[i].y + btns[i].h * 0.5f - cy) * dy : (btns[i].x + btns[i].w * 0.5f - cx) * dx;
+		float rank = wrapRank(along);
+		if (rank < bestRank) {
+			bestRank = rank;
+			best = i;
+		}
+	}
+	if (best >= 0 && dy != 0) {
+		const Button row = btns[best];
+		float bestAcross = 1e9f;
+		for (int i = 0; i < n; i++) {
+			if (i == focus || !sameRow(btns[i], row) || sameRow(btns[i], c)) continue;
+			float across = fabsf(btns[i].x + btns[i].w * 0.5f - cx);
+			if (across < bestAcross) {
+				bestAcross = across;
+				best = i;
+			}
+		}
+	}
+	if (best >= 0) {
+		focus = best;
+		audio::click(0.5f);
+	}
+}
+
+static int menuInput(const Button* btns, int n, Screen screen, const Input& in, bool wasTouching) {
+	int& focus = sFocus[screen];
+	dpadNav(btns, n, in.repeat, focus);
+	int tapped = touchButtons(btns, n, in, wasTouching, focus);
+	if (tapped < 0 && (in.down & KEY_A)) tapped = focus;
+	if (tapped >= 0) audio::click();
+	return tapped;
+}
+
+// ---------------------------------------------------------------- settings rows
+enum RowKind { ROW_SLIDER, ROW_CHOICE, ROW_ACTION };
+enum RowAction { ACT_NONE, ACT_RESET_AUDIO, ACT_RESET_VISUALS, ACT_RESET_GAMEPLAY, ACT_RESET_SCORES, ACT_RESET_ALL, ACT_SPEED_TEST };
+
+struct Row {
+	RowKind kind;
+	const char* label;
+	u8* value;
+	u8 lo, hi;                  // slider range, or for a choice: 0 and the last index
+	const char* const* names;   // choice labels
+	float showLo, showHi;       // what a slider's ends mean, as a percentage (or a plain count)
+	RowAction action;
+	const char* line1;
+	const char* line2;
+};
+
+static const char* const kBladeNames[kBladeCount] = {"Ember", "Azure", "Rose", "Mint", "Gold", "Rainbow"};
+static const char* const kBoardNames[kBoardCount] = {"Picnic Blanket", "Cutting Board", "Plate", "Marble", "Beach", "Starlight"};
+static const char* const kSceneNames[kSceneCount] = {"Dusk Orchard", "Morning Meadow", "Moonlit Bay"};
+static const char* const kArtNames[] = {"2D Stickers", "3D Models"};
+static const char* const kEffectNames[] = {"None", "Low", "Medium", "Full"};
+static const char* const kOffOn[] = {"Off", "On"};
+static const char* const kBgNames[] = {"Simple", "Full"};
+static const char* const kDetailNames[] = {"Low", "High"};
+static const char* const kSliceNames[] = {"Quick", "Exact"};
+static const char* const kDifficultyNames[DIFF_COUNT] = {"Easy", "Normal", "Hard", "Insane"};
+
+static const char* const kTrackRowNames[kTrackCount + 1] = {
+	"Auto", "Orchard Morning", "Picnic Stroll", "Sleepy Meadow", "Lantern Walk", "Still Water", "Moss Garden", "Bamboo Breeze", "Drifting Clouds",
+};
+
+static const Row kAudioRows[] = {
+	{ROW_SLIDER, "Sound Effects", &gSave.sfx, 0, 100, nullptr, 0, 100, ACT_NONE, "Slices, combos and bombs.", ""},
+	{ROW_SLIDER, "Music", &gSave.music, 0, 100, nullptr, 0, 100, ACT_NONE, "Menu and game music.", ""},
+	{ROW_SLIDER, "Menu Sounds", &gSave.menuSfx, 0, 100, nullptr, 0, 100, ACT_NONE, "The tap when you press a sign.", ""},
+	{ROW_CHOICE, "Menu Music", &gSave.menuTrack, 0, kTrackCount, kTrackRowNames, 0, 0, ACT_NONE, "What plays in the menus.", "Auto uses Orchard Morning."},
+	{ROW_CHOICE, "Game Music", &gSave.gameTrack, 0, kTrackCount, kTrackRowNames, 0, 0, ACT_NONE, "What plays during a game.", "Auto suits each mode."},
+	{ROW_ACTION, "Reset Audio", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_AUDIO, "Puts these back to their defaults.", ""},
+};
+static const Row kVisualRows[] = {
+	{ROW_CHOICE, "Art Style", &gSave.artStyle, 0, 1, kArtNames, 0, 0, ACT_NONE, "3D models or flat stickers.", "2D is lighter on an Old 3DS."},
+	{ROW_CHOICE, "Board", &gSave.board, 0, kBoardCount - 1, kBoardNames, 0, 0, ACT_NONE, "What you slice over.", ""},
+	{ROW_CHOICE, "Scenery", &gSave.scene, 0, kSceneCount - 1, kSceneNames, 0, 0, ACT_NONE, "The view on the top screen.", ""},
+	{ROW_CHOICE, "Blade", &gSave.blade, 0, kBladeCount - 1, kBladeNames, 0, 0, ACT_NONE, "The colour of your slice.", ""},
+	{ROW_CHOICE, "Effects", &gSave.effects, 0, 3, kEffectNames, 0, 0, ACT_NONE, "Juice, sparks and rings.", "Lower saves the most speed."},
+	{ROW_SLIDER, "3D Depth", &gSave.depth, 0, 100, nullptr, 0, 100, ACT_NONE, "How far things stand out,", "with the console's 3D slider."},
+	{ROW_SLIDER, "Screen Shake", &gSave.shake, 0, 100, nullptr, 0, 100, ACT_NONE, "How hard big hits shake the field.", ""},
+	{ROW_CHOICE, "Background", &gSave.bgDetail, 0, 1, kBgNames, 0, 0, ACT_NONE, "Simple draws fewer scenery layers", "and helps an Old 3DS."},
+	{ROW_CHOICE, "Top Screen Fruit", &gSave.topFruit, 0, 1, kOffOn, 0, 0, ACT_NONE, "High throws fly up onto the top", "screen, where 3D depth shows."},
+	{ROW_CHOICE, "3D Detail", &gSave.detail, 0, 1, kDetailNames, 0, 0, ACT_NONE, "Polygons per fruit, 3D style only.", "Low suits an Old 3DS."},
+	{ROW_CHOICE, "Slice Style", &gSave.sliceStyle, 0, 1, kSliceNames, 0, 0, ACT_NONE, "Exact cuts along your swipe.", "Quick uses ready-made halves."},
+	{ROW_CHOICE, "Transitions", &gSave.transitions, 0, 1, kOffOn, 0, 0, ACT_NONE, "Slides between menus.", ""},
+	{ROW_ACTION, "Reset Visuals", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_VISUALS, "Back to the best settings for this console.", ""},
+};
+static const Row kGameplayRows[] = {
+	{ROW_SLIDER, "Stylus Sensitivity", &gSave.stylus, 0, 100, nullptr, 0, 100, ACT_NONE, "Higher follows small, quick moves.", "Lower smooths out a shaky line."},
+	{ROW_CHOICE, "Difficulty", &gSave.difficulty, 0, DIFF_COUNT - 1, kDifficultyNames, 0, 0, ACT_NONE, "Changes throw speed, how often", "fruit comes, and how many bombs."},
+	{ROW_SLIDER, "Fruit Speed", &gSave.fruitSpeed, 0, 100, nullptr, 70, 130, ACT_NONE, "How fast everything flies.", ""},
+	{ROW_SLIDER, "Bomb Amount", &gSave.bombs, 0, 100, nullptr, 0, 200, ACT_NONE, "More or fewer bombs than usual.", ""},
+	{ROW_SLIDER, "Slice Forgiveness", &gSave.forgiveness, 0, 100, nullptr, 70, 130, ACT_NONE, "How close a swipe has to pass", "for a fruit to count as cut."},
+	{ROW_SLIDER, "Frenzy Drain", &gSave.frenzyDrain, 0, 100, nullptr, 40, 160, ACT_NONE, "How fast the meter drops when", "you stop slicing."},
+	{ROW_SLIDER, "Misses Allowed", &gSave.misses, 1, 5, nullptr, 1, 5, ACT_NONE, "Misses before Classic ends.", ""},
+	{ROW_ACTION, "Reset Gameplay", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_GAMEPLAY, "Puts these back to their defaults.", "Your scores stay."},
+};
+static const Row kDataRows[] = {
+	{ROW_ACTION, "Speed Test", nullptr, 0, 0, nullptr, 0, 0, ACT_SPEED_TEST, "A 90 second test of this console.", "Results go in 3ds/FruitSlicer/bench.txt"},
+	{ROW_ACTION, "Reset Scores", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_SCORES, "Erases best scores and totals.", "Settings stay."},
+	{ROW_ACTION, "Reset Everything", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_ALL, "Erases scores and all settings.", ""},
+};
+
+struct Section {
+	const char* title;
+	const Row* rows;
+	int count;
+};
+static const Section kSections[] = {
+	{"Audio", kAudioRows, sizeof kAudioRows / sizeof(Row)},
+	{"Visuals", kVisualRows, sizeof kVisualRows / sizeof(Row)},
+	{"Gameplay", kGameplayRows, sizeof kGameplayRows / sizeof(Row)},
+	{"Scores and Data", kDataRows, sizeof kDataRows / sizeof(Row)},
+};
+
+static bool sOptionsFromPause = false;  // Options opened from the pause menu, with a game waiting
+
+static constexpr float kListTop = 46;
+static constexpr float kRowH = 38;
+static constexpr float kTrackX0 = 162, kTrackX1 = 258;
+
+static int sSection = 0;
+static float sScroll = 0;
+static int sArmed = -1;  // a reset row waiting for its second tap
+static bool sDirty = false;
+enum TouchMode { TOUCH_NONE, TOUCH_BACK, TOUCH_SLIDER, TOUCH_ROW };
+static TouchMode sTouchMode = TOUCH_NONE;
+static int sTouchRow = -1;
+static int sTouchStartY = 0;
+static float sScrollStart = 0;
+static bool sTouchMoved = false;
+static Blade sPreviewBlade;
+static int sLastTouchX = 0;  // a released touch has no position, so remember where it last was
+
+static float maxScroll() {
+	float h = kSections[sSection].count * kRowH;
+	float room = 240 - kListTop - 2;
+	return h > room ? h - room : 0;
+}
+
+static bool rowDisabled(const Row& r) { return r.value == &gSave.depth && !gHas3dScreen; }
+
+static void rowValueText(const Row& r, char* buf, size_t size) {
+	buf[0] = 0;
+	if (r.kind == ROW_CHOICE) {
+		snprintf(buf, size, "%s", r.names[*r.value]);
+	} else if (r.kind == ROW_SLIDER) {
+		if (rowDisabled(r)) {
+			snprintf(buf, size, "-");
+		} else if (r.value == &gSave.misses) {
+			snprintf(buf, size, "%d", *r.value);
+		} else {
+			float t = (*r.value - r.lo) / (float)(r.hi - r.lo);
+			snprintf(buf, size, "%d%%", (int)(lerpf(r.showLo, r.showHi, t) + 0.5f));
+		}
+	}
+}
+
+static void changedSetting(const Row& r) {
+	sDirty = true;
+	if (r.value == &gSave.music) audio::refreshVolumes();
+	// Hear a track as soon as it is picked. Leaving the section puts the right one back.
+	if (r.value == &gSave.menuTrack) audio::preview(MUSIC_MENU);
+	if (r.value == &gSave.gameTrack) audio::preview(MUSIC_PLAY);
+}
+
+static void adjustRow(const Row& r, int dir) {
+	if (rowDisabled(r) || r.kind == ROW_ACTION) return;
+	int v = *r.value;
+	if (r.kind == ROW_SLIDER) {
+		int step = r.hi - r.lo >= 50 ? 5 : 1;
+		v = v + dir * step;
+		v = v < r.lo ? r.lo : (v > r.hi ? r.hi : v);
+	} else {
+		v += dir;
+		if (v < r.lo) v = r.hi;
+		if (v > r.hi) v = r.lo;
+	}
+	if (v == *r.value) return;
+	*r.value = (u8)v;
+	changedSetting(r);
+	if (r.value == &gSave.sfx) audio::play(SFX_CLICK);  // lets you hear the level you just picked
+	else audio::click(0.6f);
+}
+
+static void startSpeedTest();
+
+static void rowAction(int index, const Row& r) {
+	if (r.action == ACT_SPEED_TEST) {
+		audio::click();
+		if (sDirty) saveWrite();
+		sDirty = false;
+		fadeThen(startSpeedTest);
+		return;
+	}
+	if (sArmed != index) {
+		sArmed = index;
+		audio::click();
+		return;
+	}
+	sArmed = -1;
+	switch (r.action) {
+		case ACT_RESET_AUDIO: saveDefaults(true, 0); break;
+		case ACT_RESET_VISUALS: saveDefaults(true, 1); break;
+		case ACT_RESET_GAMEPLAY: saveDefaults(true, 2); break;
+		case ACT_RESET_SCORES:
+			memset(gSave.best, 0, sizeof gSave.best);
+			gSave.totalFruit = 0;
+			gSave.bestCombo = 0;
+			break;
+		case ACT_RESET_ALL: saveDefaults(false, -1); break;
+		default: break;
+	}
+	audio::refreshVolumes();
+	audio::reapply();
+	audio::play(SFX_GOLD, 0.7f);
+	saveWrite();
+	sDirty = false;
+}
+
+static void leaveSection() {
+	audio::click();
+	if (sDirty) saveWrite();
+	sDirty = false;
+	sArmed = -1;
+	sTouchMode = TOUCH_NONE;
+	audio::reapply();
+	goTo(SCREEN_OPTIONS, -1);
+}
+
+static void setSliderFromTouch(const Row& r, int x) {
+	if (rowDisabled(r)) return;
+	float t = clampf((x - kTrackX0) / (kTrackX1 - kTrackX0), 0, 1);
+	u8 v = (u8)(lerpf(r.lo, r.hi, t) + 0.5f);
+	if (v != *r.value) {
+		*r.value = v;
+		changedSetting(r);
+	}
+}
+
+static void updateSection(const Input& in, bool wasTouching) {
+	const Section& sec = kSections[sSection];
+	int& focus = sFocus[SCREEN_SECTION];  // -1 is the back arrow
+
+	if (in.down & KEY_B) {
+		leaveSection();
+		return;
+	}
+	if (in.repeat & KEY_DOWN) {
+		focus = focus + 1 < sec.count ? focus + 1 : -1;
+		audio::click(0.5f);
+		sArmed = -1;
+	}
+	if (in.repeat & KEY_UP) {
+		focus = focus >= 0 ? focus - 1 : sec.count - 1;
+		audio::click(0.5f);
+		sArmed = -1;
+	}
+	if (focus < 0 && (in.repeat & (KEY_UP | KEY_DOWN))) sScroll = 0;
+	if (focus >= 0) {
+		const Row& r = sec.rows[focus];
+		if (in.repeat & KEY_LEFT) adjustRow(r, -1);
+		if (in.repeat & KEY_RIGHT) adjustRow(r, 1);
+		if (in.down & KEY_A) {
+			if (r.kind == ROW_ACTION) rowAction(focus, r);
+			else if (r.kind == ROW_CHOICE) adjustRow(r, 1);
+		}
+		// Keep the focused row in view.
+		float top = focus * kRowH, bottom = top + kRowH;
+		float room = 240 - kListTop - 2;
+		if (in.repeat & (KEY_UP | KEY_DOWN)) {
+			if (top < sScroll) sScroll = top;
+			if (bottom > sScroll + room) sScroll = bottom - room;
+		}
+	} else if (in.down & KEY_A) {
+		leaveSection();
+		return;
+	}
+
+	if (in.touching) {
+		sLastTouchX = in.tx;
+		if (!wasTouching) {
+			sTouchMode = TOUCH_NONE;
+			if (hit(kBack, in.tx, in.ty)) {
+				sTouchMode = TOUCH_BACK;
+				sPressed = 0;
+				focus = -1;
+			} else if (in.ty >= kListTop) {
+				int row = (int)((in.ty - kListTop + sScroll) / kRowH);
+				if (row >= 0 && row < sec.count) {
+					if (row != sArmed) sArmed = -1;
+					focus = row;
+					sTouchRow = row;
+					const Row& r = sec.rows[row];
+					if (r.kind == ROW_SLIDER && in.tx >= kTrackX0 - 12 && in.tx <= kTrackX1 + 12) {
+						sTouchMode = TOUCH_SLIDER;
+						setSliderFromTouch(r, in.tx);
+					} else {
+						sTouchMode = TOUCH_ROW;
+						sTouchStartY = in.ty;
+						sScrollStart = sScroll;
+						sTouchMoved = false;
+					}
+				}
+			}
+		} else if (sTouchMode == TOUCH_BACK) {
+			if (!hit(kBack, in.tx, in.ty)) {
+				sTouchMode = TOUCH_NONE;
+				sPressed = -1;
+			}
+		} else if (sTouchMode == TOUCH_SLIDER) {
+			setSliderFromTouch(sec.rows[sTouchRow], in.tx);
+		} else if (sTouchMode == TOUCH_ROW) {
+			int dy = in.ty - sTouchStartY;
+			if (dy > 6 || dy < -6) sTouchMoved = true;
+			if (sTouchMoved) sScroll = sScrollStart - dy;
+		}
+	} else if (wasTouching) {
+		sPressed = -1;
+		if (sTouchMode == TOUCH_BACK) {
+			sTouchMode = TOUCH_NONE;
+			leaveSection();
+			return;
+		}
+		if (sTouchMode == TOUCH_SLIDER) {
+			const Row& r = sec.rows[sTouchRow];
+			if (r.value == &gSave.sfx) audio::play(SFX_CLICK);
+			else audio::click(0.6f);
+		} else if (sTouchMode == TOUCH_ROW && !sTouchMoved) {
+			const Row& r = sec.rows[sTouchRow];
+			if (r.kind == ROW_ACTION) rowAction(sTouchRow, r);
+			else if (r.kind == ROW_CHOICE) adjustRow(r, sLastTouchX < 214 ? -1 : 1);
+		}
+		sTouchMode = TOUCH_NONE;
+	}
+	sScroll = clampf(sScroll, 0, maxScroll());
+}
+
+// ---------------------------------------------------------------- top-screen art
 static void drawTopBackground() {
 	const float d = sTime;
 	// Layers sit behind the screen plane and slowly drift for life.
 	gfx::setDepth(-2.0f);
 	gfx::image(SHEET_BGTOP, bgtop0_sky_idx, -12, 0, 424, 240);
-	gfx::setDepth(-1.3f);
-	gfx::image(SHEET_BGTOP, bgtop0_far_idx, -12 + sinf(d * 0.11f) * 2, 120, 424, 120);
+	if (gSave.bgDetail) {
+		gfx::setDepth(-1.3f);
+		gfx::image(SHEET_BGTOP, bgtop0_far_idx, -12 + sinf(d * 0.11f) * 2, 120, 424, 120);
+	}
 	gfx::setDepth(-0.7f);
 	gfx::image(SHEET_BGTOP, bgtop0_mid_idx, -12 + sinf(d * 0.15f) * 3, 130, 424, 110);
-	gfx::setDepth(-0.15f);
-	gfx::image(SHEET_BGTOP, bgtop0_near_idx, -12, 170, 424, 70);
+	if (gSave.bgDetail) {
+		gfx::setDepth(-0.15f);
+		gfx::image(SHEET_BGTOP, bgtop0_near_idx, -12, 170, 424, 70);
+	}
 }
 
-static void drawBestTable() {
-	char buf[40];
-	gfx::setDepth(0.4f);
-	gfx::image(SHEET_SPRITES, sprites_panel_idx, 40, 124, 320, 106, rgba(24, 16, 44, 175));
-	gfx::setDepth(0.8f);
-	if (sMenuSel < MODE_COUNT) {
-		gfx::text(kModes[sMenuSel].name, 200, 128, 0.56f, rgba(255, 226, 120), ALIGN_CENTER);
-		gfx::text(kModes[sMenuSel].line1, 200, 154, 0.38f, rgba(255, 246, 226), ALIGN_CENTER);
-		gfx::text(kModes[sMenuSel].line2, 200, 170, 0.38f, rgba(255, 246, 226), ALIGN_CENTER);
-		snprintf(buf, sizeof buf, "BEST %lu", (unsigned long)gSave.best[sMenuSel]);
-		gfx::text(buf, 200, 192, 0.56f, rgba(170, 240, 255), ALIGN_CENTER);
+// A slowly turning fruit, drawn with whichever art style is chosen.
+static void drawHero(float x, float y, float scale, float depth) {
+	static const int kSprites[] = {fruit_orange_idx, fruit_apple_idx, fruit_melon_idx, fruit_pineapple_idx, fruit_peach_idx, fruit_berry_idx};
+	static const int kMeshes[] = {m3d::MESH_ORANGE, m3d::MESH_APPLE, m3d::MESH_MELON, m3d::MESH_PINEAPPLE, m3d::MESH_PEACH, m3d::MESH_BERRY};
+	int which = ((int)(sTime / 4.0f)) % 6;
+	if (gSave.artStyle == ART_3D && m3d::ready()) {
+		m3d::begin(400, gfx::stereoPerZ());
+		m3d::Pose pose = {x, y, depth * 30, 0.25f, sTime * 0.9f, sinf(sTime * 0.7f) * 0.15f, scale, 0, 0, 0};
+		m3d::draw(kMeshes[which], m3d::PART_WHOLE, pose);
+		m3d::end();
 	} else {
-		gfx::text("Options", 200, 128, 0.56f, rgba(255, 226, 120), ALIGN_CENTER);
-		gfx::text("Boards, scenery, sound and more", 200, 160, 0.38f, rgba(255, 246, 226), ALIGN_CENTER);
+		gfx::setDepth(depth);
+		gfx::sprite(SHEET_FRUIT, kSprites[which], x, y, scale, scale, sinf(sTime * 0.7f) * 0.15f);
 	}
+}
+
+static void topPanel(float x, float y, float w, float h) {
+	gfx::setDepth(0.3f);
+	gfx::image(SHEET_SPRITES, sprites_plank_idx, x, y, w, h, COL_PLANK);
 }
 
 static void drawDebug() {
 	char buf[64];
 	gfx::setDepth(0);
-	gfx::rect(4, 186, 300, 50, rgba(0, 0, 0, 170));
+	gfx::rect(4, 170, 310, 66, rgba(0, 0, 0, 170));
 	snprintf(buf, sizeof buf, "FPS %.1f CPU %.0f%% GPU %.0f%%", sFps, C3D_GetProcessingTime() * 6.0f, C3D_GetDrawingTime() * 6.0f);
-	gfx::text(buf, 8, 186, 0.36f, rgba(160, 255, 160));
+	gfx::text(buf, 8, 170, 0.36f, rgba(160, 255, 160));
 	snprintf(buf, sizeof buf, "DRAWS %lu OBJ %d PART %d", (unsigned long)gfx::drawCalls, sGame.activeObjects(), sGame.activeParticles());
+	gfx::text(buf, 8, 186, 0.36f, rgba(160, 255, 160));
+	snprintf(buf, sizeof buf, "LINEAR FREE %luK CORE2 %s", (unsigned long)(linearSpaceFree() / 1024), jobs::threaded() ? "ON" : "OFF");
 	gfx::text(buf, 8, 202, 0.36f, rgba(160, 255, 160));
-	snprintf(buf, sizeof buf, "TOUCH RAW %.0f,%.0f BLADE %.0f,%.0f", sBlade.rawX, sBlade.rawY, sBlade.x, sBlade.y);
+	snprintf(buf, sizeof buf, "TOUCH %.0f,%.0f BLADE %.0f,%.0f", sBlade.rawX, sBlade.rawY, sBlade.x, sBlade.y);
 	gfx::text(buf, 8, 218, 0.36f, rgba(160, 255, 160));
 }
 
-static void drawTop() {
-	char buf[40];
-	drawTopBackground();
-	switch (sScreen) {
-		case SCREEN_MENU:
-			gfx::setDepth(1.2f);
-			gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 64 + sinf(sTime * 1.6f) * 2);
-			drawBestTable();
+// ---------------------------------------------------------------- speed test
+struct BenchProfile {
+	const char* name;
+	u8 art, effects, detail, bg, slice;
+	bool fast, stereo;
+};
+static const BenchProfile kBench[] = {
+	{"NEW 3D FULL", ART_3D, FX_FULL, 1, 1, 1, true, false},
+	{"NEW 3D FULL STEREO", ART_3D, FX_FULL, 1, 1, 1, true, true},
+	{"NEW 2D FULL STEREO", ART_2D, FX_FULL, 0, 1, 0, true, true},
+	{"OLD 2D DEFAULT", ART_2D, FX_MEDIUM, 0, 0, 0, false, false},
+	{"OLD 2D STEREO", ART_2D, FX_MEDIUM, 0, 0, 0, false, true},
+	{"OLD 3D LOW STEREO", ART_3D, FX_LOW, 0, 0, 0, false, true},
+};
+static constexpr int kBenchCount = sizeof kBench / sizeof kBench[0];
+static constexpr int kBenchSettle = 30;
+static constexpr int kBenchFrames = 840;
+
+struct BenchResult {
+	float logicAvg, logicMax, cpuAvg, cpuMax, gpuAvg, gpuMax;
+	int missed;
+	u32 linearFree;
+};
+static BenchResult sBenchResults[kBenchCount];
+static int sBenchIndex = 0;
+static int sBenchFrame = 0;
+static bool sBenchDone = false;
+static bool sBenchSaved = false;
+static Settings sBenchRestore;
+static u64 sBenchLastTick = 0;
+static float sBenchLogicMs = 0;
+
+static void benchSetup() {
+	const BenchProfile& p = kBench[sBenchIndex];
+	gSave = sBenchRestore;
+	gSave.artStyle = p.art;
+	gSave.effects = p.effects;
+	gSave.detail = p.detail;
+	gSave.bgDetail = p.bg;
+	gSave.sliceStyle = p.slice;
+	gSave.topFruit = 1;
+	gSave.depth = 50;
+	gSave.difficulty = DIFF_INSANE;
+	gSave.bombs = 0;
+	gSave.sfx = gSave.music = 0;
+	osSetSpeedupEnable(p.fast);
+	jobs::setEnabled(p.fast);
+	gfx::forceStereo(p.stereo);
+	gRng.s = 0x51CE51CE;
+	sGame.start(MODE_FRENZY);  // the most objects on screen of any mode, with a Fruit Frenzy held on below
+	sBlade.reset();
+	sBenchFrame = 0;
+	sBenchResults[sBenchIndex] = {};
+	sBenchResults[sBenchIndex].linearFree = 0xFFFFFFFFu;
+}
+
+static void startSpeedTest() {
+	sBenchRestore = gSave;
+	sBenchIndex = 0;
+	sBenchDone = false;
+	sBenchSaved = false;
+	audio::music(MUSIC_NONE);
+	audio::fuse(false);
+	benchSetup();
+	sScreen = SCREEN_BENCH;
+}
+
+static void benchWriteFile() {
+	mkdir("sdmc:/3ds", 0777);
+	mkdir("sdmc:/3ds/FruitSlicer", 0777);
+	FILE* f = fopen("sdmc:/3ds/FruitSlicer/bench.txt", "w");
+	sBenchSaved = f != nullptr;
+	if (!f) return;
+	u8 model = 255;
+	CFGU_GetSystemModel(&model);
+	fprintf(f, "Fruit Slicer 3DS %s speed test\nconsole model %d, new=%d, 3d screen=%d, core2=%d\n", VERSION_STRING, model, gIsNew3ds, gHas3dScreen, jobs::threaded());
+	fprintf(f, "Each frame has 16.7 ms. OLD profiles run at 268 MHz, without L2 cache or the extra core.\n");
+	fprintf(f, "profile, missed frames of %d, logic avg/max ms, draw avg/max ms, gpu avg/max ms, linear free KB\n", kBenchFrames);
+	for (int i = 0; i < kBenchCount; i++) {
+		const BenchResult& r = sBenchResults[i];
+		fprintf(f, "%s, %d, %.1f/%.1f, %.1f/%.1f, %.1f/%.1f, %lu\n", kBench[i].name, r.missed, r.logicAvg / kBenchFrames, r.logicMax, r.cpuAvg / kBenchFrames, r.cpuMax,
+		        r.gpuAvg / kBenchFrames, r.gpuMax, (unsigned long)(r.linearFree / 1024));
+	}
+	fclose(f);
+}
+
+static void benchFinish() {
+	gSave = sBenchRestore;
+	osSetSpeedupEnable(true);
+	jobs::setEnabled(true);
+	gfx::forceStereo(false);
+	gfx::setShake(0, 0);
+	audio::refreshVolumes();
+	audio::music(MUSIC_MENU);
+	benchWriteFile();
+	sBenchDone = true;
+}
+
+static void benchMeasure() {
+	u64 now = svcGetSystemTick();
+	float frameMs = (now - sBenchLastTick) / (float)CPU_TICKS_PER_MSEC;
+	sBenchLastTick = now;
+	if (sBenchFrame < kBenchSettle) return;
+	BenchResult& r = sBenchResults[sBenchIndex];
+	float cpu = C3D_GetProcessingTime(), gpu = C3D_GetDrawingTime();
+	r.logicAvg += sBenchLogicMs;
+	r.cpuAvg += cpu;
+	r.gpuAvg += gpu;
+	if (sBenchLogicMs > r.logicMax) r.logicMax = sBenchLogicMs;
+	if (cpu > r.cpuMax) r.cpuMax = cpu;
+	if (gpu > r.gpuMax) r.gpuMax = gpu;
+	if (frameMs > 17.7f) r.missed++;
+	u32 freeNow = linearSpaceFree();
+	if (freeNow < r.linearFree) r.linearFree = freeNow;
+}
+
+static void benchUpdate(const Input& hw) {
+	if (sBenchDone) {
+		if (hw.down & (KEY_A | KEY_B)) {
+			audio::click();
+			audio::music(MUSIC_MENU);
+			sFocus[SCREEN_SECTION] = 0;
+			sScreen = SCREEN_SECTION;
+		}
+		return;
+	}
+	if (hw.down & KEY_B) {  // leave without saving a partial report
+		gSave = sBenchRestore;
+		osSetSpeedupEnable(true);
+		jobs::setEnabled(true);
+		gfx::forceStereo(false);
+		gfx::setShake(0, 0);
+		audio::refreshVolumes();
+		audio::music(MUSIC_MENU);
+		sScreen = SCREEN_SECTION;
+		return;
+	}
+	u64 start = svcGetSystemTick();
+	Input in{};
+	in.touching = true;
+	in.tx = (int)(160 + sinf(sBenchFrame * 0.25f) * 150);
+	in.ty = (int)(120 + sinf(sBenchFrame * 0.37f) * 100);
+	sGame.timeLeft = 40;
+	sGame.elapsed = 45;
+	if (sGame.phase == PHASE_PLAY) sGame.feverT = 7;
+	sBlade.update(in);
+	sGame.update(sBlade);
+	sGame.kickParticles();
+	sBenchLogicMs = (svcGetSystemTick() - start) / (float)CPU_TICKS_PER_MSEC;
+	if (++sBenchFrame >= kBenchFrames + kBenchSettle) {
+		sBenchIndex++;
+		if (sBenchIndex >= kBenchCount) benchFinish();
+		else benchSetup();
+	}
+}
+
+// ---------------------------------------------------------------- screens: top
+static void drawTopContent(Screen screen) {
+	char buf[48];
+	switch (screen) {
+		case SCREEN_LOADING:
 			break;
-		case SCREEN_OPTIONS:
+		case SCREEN_TITLE:
+			gfx::setDepth(1.2f);
+			gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 66 + sinf(sTime * 1.6f) * 2);
+			drawHero(200, 172, 1.25f, 0.8f);
+			if (sNoSound) {
+				gfx::setDepth(0.6f);
+				gfx::text("No sound: needs 3ds/dspfirm.cdc", 200, 222, 0.34f, rgba(255, 190, 150), ALIGN_CENTER);
+			}
+			break;
+		case SCREEN_MODES: {
+			int f = sFocus[SCREEN_MODES];
+			topPanel(30, 96, 340, 134);
+			gfx::setDepth(1.0f);
+			gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 50, 0.62f, 0.62f);
+			gfx::setDepth(0.7f);
+			if (f >= 1) {
+				const ModeInfo& m = kModes[f - 1];
+				gfx::text(m.name, 200, 104, 0.6f, COL_ACCENT, ALIGN_CENTER);
+				gfx::text(m.line1, 200, 134, 0.38f, COL_CREAM, ALIGN_CENTER);
+				gfx::text(m.line2, 200, 152, 0.38f, COL_CREAM, ALIGN_CENTER);
+				snprintf(buf, sizeof buf, "BEST %lu", (unsigned long)gSave.best[f - 1]);
+				gfx::text(buf, 200, 184, 0.6f, COL_CREAM, ALIGN_CENTER);
+			} else {
+				gfx::text("Back to the title", 200, 150, 0.46f, COL_CREAM, ALIGN_CENTER);
+			}
+			break;
+		}
+		case SCREEN_OPTIONS: {
+			static const char* const kLines[][2] = {
+				{"", "Back to the title"},
+				{"Sound, music and menu volume.", ""},
+				{"Art style, board, scenery, blade,", "effects and speed savers."},
+				{"Stylus, difficulty, and how the", "game plays."},
+				{"Speed test, and resetting scores.", ""},
+			};
+			int f = sFocus[SCREEN_OPTIONS];
+			gfx::setDepth(1.0f);
+			gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 50, 0.62f, 0.62f);
+			topPanel(40, 112, 320, 84);
+			gfx::setDepth(0.7f);
+			gfx::text(f >= 1 ? kOptionButtons[f].label : "Options", 200, 118, 0.5f, COL_ACCENT, ALIGN_CENTER);
+			gfx::text(kLines[f][0], 200, 146, 0.38f, COL_CREAM, ALIGN_CENTER);
+			gfx::text(kLines[f][1], 200, 164, 0.38f, COL_CREAM, ALIGN_CENTER);
+			break;
+		}
+		case SCREEN_SECTION: {
+			const Section& sec = kSections[sSection];
+			int f = sFocus[SCREEN_SECTION];
+			const Row* r = f >= 0 ? &sec.rows[f] : nullptr;
+			if (r && (r->value == &gSave.artStyle || r->value == &gSave.detail || r->value == &gSave.sliceStyle || r->value == &gSave.depth)) {
+				drawHero(200, 50, 1.2f, 1.0f);
+			} else if (r && r->value == &gSave.board) {
+				gfx::setDepth(0.6f);
+				gfx::image(SHEET_BOARD, 0, 142, 8, 116, 87);
+			} else if (r && r->value == &gSave.blade) {
+				gfx::setDepth(0.6f);
+				sPreviewBlade.draw();
+			} else if (sSection == 3) {
+				gfx::setDepth(0.6f);
+				snprintf(buf, sizeof buf, "FRUIT SLICED %lu", (unsigned long)gSave.totalFruit);
+				gfx::text(buf, 200, 20, 0.5f, COL_CREAM, ALIGN_CENTER);
+				snprintf(buf, sizeof buf, "BEST COMBO %lu", (unsigned long)gSave.bestCombo);
+				gfx::text(buf, 200, 50, 0.5f, COL_CREAM, ALIGN_CENTER);
+			}
+			topPanel(30, 100, 340, 130);
+			gfx::setDepth(0.7f);
+			gfx::text(r ? r->label : sec.title, 200, 106, 0.56f, COL_ACCENT, ALIGN_CENTER);
+			if (r && rowDisabled(*r)) {
+				gfx::text("This console has no 3D screen,", 200, 142, 0.38f, COL_CREAM, ALIGN_CENTER);
+				gfx::text("so depth has no effect here.", 200, 160, 0.38f, COL_CREAM, ALIGN_CENTER);
+			} else if (r) {
+				gfx::text(r->line1, 200, 138, 0.38f, COL_CREAM, ALIGN_CENTER);
+				gfx::text(r->line2, 200, 156, 0.38f, COL_CREAM, ALIGN_CENTER);
+				if (r->value == &gSave.stylus) gfx::text("Also calibrate in System Settings.", 200, 174, 0.34f, COL_DIM, ALIGN_CENTER);
+				rowValueText(*r, buf, sizeof buf);
+				gfx::text(buf, 200, 194, 0.5f, COL_CREAM, ALIGN_CENTER);
+			} else {
+				gfx::text("Back to Options", 200, 150, 0.42f, COL_CREAM, ALIGN_CENTER);
+			}
+			break;
+		}
+		case SCREEN_CREDITS:
 			gfx::setDepth(1.0f);
 			gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 54, 0.72f, 0.72f);
-			gfx::setDepth(0.4f);
-			gfx::image(SHEET_SPRITES, sprites_panel_idx, 40, 106, 320, 124, rgba(24, 16, 44, 175));
+			topPanel(30, 110, 340, 116);
 			gfx::setDepth(0.7f);
-			gfx::text("Fan-made game. Free, non-commercial.", 200, 112, 0.36f, rgba(255, 246, 226), ALIGN_CENTER);
-			gfx::text("Art, sound and music generated", 200, 130, 0.36f, rgba(255, 246, 226), ALIGN_CENTER);
-			gfx::text("from code in the source repo.", 200, 146, 0.36f, rgba(255, 246, 226), ALIGN_CENTER);
-			gfx::text("Not affiliated with any publisher.", 200, 164, 0.36f, rgba(255, 246, 226), ALIGN_CENTER);
-			if (!audio::available()) gfx::text("No sound: needs 3ds/dspfirm.cdc", 200, 178, 0.32f, rgba(255, 130, 110), ALIGN_CENTER);
+			gfx::text("Free, non-commercial fan game.", 200, 118, 0.38f, COL_CREAM, ALIGN_CENTER);
+			gfx::text("Not affiliated with any publisher.", 200, 136, 0.38f, COL_CREAM, ALIGN_CENTER);
 			snprintf(buf, sizeof buf, "FRUIT SLICED %lu  BEST COMBO %lu", (unsigned long)gSave.totalFruit, (unsigned long)gSave.bestCombo);
-			gfx::text(buf, 200, 194, 0.34f, rgba(255, 226, 120), ALIGN_CENTER);
-			gfx::text("V" VERSION_STRING, 200, 211, 0.34f, rgba(170, 240, 255), ALIGN_CENTER);
+			gfx::text(buf, 200, 164, 0.34f, COL_DIM, ALIGN_CENTER);
+			gfx::text("V" VERSION_STRING, 200, 190, 0.42f, COL_ACCENT, ALIGN_CENTER);
+			break;
+		case SCREEN_HOWTO:
+			gfx::setDepth(1.0f);
+			gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 50, 0.62f, 0.62f);
+			drawHero(200, 164, 1.2f, 0.8f);
 			break;
 		case SCREEN_GAME:
+			sGame.drawFieldTop();
 			sGame.drawHud();
 			break;
 		case SCREEN_PAUSE:
+			sGame.drawFieldTop();
 			sGame.drawHud();
 			gfx::setDepth(1.8f);
-			gfx::text("PAUSED", 200, 110, 1.3f, rgba(255, 230, 140), ALIGN_CENTER);
+			gfx::text("PAUSED", 200, 130, 1.1f, COL_CREAM, ALIGN_CENTER);
 			break;
 		case SCREEN_RESULT: {
 			float in = clampf(sGame.phaseT * 4, 0, 1);
 			gfx::setDepth(0.5f);
-			gfx::image(SHEET_SPRITES, sprites_panel_idx, 40, 22, 320, 196, rgba(24, 16, 44, (u8)(200 * in)));
+			gfx::image(SHEET_SPRITES, sprites_plank_idx, 30, 12, 340, 212, withAlpha(COL_PLANK, in));
 			gfx::setDepth(1.0f);
-			gfx::text(kModes[sGame.mode].name, 200, 28, 0.56f, rgba(255, 246, 226), ALIGN_CENTER);
+			gfx::text(kModes[sGame.mode].name, 200, 26, 0.56f, COL_CREAM, ALIGN_CENTER);
 			gfx::setDepth(1.7f);
 			snprintf(buf, sizeof buf, "%lu", (unsigned long)sGame.score);
-			gfx::text(buf, 200, 54, 1.7f, rgba(255, 226, 120), ALIGN_CENTER);
+			gfx::text(buf, 200, 50, 1.7f, COL_ACCENT, ALIGN_CENTER);
 			gfx::setDepth(1.0f);
 			if (sGame.newBest) {
-				gfx::text("NEW BEST!", 200, 118, 0.7f + sinf(sTime * 6) * 0.04f, rgba(140, 240, 150), ALIGN_CENTER);
+				gfx::text("NEW BEST!", 200, 116, 0.7f + sinf(sTime * 6) * 0.04f, COL_CREAM, ALIGN_CENTER);
 			} else {
 				snprintf(buf, sizeof buf, "BEST %lu", (unsigned long)sGame.best);
-				gfx::text(buf, 200, 118, 0.6f, rgba(170, 240, 255), ALIGN_CENTER);
+				gfx::text(buf, 200, 116, 0.6f, COL_DIM, ALIGN_CENTER);
 			}
 			snprintf(buf, sizeof buf, "FRUIT SLICED %d", sGame.sliced);
-			gfx::text(buf, 200, 156, 0.44f, rgba(255, 246, 226), ALIGN_CENTER);
+			gfx::text(buf, 200, 154, 0.44f, COL_CREAM, ALIGN_CENTER);
 			snprintf(buf, sizeof buf, "BEST COMBO %d", sGame.bestCombo);
-			gfx::text(buf, 200, 178, 0.44f, rgba(255, 246, 226), ALIGN_CENTER);
+			gfx::text(buf, 200, 176, 0.44f, COL_CREAM, ALIGN_CENTER);
 			break;
 		}
+		case SCREEN_BENCH:
+			if (!sBenchDone) {
+				sGame.drawFieldTop();
+				gfx::setDepth(0);
+				gfx::rect(0, 0, 400, 44, rgba(30, 20, 12, 220));
+				snprintf(buf, sizeof buf, "SPEED TEST %d OF %d", sBenchIndex + 1, kBenchCount);
+				gfx::text(buf, 200, 2, 0.42f, COL_CREAM, ALIGN_CENTER);
+				gfx::text(kBench[sBenchIndex].name, 200, 22, 0.42f, COL_ACCENT, ALIGN_CENTER);
+			} else {
+				gfx::setDepth(0);
+				gfx::rect(0, 0, 400, 240, rgba(30, 20, 12, 235));
+				gfx::text("MISSED FRAMES", 200, 4, 0.46f, COL_ACCENT, ALIGN_CENTER);
+				for (int i = 0; i < kBenchCount; i++) {
+					snprintf(buf, sizeof buf, "%s: %d", kBench[i].name, sBenchResults[i].missed);
+					gfx::text(buf, 200, 34 + i * 24, 0.4f, COL_CREAM, ALIGN_CENTER);
+				}
+				gfx::text(sBenchSaved ? "Saved to 3ds/FruitSlicer/bench.txt" : "Could not save the results", 200, 190, 0.36f, COL_DIM, ALIGN_CENTER);
+			}
+			break;
+		default:
+			break;
 	}
-	if (sShowDebug) drawDebug();
 }
 
-static void drawBottom() {
-	switch (sScreen) {
-		case SCREEN_MENU:
-			gfx::image(SHEET_BGBOT, bgbot_board0_idx + gSave.board, 0, 0, 320, 240);
-			for (int i = 0; i < kMenuCount; i++)
-				drawButton(kMenuButtons[i], kMenuButtons[i].label, kModeTints[i], sMenuSel == i, sPressed == i, (i == 4 || i == 6) ? 0.48f : 0.56f);
+// ---------------------------------------------------------------- screens: bottom
+static void drawRows() {
+	const Section& sec = kSections[sSection];
+	int focus = sFocus[SCREEN_SECTION];
+	char buf[32];
+	for (int i = 0; i < sec.count; i++) {
+		const Row& r = sec.rows[i];
+		float y = kListTop + i * kRowH - sScroll;
+		if (y + kRowH < kListTop || y > 240) continue;
+		bool pressed = sTouchMode == TOUCH_ROW && sTouchRow == i && !sTouchMoved && r.kind == ROW_ACTION;
+		drawPlank(8, y + 1, 304, kRowH - 3, focus == i, pressed);
+		float ty = y + kRowH * 0.5f - 8;
+		u32 labelColor = rowDisabled(r) ? COL_DIM : COL_CREAM;
+		if (r.kind == ROW_ACTION) {
+			const char* label = sArmed == i ? "Tap again to confirm" : r.label;
+			gfx::text(label, 160, ty - 1, 0.42f, sArmed == i ? COL_ACCENT : COL_CREAM, ALIGN_CENTER);
+			continue;
+		}
+		float ls = 0.36f;
+		float lw = gfx::textWidth(r.label, ls);
+		if (lw > 134) ls *= 134 / lw;
+		gfx::text(r.label, 18, ty + (0.36f - ls) * 10, ls, labelColor);
+		rowValueText(r, buf, sizeof buf);
+		if (r.kind == ROW_SLIDER) {
+			float cy = y + kRowH * 0.5f - 1;
+			float t = (*r.value - r.lo) / (float)(r.hi - r.lo);
+			if (rowDisabled(r)) t = 0;
+			gfx::rect(kTrackX0, cy - 3, kTrackX1 - kTrackX0, 6, gfx::themeBar());
+			gfx::rect(kTrackX0, cy - 3, (kTrackX1 - kTrackX0) * t, 6, rowDisabled(r) ? COL_DIM : COL_ACCENT);
+			gfx::sprite(SHEET_SPRITES, sprites_knob_idx, lerpf(kTrackX0, kTrackX1, t), cy, 0.72f, 0.72f);
+			gfx::text(buf, 306, ty + 1, 0.3f, COL_CREAM, ALIGN_RIGHT);
+		} else {
+			float cy = y + kRowH * 0.5f - 1;
+			gfx::sprite(SHEET_SPRITES, sprites_arrow_idx, 164, cy, 0.5f, 0.5f, 0, COL_ACCENT);
+			gfx::sprite(SHEET_SPRITES, sprites_arrow_idx, 298, cy, 0.5f, 0.5f, 3.14159265f, COL_ACCENT);
+			float vs = 0.36f;
+			float w = gfx::textWidth(buf, vs);
+			if (w > 108) vs *= 108 / w;
+			gfx::text(buf, 231, ty + (0.36f - vs) * 10, vs, COL_CREAM, ALIGN_CENTER);
+		}
+	}
+	// A quiet scroll mark, only when the list is longer than the screen.
+	float most = maxScroll();
+	if (most > 0) {
+		float room = 240 - kListTop;
+		float size = room * room / (room + most);
+		gfx::rect(315, kListTop + (room - size) * (sScroll / most), 3, size, COL_DIM);
+	}
+}
+
+static void drawBottomContent(Screen screen) {
+	static const int kIcons[] = {sprites_pip_on_idx, sprites_ic_clock_idx, sprites_ic_leaf_idx, sprites_ic_fast_idx, sprites_ic_one_idx, sprites_ic_mine_idx, sprites_ic_chain_idx};
+	switch (screen) {
+		case SCREEN_LOADING:
 			break;
+		case SCREEN_TITLE: {
+			drawMenuBack();
+			gfx::image(SHEET_SPRITES, sprites_post_idx, 150, 0, 20, 240, COL_PLANK);
+			int f = sFocus[SCREEN_TITLE];
+			for (int i = 0; i < 4; i++) drawSign(kTitleButtons[i], kTitleButtons[i].label, f == i, sPressed == i, i == 0 ? 1.0f : 0.5f);
+			break;
+		}
+		case SCREEN_MODES: {
+			drawMenuBack();
+			int f = sFocus[SCREEN_MODES];
+			drawHeader("Pick a Game");
+			drawBackArrow(f == 0, sPressed == 0);
+			for (int i = 1; i < 8; i++) drawSign(kModeButtons[i], kModeButtons[i].label, f == i, sPressed == i, 0.46f, kIcons[i - 1]);
+			break;
+		}
 		case SCREEN_OPTIONS: {
-			gfx::image(SHEET_BGBOT, bgbot_board0_idx + gSave.board, 0, 0, 320, 240);
-			const u32 tints[kOptCount] = {
-				rgba(66, 150, 200), rgba(90, 170, 130), rgba(176, 116, 66), rgba(120, 100, 190), rgba(230, 150, 70),
-				rgba(226, 92, 110), rgba(70, 130, 170), rgba(150, 120, 90), rgba(200, 80, 90), rgba(110, 100, 150),
+			drawMenuBack();
+			int f = sFocus[SCREEN_OPTIONS];
+			drawHeader("Options");
+			drawBackArrow(f == 0, sPressed == 0);
+			for (int i = 1; i < (sOptionsFromPause ? 4 : 5); i++) drawSign(kOptionButtons[i], kOptionButtons[i].label, f == i, sPressed == i, 0.56f);
+			break;
+		}
+		case SCREEN_SECTION:
+			drawMenuBack();
+			drawRows();
+			// The header covers rows as they scroll up beneath it.
+			gfx::rect(0, 0, 320, 44, gfx::themeBar());
+			drawHeader(kSections[sSection].title);
+			drawBackArrow(sFocus[SCREEN_SECTION] < 0, sPressed == 0);
+			break;
+		case SCREEN_CREDITS:
+			drawMenuBack();
+			drawHeader("Credits");
+			drawBackArrow(true, sPressed == 0);
+			gfx::image(SHEET_SPRITES, sprites_plank_idx, 10, 50, 300, 176, COL_PLANK);
+			gfx::text("PROGRAMMING", 160, 60, 0.36f, COL_ACCENT, ALIGN_CENTER);
+			gfx::text("Claude Opus 5.5", 160, 78, 0.56f, COL_CREAM, ALIGN_CENTER);
+			gfx::text("PROMPT ENGINEERING", 160, 114, 0.36f, COL_ACCENT, ALIGN_CENTER);
+			gfx::text("RealAnxiousGit", 160, 132, 0.56f, COL_CREAM, ALIGN_CENTER);
+			gfx::text("Art, sound and music are all", 160, 172, 0.34f, COL_DIM, ALIGN_CENTER);
+			gfx::text("generated from code in the repo.", 160, 190, 0.34f, COL_DIM, ALIGN_CENTER);
+			break;
+		case SCREEN_HOWTO: {
+			static const char* const kLines[] = {
+				"Swipe through fruit. Miss the bombs.",
+				"Each slice fills the Fruit Frenzy meter.",
+				"Stop slicing and it drains.",
+				"If it runs dry, your combo resets.",
+				"Fill it for Frenzy: double points!",
+				"One long swipe scores a big bonus.",
+				"START pauses. B goes back.",
 			};
-			const char* titles[OPT_RESET] = {"SOUND", "MUSIC", "BOARD", "SCENERY", "BLADE", "JUICE", "3D DEPTH", "SCREEN SHAKE"};
-			const char* values[OPT_RESET] = {
-				kVolumeNames[gSave.sfx], kVolumeNames[gSave.music], kBoardNames[gSave.board], kSceneNames[gSave.scene],
-				kBladeNames[gSave.blade], kJuiceNames[gSave.juice % 3], kDepthNames[gSave.depth % 3], gSave.shake ? "On" : "Off",
-			};
-			for (int i = 0; i < OPT_RESET; i++) {
-				const Button& b = kOptButtons[i];
-				float dy = sPressed == i ? 2 : 0;
-				if (sOptSel == i) gfx::image(SHEET_SPRITES, sprites_button_idx, b.x - 2, b.y - 2 + dy, b.w + 4, b.h + 4, rgba(255, 236, 150));
-				gfx::image(SHEET_SPRITES, sprites_button_idx, b.x, b.y + dy, b.w, b.h, tints[i]);
-				gfx::text(titles[i], b.x + b.w * 0.5f, b.y + 2 + dy, 0.3f, rgba(255, 240, 200), ALIGN_CENTER);
-				float vs = 0.46f;
-				float w = gfx::textWidth(values[i], vs);
-				if (w > b.w - 12) vs *= (b.w - 12) / w;
-				gfx::text(values[i], b.x + b.w * 0.5f, b.y + 16 + dy + (0.46f - vs) * 18, vs, WHITE, ALIGN_CENTER);
+			drawMenuBack();
+			drawHeader("How to Play");
+			drawBackArrow(true, sPressed == 0);
+			gfx::image(SHEET_SPRITES, sprites_plank_idx, 8, 48, 304, 186, COL_PLANK);
+			for (int i = 0; i < 7; i++) {
+				float s = 0.36f, w = gfx::textWidth(kLines[i], s);
+				if (w > 284) s *= 284 / w;
+				gfx::text(kLines[i], 160, 58 + i * 24, s, COL_CREAM, ALIGN_CENTER);
 			}
-			drawButton(kOptButtons[OPT_RESET], sResetArmed ? "Tap to erase" : "Reset scores", tints[OPT_RESET], sOptSel == OPT_RESET, sPressed == OPT_RESET, 0.4f);
-			drawButton(kOptButtons[OPT_BACK], "Back", tints[OPT_BACK], sOptSel == OPT_BACK, sPressed == OPT_BACK, 0.5f);
 			break;
 		}
 		case SCREEN_GAME:
 			sGame.drawField(sBlade);
 			break;
-		case SCREEN_PAUSE:
+		case SCREEN_PAUSE: {
 			sGame.drawField(sBlade);
-			gfx::rect(0, 0, 320, 240, rgba(10, 6, 24, 150));
-			for (int i = 0; i < 2; i++)
-				drawButton(kPauseButtons[i], kPauseButtons[i].label, i == 0 ? rgba(90, 170, 130) : rgba(200, 80, 90), sPauseSel == i, sPressed == i);
+			gfx::rect(0, 0, 320, 240, rgba(30, 18, 10, 150));
+			int f = sFocus[SCREEN_PAUSE];
+			drawBackArrow(f == 0, sPressed == 0);
+			for (int i = 1; i < 4; i++) drawSign(kPauseButtons[i], kPauseButtons[i].label, f == i, sPressed == i);
 			break;
-		case SCREEN_RESULT:
+		}
+		case SCREEN_RESULT: {
 			sGame.drawField(sBlade);
-			for (int i = 0; i < 2; i++)
-				drawButton(kResultButtons[i], kResultButtons[i].label, i == 0 ? rgba(90, 170, 130) : rgba(110, 100, 150), sResultSel == i, sPressed == i);
+			int f = sFocus[SCREEN_RESULT];
+			drawBackArrow(f == 0, sPressed == 0);
+			for (int i = 1; i < 3; i++) drawSign(kResultButtons[i], kResultButtons[i].label, f == i, sPressed == i);
+			break;
+		}
+		case SCREEN_BENCH:
+			if (!sBenchDone) {
+				sGame.drawField(sBlade);
+				gfx::text("B stops the test", 160, 222, 0.32f, COL_CREAM, ALIGN_CENTER);
+			} else {
+				drawMenuBack();
+				drawHeader("Speed Test");
+				gfx::text("Each line should read 0.", 160, 90, 0.42f, COL_CREAM, ALIGN_CENTER);
+				gfx::text("On an emulator these numbers only", 160, 120, 0.36f, COL_DIM, ALIGN_CENTER);
+				gfx::text("describe the PC, not a 3DS.", 160, 138, 0.36f, COL_DIM, ALIGN_CENTER);
+				gfx::text("A or B: back", 160, 190, 0.42f, COL_ACCENT, ALIGN_CENTER);
+			}
+			break;
+		default:
 			break;
 	}
 }
 
 // ---------------------------------------------------------------- flow
-static void startGame(Mode m) {
-	sGame.start(m);
+static Mode sStartMode = MODE_CLASSIC;
+
+static void startGame() {
+	sGame.start(sStartMode);
 	sBlade.reset();
 	gfx::setShake(0, 0);
 	sScreen = SCREEN_GAME;
+	sPressed = -1;
 }
 
-static void toMenu() {
-	sScreen = SCREEN_MENU;
+static void toModes() {
+	sScreen = SCREEN_MODES;
 	sPressed = -1;
 	gfx::setShake(0, 0);
+	audio::fuse(false);
 	audio::music(MUSIC_MENU);
 }
 
-static void activateMenu(int i) {
-	audio::play(SFX_CLICK);
-	sMenuSel = i;
-	if (i < MODE_COUNT) startGame((Mode)i);
-	else {
-		sScreen = SCREEN_OPTIONS;
-		sOptSel = 0;
-		sResetArmed = false;
-	}
-}
-
-static void activateOption(int i) {
-	sOptSel = i;
-	if (i != OPT_RESET) sResetArmed = false;
-	switch (i) {
-		case OPT_SOUND: gSave.sfx = (gSave.sfx + 1) % kVolumeLevels; break;
-		case OPT_MUSIC: gSave.music = (gSave.music + 1) % kVolumeLevels; audio::refreshVolumes(); break;
-		case OPT_BOARD: gSave.board = (gSave.board + 1) % kBoardCount; break;
-		case OPT_SCENE:
-			gSave.scene = (gSave.scene + 1) % kSceneCount;
-			gfx::setScene(gSave.scene);
-			break;
-		case OPT_BLADE: gSave.blade = (gSave.blade + 1) % kBladeCount; break;
-		case OPT_JUICE: gSave.juice = (gSave.juice + 1) % 3; break;
-		case OPT_DEPTH: gSave.depth = (gSave.depth + 1) % 3; break;
-		case OPT_SHAKE: gSave.shake = !gSave.shake; break;
-		case OPT_RESET:
-			if (!sResetArmed) {
-				sResetArmed = true;
-				audio::play(SFX_CLICK);
-				return;
-			}
-			memset(gSave.best, 0, sizeof gSave.best);
-			gSave.totalFruit = 0;
-			gSave.bestCombo = 0;
-			sResetArmed = false;
-			break;
-		case OPT_BACK:
-			audio::play(SFX_CLICK);
-			saveWrite();
-			sScreen = SCREEN_MENU;
-			return;
-	}
-	audio::play(SFX_CLICK);
-	saveWrite();
+static void toTitle() {
+	sOptionsFromPause = false;
+	toModes();
+	sScreen = SCREEN_TITLE;
 }
 
 static void pauseGame() {
-	if (sScreen != SCREEN_GAME || sGame.phase == PHASE_OVER) return;
+	// Not while a run is ending: its score is only saved once that finishes.
+	if (sScreen != SCREEN_GAME || sGame.phase == PHASE_OVER || sGame.phase == PHASE_DYING) return;
 	sScreen = SCREEN_PAUSE;
+	gfx::setShake(0, 0);
 	audio::fuse(false);
-	sPauseSel = 0;
+	sFocus[SCREEN_PAUSE] = 1;
 	sPressed = -1;
 	sBlade.reset();
 }
@@ -333,6 +1093,25 @@ static void aptHook(APT_HookType hook, void*) {
 #include "autotest.inc"
 #endif
 
+static void updateTransitions() {
+	if (sSliding) {
+		sSlideT += kDt / kSlideTime;
+		if (sSlideT >= 1) sSliding = false;
+	}
+	if (sFadingOut) {
+		sFade += kDt / kFadeTime;
+		if (sFade >= 1) {
+			sFade = 1;
+			sFadingOut = false;
+			if (sFadeAction) sFadeAction();
+			sFadeAction = nullptr;
+		}
+	} else if (sFade > 0) {
+		sFade -= kDt / kFadeTime;
+		if (sFade < 0) sFade = 0;
+	}
+}
+
 static void updateFrame(const Input& in, bool wasTouching) {
 	sTime += kDt;
 	if (in.down & KEY_SELECT) sShowDebug = !sShowDebug;
@@ -340,109 +1119,263 @@ static void updateFrame(const Input& in, bool wasTouching) {
 		sSuspended = false;
 		pauseGame();
 	}
+	updateTransitions();
 
+	// The game keeps moving during a fade, but menus ignore input while anything is sliding.
+	const bool blocked = inputBlocked();
 	switch (sScreen) {
-		case SCREEN_MENU: {
-			audio::music(MUSIC_MENU);
-			int prev = sMenuSel;
-			dpadGrid(sMenuSel, kMenuCount, in.down, 2);
-			if (prev != sMenuSel) audio::play(SFX_CLICK, 0.5f);
-			if (in.touching) {
-				for (int i = 0; i < kMenuCount; i++)
-					if (hit(kMenuButtons[i], in.tx, in.ty)) sMenuSel = i;
+		case SCREEN_TITLE: {
+			if (blocked) break;
+			int t = menuInput(kTitleButtons, 4, SCREEN_TITLE, in, wasTouching);
+			if (t == 0) goTo(SCREEN_MODES, 1);
+			else if (t == 1) goTo(SCREEN_OPTIONS, 1);
+			else if (t == 2) goTo(SCREEN_CREDITS, 1);
+			else if (t == 3) goTo(SCREEN_HOWTO, 1);
+			break;
+		}
+		case SCREEN_MODES: {
+			if (blocked) break;
+			int t = menuInput(kModeButtons, 8, SCREEN_MODES, in, wasTouching);
+			if (in.down & KEY_B) {
+				audio::click();
+				t = 0;
 			}
-			int tapped = handleButtons(kMenuButtons, kMenuCount, in, wasTouching);
-			if (tapped >= 0) activateMenu(tapped);
-			else if (in.down & KEY_A) activateMenu(sMenuSel);
+			if (t == 0) goTo(SCREEN_TITLE, -1);
+			else if (t > 0) {
+				sStartMode = (Mode)(t - 1);
+				fadeThen(startGame);
+			}
 			break;
 		}
 		case SCREEN_OPTIONS: {
-			dpadGrid(sOptSel, kOptCount, in.down, 2);
-			int tapped = handleButtons(kOptButtons, kOptCount, in, wasTouching);
-			if (tapped >= 0) activateOption(tapped);
-			else if (in.down & KEY_A) activateOption(sOptSel);
-			else if (in.down & KEY_B) activateOption(OPT_BACK);
+			if (blocked) break;
+			// Mid-game, the data section stays out of reach: its speed test would replace the paused game.
+			int t = menuInput(kOptionButtons, sOptionsFromPause ? 4 : 5, SCREEN_OPTIONS, in, wasTouching);
+			if (in.down & KEY_B) {
+				audio::click();
+				t = 0;
+			}
+			if (t == 0) {
+				if (sOptionsFromPause) goTo(SCREEN_PAUSE, -1);
+				else goTo(SCREEN_TITLE, -1);
+			}
+			else if (t > 0) {
+				sSection = t - 1;
+				sScroll = 0;
+				sArmed = -1;
+				sFocus[SCREEN_SECTION] = 0;
+				goTo(SCREEN_SECTION, 1);
+			}
+			break;
+		}
+		case SCREEN_SECTION: {
+			if (blocked) break;
+			updateSection(in, wasTouching);
+			// A little figure-eight, so the Blade row shows the real trail.
+			const Row* rows = kSections[sSection].rows;
+			int f = sFocus[SCREEN_SECTION];
+			if (f >= 0 && rows[f].value == &gSave.blade) {
+				Input fake{};
+				fake.touching = true;
+				fake.tx = (int)(200 + sinf(sTime * 3.1f) * 60);
+				fake.ty = (int)(50 + sinf(sTime * 6.2f) * 30);
+				sPreviewBlade.update(fake);
+			}
+			break;
+		}
+		case SCREEN_CREDITS:
+		case SCREEN_HOWTO: {
+			if (blocked) break;
+			int& f = sFocus[sScreen];
+			int t = touchButtons(kOnlyBack, 1, in, wasTouching, f);
+			if (t == 0 || (in.down & (KEY_A | KEY_B))) {
+				audio::click();
+				goTo(SCREEN_TITLE, -1);
+			}
 			break;
 		}
 		case SCREEN_GAME:
 			sBlade.update(in);
 			sGame.update(sBlade);
+			sGame.kickParticles();
 			if (in.down & KEY_START) {
 				pauseGame();
 				break;
 			}
 			if (sGame.phase == PHASE_OVER) {
 				sScreen = SCREEN_RESULT;
-				sResultSel = 0;
+				sFocus[SCREEN_RESULT] = 1;
 				sPressed = -1;
 				sBlade.reset();
 			}
 			break;
 		case SCREEN_PAUSE: {
-			if (in.down & (KEY_UP | KEY_DOWN)) sPauseSel = !sPauseSel;
-			int tapped = handleButtons(kPauseButtons, 2, in, wasTouching);
-			if (tapped < 0 && (in.down & KEY_A)) tapped = sPauseSel;
-			if (tapped < 0 && (in.down & KEY_START)) tapped = 0;
-			if (tapped == 0) {
-				audio::play(SFX_CLICK);
+			if (blocked) break;
+			int t = menuInput(kPauseButtons, 4, SCREEN_PAUSE, in, wasTouching);
+			if (t < 0 && (in.down & (KEY_START | KEY_B))) {
+				t = 1;
+				audio::click();
+			}
+			if (t == 0 || t == 1) {
+				sOptionsFromPause = false;
 				sScreen = SCREEN_GAME;
 				sBlade.reset();
-			} else if (tapped == 1) {
-				audio::play(SFX_CLICK);
-				toMenu();
+			} else if (t == 2) {
+				sOptionsFromPause = true;
+				sFocus[SCREEN_OPTIONS] = 1;
+				goTo(SCREEN_OPTIONS, 1);
+			} else if (t == 3) {
+				fadeThen(toTitle);
 			}
 			break;
 		}
 		case SCREEN_RESULT: {
 			sGame.update(sBlade);  // keeps debris falling behind the buttons
-			if (in.down & (KEY_LEFT | KEY_RIGHT)) sResultSel = !sResultSel;
-			// A short lock-out stops a frantic swipe from tapping a button by accident.
-			int tapped = sGame.phaseT > 0.7f ? handleButtons(kResultButtons, 2, in, wasTouching) : -1;
-			if (tapped < 0 && sGame.phaseT > 0.7f && (in.down & KEY_A)) tapped = sResultSel;
-			if (tapped == 0) {
-				audio::play(SFX_CLICK);
-				startGame(sGame.mode);
-			} else if (tapped == 1) {
-				audio::play(SFX_CLICK);
-				toMenu();
+			sGame.kickParticles();
+			if (blocked) break;
+			// A short lock-out stops a frantic swipe from tapping a sign by accident.
+			if (sGame.phaseT <= 0.7f) break;
+			int t = menuInput(kResultButtons, 3, SCREEN_RESULT, in, wasTouching);
+			if (in.down & KEY_B) {
+				audio::click();
+				t = 0;
+			}
+			if (t == 1) {
+				sStartMode = sGame.mode;
+				fadeThen(startGame);
+			} else if (t == 0 || t == 2) {
+				fadeThen(toModes);
 			}
 			break;
 		}
+		case SCREEN_BENCH:
+			benchUpdate(in);
+			break;
+		default:
+			break;
 	}
 }
 
-static void debugLog(const Input& in) {
-	static u32 frame = 0;
-	frame++;
-	if (frame % 60) return;
-	fprintf(stderr, "[dbg] f=%lu fps=%.1f cpu=%.1f%% gpu=%.1f%% draws=%lu screen=%d mode=%d phase=%d score=%lu obj=%d part=%d touch=%d,%d blade=%.0f,%.0f\n",
-	        (unsigned long)frame, sFps, C3D_GetProcessingTime() * 6.0f, C3D_GetDrawingTime() * 6.0f, (unsigned long)gfx::drawCalls,
-	        (int)sScreen, (int)sGame.mode, (int)sGame.phase, (unsigned long)sGame.score, sGame.activeObjects(), sGame.activeParticles(),
-	        in.tx, in.ty, sBlade.x, sBlade.y);
+static void drawFrame() {
+	float e = sSlideT * sSlideT * (3 - 2 * sSlideT);  // eases in and out
+	gfx::beginFrame();
+	for (int eye = 0; eye < 2; eye++) {
+		if (!gfx::beginTop(eye)) continue;
+		gfx::setBase(0, 0);
+		drawTopBackground();
+		if (sSliding) {
+			gfx::setBase(-sSlideDir * 400 * e, 0);
+			drawTopContent(sSlideFrom);
+			gfx::setBase(sSlideDir * 400 * (1 - e), 0);
+			drawTopContent(sScreen);
+			gfx::setBase(0, 0);
+		} else {
+			drawTopContent(sScreen);
+		}
+		if (sFade > 0) {
+			gfx::setDepth(0);
+			gfx::rect(0, 0, 400, 240, rgba(0, 0, 0, (u8)(clampf(sFade, 0, 1) * 255)));
+		}
+		if (sShowDebug) drawDebug();
+	}
+	gfx::beginBottom();
+	if (sSliding) {
+		gfx::setBase(-sSlideDir * 320 * e, 0);
+		drawBottomContent(sSlideFrom);
+		gfx::setBase(sSlideDir * 320 * (1 - e), 0);
+		drawBottomContent(sScreen);
+		gfx::setBase(0, 0);
+	} else {
+		drawBottomContent(sScreen);
+	}
+	if (sFade > 0) gfx::rect(0, 0, 320, 240, rgba(0, 0, 0, (u8)(clampf(sFade, 0, 1) * 255)));
+	gfx::endFrame();
+}
+
+// ---------------------------------------------------------------- loading screen
+static void drawLoading(float progress) {
+	gfx::beginFrame();
+	for (int eye = 0; eye < 2; eye++) {
+		if (!gfx::beginTop(eye)) continue;
+		drawTopBackground();
+		gfx::setDepth(1.0f);
+		gfx::sprite(SHEET_LOGO, logo_logo_idx, 200, 90);
+		gfx::setDepth(0.3f);
+		gfx::text(gIsNew3ds ? "Setting up for New 3DS" : "Setting up for Old 3DS", 200, 190, 0.38f, COL_CREAM, ALIGN_CENTER);
+	}
+	gfx::beginBottom();
+	drawMenuBack();
+	drawPlank(40, 84, 240, 72, false, false);
+	gfx::text("Loading", 160, 92, 0.56f, COL_CREAM, ALIGN_CENTER);
+	gfx::rect(58, 128, 204, 12, gfx::themeBar());
+	gfx::rect(60, 130, 200 * clampf(progress, 0, 1), 8, COL_ACCENT);
+	gfx::endFrame();
+}
+
+static void runLoading() {
+	const int gfxSteps = gfx::loadStepCount();
+	const int audioSteps = audio::available() ? audio::loadStepCount() : 0;
+	const int total = gfxSteps + 1 + audioSteps;
+	int step = 0, frames = 0;
+	// Work happens one step per frame. It always lasts at least a second, so that the title's arrival reads
+	// as a moment and not a flicker.
+	while (aptMainLoop() && (step < total || frames < 60)) {
+		if (step < gfxSteps) gfx::loadStep(step);
+		else if (step == gfxSteps) m3d::sync();
+		else if (step < total) audio::loadStep(step - gfxSteps - 1);
+		if (step < total) step++;
+		frames++;
+		float byStep = step / (float)total, byTime = frames / 60.0f;
+		drawLoading(byStep < byTime ? byStep : byTime);
+	}
+	audio::music(MUSIC_MENU);
+	sFade = 1;  // the title fades up out of black
 }
 
 int main() {
 	romfsInit();
+#ifdef AUTOTEST
 	consoleDebugInit(debugDevice_SVC);  // stderr goes to svcOutputDebugString, visible in Azahar's log
+#endif
 	osSetSpeedupEnable(true);           // New 3DS: 804 MHz + L2 cache; no effect on Old 3DS
+	APT_CheckNew3DS(&gIsNew3ds);
+	cfguInit();
+	u8 model = CFG_MODEL_3DS;
+	if (R_SUCCEEDED(CFGU_GetSystemModel(&model))) gHas3dScreen = model != CFG_MODEL_2DS && model != CFG_MODEL_N2DSXL;
 
-	bool assetsOk = gfx::init();
 	saveLoad();
-	bool audioOk = audio::init();
-	aptHookCookie* cookie = &sAptCookie;
-	aptHook(cookie, aptHook, nullptr);
-	gRng.s = (u32)osGetTime() | 1;
-	bool isNew3ds = false;
-	APT_CheckNew3DS(&isNew3ds);
-	fprintf(stderr, "[boot] Fruit Slicer %s assets=%d audio=%d new3ds=%d\n", VERSION_STRING, assetsOk, audioOk, isNew3ds);
+#ifdef TEST_ART
+	gSave.artStyle = TEST_ART;
+#endif
+#ifdef TEST_FX
+	gSave.effects = TEST_FX;
+#endif
+#ifdef TEST_NOSFX
+	gSave.sfx = 0;
+#endif
+#ifdef TEST_BOARD
+	gSave.board = TEST_BOARD;
+#endif
+	bool assetsOk = gfx::init();
 	if (!assetsOk) {
 		// Without romfs there is nothing to draw; bail out instead of crashing.
 		gfx::shutdown();
+		cfguExit();
 		romfsExit();
 		return 1;
 	}
-	if (gSave.scene != 0) gfx::setScene(gSave.scene);
-	audio::music(MUSIC_MENU);
+	hidSetRepeatParameters(20, 5);
+	m3d::init();
+	jobs::init();
+	bool audioOk = audio::init();
+	sNoSound = !audioOk;
+	aptHookCookie* cookie = &sAptCookie;
+	aptHook(cookie, aptHook, nullptr);
+	gRng.s = (u32)osGetTime() | 1;
+	DLOG("[boot] Fruit Slicer %s audio=%d new3ds=%d 3dscreen=%d\n", VERSION_STRING, audioOk, gIsNew3ds, gHas3dScreen);
+
+	runLoading();
+	sScreen = SCREEN_TITLE;
 	sLastTick = osGetTime();
 
 	bool wasTouching = false;
@@ -451,6 +1384,7 @@ int main() {
 		Input in{};
 		in.down = hidKeysDown();
 		in.held = hidKeysHeld();
+		in.repeat = hidKeysDownRepeat();
 		if (in.held & KEY_TOUCH) {
 			touchPosition tp;
 			hidTouchRead(&tp);
@@ -462,30 +1396,33 @@ int main() {
 		autotestInput(in);
 		if (autotestDone()) break;
 #else
-		// START+SELECT from the menu quits, for builds launched from the Homebrew Launcher.
-		if (sScreen == SCREEN_MENU && (in.held & KEY_START) && (in.held & KEY_SELECT)) break;
+		// START+SELECT from the title quits, for builds launched from the Homebrew Launcher.
+		if (sScreen == SCREEN_TITLE && (in.held & KEY_START) && (in.held & KEY_SELECT)) break;
 #endif
 
 		updateFrame(in, wasTouching);
 		wasTouching = in.touching;
-		debugLog(in);
 
-		gfx::beginFrame();
-		for (int eye = 0; eye < 2; eye++) {
-			if (gfx::beginTop(eye)) drawTop();
-		}
-		gfx::beginBottom();
-		drawBottom();
-		gfx::endFrame();
+		// New scenery, boards and models load here, between frames.
+		gfx::sync();
+		m3d::sync();
+		audio::update();
+
+		drawFrame();
+		if (sScreen == SCREEN_BENCH && !sBenchDone) benchMeasure();
 
 		u64 now = osGetTime();
 		if (now > sLastTick) sFps = lerpf(sFps, 1000.0f / (float)(now - sLastTick), 0.1f);
 		sLastTick = now;
 	}
 
+	if (sDirty) saveWrite();
 	aptUnhook(cookie);
+	jobs::shutdown();
+	m3d::shutdown();
 	audio::shutdown();
 	gfx::shutdown();
+	cfguExit();
 	romfsExit();
 	return 0;
 }

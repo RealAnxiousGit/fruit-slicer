@@ -1,4 +1,4 @@
---atlas -f rgba8 -z auto --border transparent
+--atlas -f la8 -z auto --border transparent
 png/font/g00.png
 png/font/g01.png
 png/font/g02.png

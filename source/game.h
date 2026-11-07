@@ -8,6 +8,7 @@ enum ObjKind : u8 { OBJ_FRUIT, OBJ_GOLD, OBJ_BOMB, OBJ_FREEZE, OBJ_DOUBLE, OBJ_F
 
 struct Obj {
 	float x, y, vx, vy, rot, rotv, radius, age;
+	float rx, ry, rxv, ryv;  // extra tumble, seen in the 3D art style
 	float hitCooldown;  // tough fruit can't be hit twice by one swipe
 	ObjKind kind;
 	u8 fruit;
@@ -16,7 +17,11 @@ struct Obj {
 };
 struct Half {
 	float x, y, vx, vy, rot, rotv;
+	float rx, ry;            // 3D: orientation kept from the moment of the cut
+	float axisX, axisY, tilt, tiltv;  // 3D: rolls the cut face towards the player
 	short sprite;
+	short cut;               // 3D: exact-cut vertex slot, or -1 for a ready-made half
+	u8 mesh, part;
 	bool on;
 };
 struct Particle {
@@ -86,7 +91,7 @@ struct Game {
 	int maxStrikes;     // 0 means no strike rule
 	int sliced;
 	int bestCombo;
-	int streak;
+	int chain;          // the running combo: fruit in a row while the meter stays alive
 	int comboCount;
 	float comboTimer;
 	u32 comboStroke;
@@ -97,9 +102,9 @@ struct Game {
 	u32 calloutColor;
 	float freezeT, doubleT, frenzyT;
 	float frenzyTimer;
-	float feverMeter;   // 0..1, fills as you slice
+	float feverMeter;   // 0..1, fills as you slice; running dry resets the combo
 	float feverIdle;    // seconds since the meter last gained anything
-	float feverT;       // seconds of Fever left
+	float feverT;       // seconds of Fruit Frenzy left
 	float feverTimer;
 	float slowT;        // brief slow motion after a huge combo
 	float scorePulse;
@@ -114,12 +119,16 @@ struct Game {
 	bool finaleOn;
 #ifdef AUTOTEST
 	// Measures how often a fruit is actually drawn on top of a bomb.
-	u32 statBombFrames, statOverlapFrames, statWaves;
+	u32 statBombFrames, statOverlapFrames, statWaves, statFrenzies, statResets;
+	u32 statThrows, statFeverThrows, statBombHits, statDropped, statPeakObjs;
+	float statFeverTime;
 #endif
 
 	void start(Mode m);
 	void update(Blade& blade);
 	void drawField(const Blade& blade) const;   // bottom screen
+	void drawFieldTop() const;                  // top screen: fruit thrown high, one eye at a time
+	void kickParticles();                       // steps particles, on the spare core when there is one
 	void drawHud() const;                       // top screen, one eye at a time
 	int activeObjects() const;
 	int activeParticles() const;
@@ -145,6 +154,9 @@ private:
 	void addStrike(float x);
 	void finishCombo();
 	void addFever(float amount);
+	void addHalves(const Obj& o, const struct FruitDef& def, const Blade& blade, float dx, float dy);
+	void drawObjects3D(bool top, float ox, float oy) const;
+	void drawObjects2D(bool top, float ox, float oy) const;
 	void emitJuice(float x, float y, u32 color, int count, float dirX, float dirY);
 	void emitSparks(float x, float y, u32 color, int count, float speed);
 	void addPopup(const char* s, float x, float y, u32 color, float scale);

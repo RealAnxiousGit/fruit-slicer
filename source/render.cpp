@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "font_metrics.h"
+#include "model3d.h"
 
 namespace gfx {
 u32 drawCalls = 0;
@@ -16,11 +17,16 @@ static C2D_SpriteSheet sSheets[SHEET_COUNT];
 static bool sOnTop;
 static int sEye;
 static float sIod;
-static float sOffX, sOffY;
+static float sDepthX;
 static float sShakeX, sShakeY;
+static float sBaseX, sBaseY;
 static bool sRightEye;
-static C2D_SpriteSheet sRetired;
-static int sRetiredFrames;
+static bool sForceStereo;
+
+// Sheets being replaced stay alive until the GPU can no longer be reading them.
+static C2D_SpriteSheet sRetired[3];
+static int sRetiredFrames[3];
+static int sLoadedScene = -1, sLoadedBoard = -1;
 
 // Pixels of total disparity at full slider per unit of depth.
 static constexpr float kMaxDisparity = 5.0f;
@@ -39,41 +45,115 @@ static C2D_SpriteSheet load(const char* p) {
 	return s;
 }
 
+static void retire(C2D_SpriteSheet s) {
+	if (!s) return;
+	for (int i = 0; i < 3; i++) {
+		if (!sRetired[i]) {
+			sRetired[i] = s;
+			sRetiredFrames[i] = 3;
+			return;
+		}
+	}
+	// All slots waiting: this is the rare case of a very fast setting change, so wait it out.
+	C3D_FrameSync();
+	C3D_FrameSync();
+	C2D_SpriteSheetFree(s);
+}
+
+struct BoardTheme {
+	u8 plank[3], accent[3], bar[3];
+};
+// Picked from each board: its check, its wood, its plate rim, its veins, its sea, its night.
+static const BoardTheme kThemes[kBoardCount] = {
+	{{46, 84, 116}, {255, 204, 96}, {22, 42, 62}},
+	{{112, 68, 36}, {255, 170, 60}, {62, 36, 18}},
+	{{44, 84, 148}, {255, 214, 120}, {70, 50, 40}},
+	{{78, 82, 100}, {130, 214, 240}, {52, 54, 68}},
+	{{24, 100, 108}, {255, 214, 110}, {16, 70, 76}},
+	{{66, 46, 118}, {255, 200, 120}, {24, 18, 54}},
+};
+u32 themePlank() {
+	const u8* c = kThemes[gSave.board % kBoardCount].plank;
+	// The plank art is about 84% white, so this lands on the listed colour.
+	auto up = [](u8 v) { int n = v * 6 / 5; return (u8)(n > 255 ? 255 : n); };
+	return C2D_Color32(up(c[0]), up(c[1]), up(c[2]), 255);
+}
+u32 themeAccent() {
+	const u8* c = kThemes[gSave.board % kBoardCount].accent;
+	return C2D_Color32(c[0], c[1], c[2], 255);
+}
+u32 themeBar() {
+	const u8* c = kThemes[gSave.board % kBoardCount].bar;
+	return C2D_Color32(c[0], c[1], c[2], 255);
+}
+
 bool init() {
 	gfxInitDefault();
 	gfxSet3D(true);
 	C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
 	C2D_Init(kMaxObjects);
 	C2D_Prepare();
+	// Sprites keep painter's order. The depth buffer belongs to the 3D fruit alone.
+	C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
 	sTopL = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
 	sTopR = C2D_CreateScreenTarget(GFX_TOP, GFX_RIGHT);
 	sBottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
-
-	static const char* const paths[SHEET_COUNT] = {
-		"romfs:/gfx/sprites.t3x", "romfs:/gfx/font.t3x", "romfs:/gfx/bgtop0.t3x",
-		"romfs:/gfx/bgbot.t3x",   "romfs:/gfx/logo.t3x",
-	};
-	bool ok = true;
-	for (int i = 0; i < SHEET_COUNT; i++) {
-		sSheets[i] = load(paths[i]);
-		ok = ok && sSheets[i];
-	}
-	return ok;
+	sSheets[SHEET_FONT] = load("romfs:/gfx/font.t3x");
+	sSheets[SHEET_SPRITES] = load("romfs:/gfx/sprites.t3x");
+	sSheets[SHEET_LOGO] = load("romfs:/gfx/logo.t3x");
+	// The loading screen already wears the player's chosen scenery and board.
+	sync();
+	sync();
+	return sSheets[SHEET_FONT] && sSheets[SHEET_SPRITES] && sSheets[SHEET_LOGO] && sSheets[SHEET_BGTOP] && sSheets[SHEET_BOARD];
 }
 
-void setScene(int scene) {
-	if (sRetired) return;  // a swap is already settling; the Options screen will ask again
+int loadStepCount() { return 1; }
+
+void loadStep(int i) {
+	(void)i;
+	sync();  // one sheet per call, so the loading bar keeps moving
+}
+
+void sync() {
+	for (int i = 0; i < 3; i++) {
+		if (sRetired[i] && --sRetiredFrames[i] <= 0) {
+			C2D_SpriteSheetFree(sRetired[i]);
+			sRetired[i] = nullptr;
+		}
+	}
 	char path[40];
-	snprintf(path, sizeof path, "romfs:/gfx/bgtop%d.t3x", scene);
-	C2D_SpriteSheet next = load(path);
-	if (!next) return;
-	sRetired = sSheets[SHEET_BGTOP];
-	sRetiredFrames = 3;
-	sSheets[SHEET_BGTOP] = next;
+	if (sLoadedScene != gSave.scene) {
+		snprintf(path, sizeof path, "romfs:/gfx/bgtop%d.t3x", gSave.scene);
+		C2D_SpriteSheet next = load(path);
+		if (next) {
+			retire(sSheets[SHEET_BGTOP]);
+			sSheets[SHEET_BGTOP] = next;
+		}
+		sLoadedScene = gSave.scene;
+		return;
+	}
+	if (sLoadedBoard != gSave.board) {
+		snprintf(path, sizeof path, "romfs:/gfx/board%d.t3x", gSave.board);
+		C2D_SpriteSheet next = load(path);
+		if (next) {
+			retire(sSheets[SHEET_BOARD]);
+			sSheets[SHEET_BOARD] = next;
+		}
+		sLoadedBoard = gSave.board;
+		return;
+	}
+	bool wantFruit = gSave.artStyle == 0 || !m3d::usable();
+	if (wantFruit && !sSheets[SHEET_FRUIT]) {
+		sSheets[SHEET_FRUIT] = load("romfs:/gfx/fruit.t3x");
+	} else if (!wantFruit && sSheets[SHEET_FRUIT]) {
+		retire(sSheets[SHEET_FRUIT]);
+		sSheets[SHEET_FRUIT] = nullptr;
+	}
 }
 
 void shutdown() {
-	if (sRetired) C2D_SpriteSheetFree(sRetired);
+	for (auto& s : sRetired)
+		if (s) C2D_SpriteSheetFree(s);
 	for (auto& s : sSheets)
 		if (s) C2D_SpriteSheetFree(s);
 	C2D_Fini();
@@ -81,15 +161,13 @@ void shutdown() {
 	gfxExit();
 }
 
+void forceStereo(bool on) { sForceStereo = on; }
+
 void beginFrame() {
-	static const float kDepthScale[] = {0.0f, 1.0f, 1.8f};
-	sIod = osGet3DSliderState() * kDepthScale[gSave.depth % 3];
-	sRightEye = osGet3DSliderState() > 0.0f;
+	float slider = sForceStereo ? 1.0f : osGet3DSliderState();
+	sIod = slider * (gSave.depth / 50.0f);
+	sRightEye = slider > 0.0f;
 	C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-	if (sRetired && --sRetiredFrames <= 0) {
-		C2D_SpriteSheetFree(sRetired);
-		sRetired = nullptr;
-	}
 	C2D_SetTintMode(C2D_TintMult);
 	drawCallsLive = 0;
 }
@@ -100,14 +178,14 @@ void endFrame() {
 }
 
 bool beginTop(int eye) {
-	// The right eye still has to be drawn at depth "Off" while the slider is up, just without offset.
+	// The right eye is still drawn at zero depth while the slider is up, just without any offset.
 	if (eye == 1 && !sRightEye) return false;
 	C3D_RenderTarget* t = eye == 0 ? sTopL : sTopR;
 	C2D_TargetClear(t, C2D_Color32(0, 0, 0, 255));
 	C2D_SceneBegin(t);
 	sOnTop = true;
 	sEye = eye;
-	sOffX = sOffY = 0;
+	sDepthX = 0;
 	return true;
 }
 
@@ -115,15 +193,23 @@ void beginBottom() {
 	C2D_TargetClear(sBottom, C2D_Color32(0, 0, 0, 255));
 	C2D_SceneBegin(sBottom);
 	sOnTop = false;
-	sOffX = sShakeX;
-	sOffY = sShakeY;
+	sDepthX = 0;
 }
+
+bool onTop() { return sOnTop; }
 
 void setDepth(float depth) {
 	if (!sOnTop) return;
 	// A plane in front of the screen is shifted right for the left eye, left for the right eye.
 	float half = sIod * kMaxDisparity * depth * 0.5f;
-	sOffX = (sEye == 0 ? half : -half);
+	sDepthX = sEye == 0 ? half : -half;
+}
+
+float stereoPerZ() {
+	if (!sOnTop) return 0;
+	// A fruit's radius is about 23, so this puts a clear couple of pixels of roundness in each eye.
+	float k = sIod * 0.1f;
+	return sEye == 0 ? k : -k;
 }
 
 void setShake(float dx, float dy) {
@@ -131,12 +217,26 @@ void setShake(float dx, float dy) {
 	sShakeY = dy;
 }
 
+void setBase(float dx, float dy) {
+	sBaseX = dx;
+	sBaseY = dy;
+}
+
+void getOffset(float* x, float* y) {
+	*x = sBaseX + (sOnTop ? 0 : sShakeX);
+	*y = sBaseY + (sOnTop ? 0 : sShakeY);
+}
+
+static inline float offX() { return sBaseX + sDepthX + (sOnTop ? 0 : sShakeX); }
+static inline float offY() { return sBaseY + (sOnTop ? 0 : sShakeY); }
+
 void sprite(SheetId sheet, int idx, float x, float y, float sx, float sy, float rot, u32 color) {
+	if (!sSheets[sheet]) return;
 	C2D_Image img = C2D_SpriteSheetGetImage(sSheets[sheet], idx);
 	float w = img.subtex->width * sx;
 	float h = img.subtex->height * sy;
 	C2D_DrawParams p;
-	p.pos = {x + sOffX, y + sOffY, w, h};
+	p.pos = {x + offX(), y + offY(), w, h};
 	p.center = {w * 0.5f, h * 0.5f};
 	p.depth = kZ;
 	p.angle = rot;
@@ -147,9 +247,10 @@ void sprite(SheetId sheet, int idx, float x, float y, float sx, float sy, float 
 }
 
 void image(SheetId sheet, int idx, float x, float y, float w, float h, u32 color) {
+	if (!sSheets[sheet]) return;
 	C2D_Image img = C2D_SpriteSheetGetImage(sSheets[sheet], idx);
 	C2D_DrawParams p;
-	p.pos = {x + sOffX, y + sOffY, w, h};
+	p.pos = {x + offX(), y + offY(), w, h};
 	p.center = {0, 0};
 	p.depth = kZ;
 	p.angle = 0;
@@ -160,12 +261,13 @@ void image(SheetId sheet, int idx, float x, float y, float w, float h, u32 color
 }
 
 void rect(float x, float y, float w, float h, u32 color) {
-	C2D_DrawRectSolid(x + sOffX, y + sOffY, kZ, w, h, color);
+	C2D_DrawRectSolid(x + offX(), y + offY(), kZ, w, h, color);
 	drawCallsLive++;
 }
 
 void tri(float x0, float y0, u32 c0, float x1, float y1, u32 c1, float x2, float y2, u32 c2) {
-	C2D_DrawTriangle(x0 + sOffX, y0 + sOffY, c0, x1 + sOffX, y1 + sOffY, c1, x2 + sOffX, y2 + sOffY, c2, kZ);
+	float ox = offX(), oy = offY();
+	C2D_DrawTriangle(x0 + ox, y0 + oy, c0, x1 + ox, y1 + oy, c1, x2 + ox, y2 + oy, c2, kZ);
 	drawCallsLive++;
 }
 
