@@ -22,3 +22,5 @@ tools/gen_assets.py
 tools/gen_backgrounds.py
 tools/gen_audio.py
 source/splash_lines.inc
+source/shop.cpp
+source/shop.h

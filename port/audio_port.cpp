@@ -20,6 +20,7 @@ struct Voice {
 };
 static Voice sVoices[kVoices];
 static Voice sMusic, sFuse;
+static double sMusicBase = 1, sMusicSpeed = 1;  // the track's own rate, and how much faster it plays now
 static int sNext;
 static float sMusicVolume = 0.45f;
 static SDL_AudioStream* sStream;
@@ -206,7 +207,15 @@ void playSfx(const Clip& c, float left, float right, float rate) {
 
 void musicStart(const Clip& c) {
 	SDL_LockMutex(sLock);
-	sMusic = {c.pcm, c.samples, 0.0, (double)c.rate / kRate, 1, 1, true, true};
+	sMusicBase = (double)c.rate / kRate;
+	sMusic = {c.pcm, c.samples, 0.0, sMusicBase * sMusicSpeed, 1, 1, true, true};
+	SDL_UnlockMutex(sLock);
+}
+
+void musicRate(float factor) {
+	SDL_LockMutex(sLock);
+	sMusicSpeed = factor;
+	sMusic.step = sMusicBase * factor;
 	SDL_UnlockMutex(sLock);
 }
 

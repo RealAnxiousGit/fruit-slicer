@@ -65,13 +65,32 @@ def make(kind, seed):
         return 0.97 + 0.05 * band(r, 40, 120, sx=0.05)
     if kind == "bomb":
         return 0.94 + 0.06 * band(r, 15, 60) - 0.24 * spots(r, 50, 0.9)
+    if kind == "banana":
+        return 0.97 + 0.05 * band(r, 3, 12, sx=0.1) + 0.02 * grain - 0.3 * spots(r, 90, 1.3)
+    if kind == "mango":
+        return 0.97 + 0.04 * band(r, 4, 14) + 0.02 * grain - 0.12 * spots(r, 600, 0.9)
+    if kind in ("cherry", "grapes", "grape"):
+        return 0.97 + 0.06 * band(r, 3, 12) + 0.015 * grain
+    if kind == "dragon":
+        return 0.96 + 0.06 * band(r, 8, 30) + 0.03 * grain
+    if kind == "spiky":
+        return 0.9 + 0.1 * band(r, 20, 60) + 0.05 * grain - 0.2 * spots(r, 400, 1.2)
+    if kind == "honey":
+        return 0.95 + 0.06 * band(r, 25, 60) + 0.03 * grain
+    if kind == "jelly":
+        return 0.985 + 0.015 * band(r, 3, 10)
+    if kind == "chili":
+        return 0.96 + 0.06 * band(r, 3, 14, sy=0.15) + 0.015 * grain
+    if kind == "coin":
+        return 0.97 + 0.04 * band(r, 60, 130, sx=0.05)
     return 0.96 + 0.07 * band(r, 5, 30, sx=0.15) + 0.03 * grain  # sunburst
 
 
 def main():
     out = os.path.join(ROOT, "romfs", "tex")
     os.makedirs(out, exist_ok=True)
-    names = ["apple", "orange", "lemon", "pear", "plum", "melon", "kiwi", "berry", "peach", "pineapple", "coconut", "gold", "bomb", "sunburst"]
+    names = ["apple", "orange", "lemon", "pear", "plum", "melon", "kiwi", "berry", "peach", "pineapple", "coconut", "gold", "bomb", "sunburst",
+             "banana", "mango", "cherry", "dragon", "spiky", "grapes", "grape", "honey", "jelly", "chili", "coin"]
     for i, name in enumerate(names):
         a = np.clip(make(name, 4000 + i), 0, 1)
         Image.fromarray((a * 255).astype(np.uint8), "L").convert("RGB").save(os.path.join(out, name + ".png"), optimize=True)

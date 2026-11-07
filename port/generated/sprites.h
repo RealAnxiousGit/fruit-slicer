@@ -29,3 +29,7 @@
 #define sprites_coin_idx 26
 #define sprites_coin_back_idx 27
 #define sprites_coin_rim_idx 28
+#define sprites_pw_magnet_idx 29
+#define sprites_pw_wide_idx 30
+#define sprites_pw_shield_idx 31
+#define sprites_pw_time_idx 32
