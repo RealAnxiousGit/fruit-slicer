@@ -121,9 +121,9 @@ cd android
 
 ## Assets
 
-Everything is generated from code in [`tools/`](tools) with Pillow and numpy: sprites, boards, 3D models, HD textures, logo, font, sound effects and music. The project uses no third-party art, fonts, samples or game files. The generated files are committed, so building only needs a compiler. [`tools/gen_steam_art.py`](tools/gen_steam_art.py) draws the cover, banners, logo and icon in [`docs/steam`](docs/steam).
+Everything is generated from code in [`tools/`](tools) with Pillow and numpy: sprites, boards, 3D models, HD textures, logo, font, sound effects and the rest of the music. The six Shop music tracks are recorded music by another artist (see Credits). Apart from those, the project uses no third-party art, fonts, samples or game files. The generated files are committed, so building only needs a compiler. [`tools/gen_steam_art.py`](tools/gen_steam_art.py) draws the cover, banners, logo and icon in [`docs/steam`](docs/steam).
 
-**AI disclosure:** this game was made with an LLM. Claude wrote the code and the generator scripts that produce the art, sound and music, directed and playtested by the project owner.
+**AI disclosure:** this game was made with an LLM. Claude wrote the code and the generator scripts that produce the art, sound and most of the music, directed and playtested by the project owner.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed, and [docs/qa](docs/qa) for how each release was tested.
 
@@ -131,9 +131,12 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed, and [docs/qa](docs/qa) for ho
 
 Programming by Claude. Prompt engineering by RealAnxiousGit.
 
+**Music:** the six Shop tracks (Summer House, 8-Bit Hero Quest, Friendly Trap, Unruly Beat, Vengeance Electro and Eternal Explorer) are by [Of Far Different Nature](https://fardifferent.carrd.co/), from "Loop Box #1" and "Loop Box #4" on [OpenGameArt.org](https://opengameart.org), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They were converted (to Ogg Vorbis) and turned down to match the game's loudness.
+
 **Libraries and build tools:**
 
 - [SDL 3](https://libsdl.org) (zlib license)
+- [stb_vorbis](https://github.com/nothings/stb) by Sean Barrett (public domain or MIT), which plays the Shop music
 - [CMake](https://cmake.org), [Ninja](https://ninja-build.org), GCC and [MinGW-w64](https://www.mingw-w64.org)
 - [Android SDK and NDK](https://developer.android.com), [Gradle](https://gradle.org) and the Android Emulator
 - [appimagetool](https://github.com/AppImage/appimagetool)
@@ -148,6 +151,6 @@ Programming by Claude. Prompt engineering by RealAnxiousGit.
 
 ## License
 
-Code and assets are licensed under [CC BY-NC 4.0](LICENSE): free to share and adapt with credit, not for commercial use. SDL is used under the zlib license, and its Android Java files are included in `android/app/src/main/java/org/libsdl`.
+Code and assets are licensed under [CC BY-NC 4.0](LICENSE): free to share and adapt with credit, not for commercial use. The Shop music tracks keep their own CC BY 4.0 license from their author. SDL is used under the zlib license, and its Android Java files are included in `android/app/src/main/java/org/libsdl`.
 
 This is an independent fan project, not affiliated with or endorsed by any game publisher.

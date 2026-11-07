@@ -17,6 +17,7 @@ struct Voice {
 	double pos, step;
 	float left, right;
 	bool on, loop;
+	int ch = 1;  // 2: interleaved stereo (recorded music)
 };
 static Voice sVoices[kVoices];
 static Voice sMusic, sFuse;
@@ -48,9 +49,16 @@ static void mixVoice(Voice& v, float l, float r, int frames) {
 		}
 		u32 next = at + 1 < v.samples ? at + 1 : (v.loop ? 0 : at);
 		float t = (float)(v.pos - at);
-		float s = (v.pcm[at] + (v.pcm[next] - v.pcm[at]) * t) / 32768.0f;
-		sMix[i * 2] += s * l;
-		sMix[i * 2 + 1] += s * r;
+		if (v.ch == 2) {
+			const s16* a = v.pcm + at * 2;
+			const s16* b = v.pcm + next * 2;
+			sMix[i * 2] += (a[0] + (b[0] - a[0]) * t) / 32768.0f * l;
+			sMix[i * 2 + 1] += (a[1] + (b[1] - a[1]) * t) / 32768.0f * r;
+		} else {
+			float s = (v.pcm[at] + (v.pcm[next] - v.pcm[at]) * t) / 32768.0f;
+			sMix[i * 2] += s * l;
+			sMix[i * 2 + 1] += s * r;
+		}
 		v.pos += v.step;
 	}
 }
@@ -209,6 +217,7 @@ void musicStart(const Clip& c) {
 	SDL_LockMutex(sLock);
 	sMusicBase = (double)c.rate / kRate;
 	sMusic = {c.pcm, c.samples, 0.0, sMusicBase * sMusicSpeed, 1, 1, true, true};
+	sMusic.ch = c.channels == 2 ? 2 : 1;
 	SDL_UnlockMutex(sLock);
 }
 
