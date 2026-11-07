@@ -1,150 +1,153 @@
-# Fruit Slicer 3DS
+# Fruit Slicer
 
-A free, fan-made fruit-slicing arcade game for the Nintendo 3DS. Swipe the touch screen to cut fruit out of the air, chain combos and stay away from the bombs.
+A free, fan-made fruit-slicing arcade game for Windows, Linux and Android. Swipe to cut fruit out of the air, chain combos and stay away from the bombs. A two-screen version for the Nintendo 3DS lives at [fruit-slicer-3ds](https://github.com/RealAnxiousGit/fruit-slicer-3ds), built from the same game code.
 
-**Status: Alpha.** Tested in the Azahar emulator. Real-hardware performance, the extra CPU core and the look of stereoscopic 3D are still unconfirmed, so reports are welcome.
+**Status: Alpha.** Tested on Windows 11 on all four renderers, on Linux under WSL, and on a real Android phone as well as the Android emulator. Native Linux desktops and more phones are still untested, so reports are welcome.
+
+All screenshots are from the Windows version.
 
 <p>
-  <img src="docs/screenshots/title.png" width="150" alt="Title screen with a turning 3D fruit">
-  <img src="docs/screenshots/gameplay.png" width="150" alt="Slicing 3D fruit on the picnic blanket board">
-  <img src="docs/screenshots/frenzy.png" width="150" alt="Fruit Frenzy with fruit on both screens">
-  <img src="docs/screenshots/plate.png" width="150" alt="The plate board during a Frenzy">
-  <img src="docs/screenshots/modes.png" width="150" alt="Game mode menu">
-  <img src="docs/screenshots/visuals.png" width="150" alt="Visuals options">
-  <img src="docs/screenshots/pause.png" width="150" alt="Pause menu">
+  <img src="docs/screenshots/title.png" width="400" alt="Title screen with the logo and menu signs side by side">
+  <img src="docs/screenshots/gameplay.png" width="400" alt="Slicing 3D fruit in Arcade mode">
+  <img src="docs/screenshots/frenzy.png" width="400" alt="A Fruit Frenzy filling the board with fruit">
+  <img src="docs/screenshots/combo.png" width="400" alt="A swipe through several fruit earning a combo bonus">
+  <img src="docs/screenshots/sunburst.png" width="400" alt="Scrubbing the blade across the Sunburst Fruit at the end of a run">
+  <img src="docs/screenshots/result.png" width="400" alt="The result sign after an Arcade run with a new best score">
+  <img src="docs/screenshots/pause.png" width="400" alt="The pause menu">
 </p>
+
+## Download
+
+Get the files from the [Releases](https://github.com/RealAnxiousGit/fruit-slicer/releases) page.
+
+| Platform | File | How to run |
+| --- | --- | --- |
+| Windows 10 or 11 | `FruitSlicer-*-windows-x64.zip` | Unzip it and run `FruitSlicer.exe`. Keep the `romfs` folder beside the game. |
+| Linux | `FruitSlicer-*-x86_64.AppImage` | Mark it as executable and run it. |
+| Linux | `FruitSlicer-*-linux-x86_64.tar.gz` | Unpack it and run `FruitSlicer`. |
+| Android 5.0 or newer | `FruitSlicer-*-android.apk` | Open it on your phone and allow the install. |
+
+The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or something similar.
+
+## Controls
+
+| Windows and Linux | Action |
+| --- | --- |
+| Mouse | Hold the button and swipe to slice. Click anything in a menu. |
+| Mouse wheel | Scroll a settings list |
+| Escape | Pause, and go back one menu |
+| Arrow keys or WASD | Move the selector, change a setting |
+| Enter or Space | Select |
+| F11 or Alt+Enter | Fullscreen |
+
+| Android | Action |
+| --- | --- |
+| Finger | Swipe to slice. Tap anything in a menu, and drag a settings list to scroll. |
+| Pause sign, top left | Open the pause menu. Resume carries on. |
+| Back | Pause, and go back one menu. On the title screen, leave the game. |
 
 ## Modes
 
 | Mode | Rules |
 | --- | --- |
 | Classic | Three missed fruit and you're out. A bomb ends the run. |
-| Arcade | 60 seconds. Bombs cost 10 points. Slice power-ups: Frost slows time, X2 doubles points, Fruit Storm throws fruit in from the sides. Ends on the Sunburst Fruit. |
+| Arcade | 60 seconds. Bombs cost 10 points, your combo and half the Frenzy meter. Slice power-ups: Frost slows time, X2 doubles points, Fruit Storm throws fruit in from the sides. Ends on the Sunburst Fruit. |
 | Zen | 90 calm seconds with no bombs and no misses. |
-| Frenzy | 30 seconds of nonstop fruit. Bombs take 5 seconds off the clock, and a Fruit Frenzy throws fruit even faster. Ends on the Sunburst Fruit. |
+| Frenzy | 30 seconds of nonstop fruit. Bombs take 5 seconds off the clock, and a Fruit Frenzy throws fruit even faster. A bomb in the last 5 seconds brings the Sunburst Fruit straight away. |
 | Sudden Death | One miss or one bomb ends the run. Fruit is worth double. |
-| Minefield | Mostly bombs. Missed fruit is free, and one bomb ends the run. |
-| Combo Rush | 45 seconds of big fruit patterns. Combo bonuses are doubled and bombs cost 10 points. Ends on the Sunburst Fruit. |
+| Minefield | Bombs take over as the run goes on. Missed fruit is free, and one bomb ends the run. |
+| Combo Rush | 45 seconds of big fruit patterns. Swipe bonuses are doubled and bombs cost 10 points, your combo and half the Frenzy meter. Ends on the Sunburst Fruit. |
 
-**Scoring:** 1 point per fruit, 3 for a coconut and 5 for a rare golden star fruit. Every 15 fruit in a row adds a 5-point streak bonus.
+**Scoring:** 1 point per fruit, 3 for a coconut and 5 for a rare golden star fruit. The COMBO count on the sign rises with every fruit, and each 15 adds a 5-point bonus. A bomb or an empty Frenzy meter resets it. A missed fruit does not.
 
-**Combos:** slicing 3 or more fruit in one stroke earns a bonus, and each tier has its own sound and effects: Nice (3), Great (4), Awesome (5), Super (6), Insane (8) and Legendary (10). The bonus is the number sliced, multiplied by 2 from Awesome, 3 at Insane and 4 at Legendary.
+**Swipe combos:** slicing 3 or more fruit in one stroke earns a bonus, and each tier has its own sound and effects: Nice (3), Great (4), Awesome (5), Super (6), Insane (8) and Legendary (10). The bonus is the number sliced, multiplied by 2 from Awesome, 3 at Insane and 4 at Legendary.
 
-**Fruit Frenzy:** slicing fills the meter on the top screen. Stop slicing and it slowly drains. Your combo holds while the bar rises, but if it runs dry the combo resets. Fill it for 7 seconds of double points and a shower of fruit, with no bombs and no misses.
+**Fruit Frenzy:** slicing fills the meter under the score sign. It drains all the time, so keep slicing to push it up. Easy drains it slowly and each slice adds more; Hard and Insane drain it faster and each slice adds less. If it runs dry, your COMBO resets. Fill it for 7 seconds of double points and a shower of fruit. Bombs already on their way fizzle out, and fruit from the shower can't count as a miss.
 
-**Sunburst Fruit:** when the clock runs out in a mode that has it, one giant fruit rises and hangs in the air for 4 seconds. Scrub the stylus across it as fast as you can. Each 70 pixels of blade travel inside it is a hit worth 1 point, every 10th hit adds 5, and it bursts at the end for 2 points per hit.
+**Sunburst Fruit:** when the clock runs out in a mode that has it, one giant fruit rises and hangs in the air for 4 seconds. Scrub the blade across it as fast as you can. Each hit scores 1, every 10th hit adds 5, and it bursts at the end for 2 more per hit.
 
 **Coconuts** take two hits. The first one cracks the shell and knocks it back up.
 
-**Fruit patterns:** rows, fountains, crossfire and staircases are thrown only when no bomb is in play. Normal throws try several paths and keep the one that stays furthest from any bomb, so fruit is much less likely to sit on top of one. If you cut a fruit that is close to a bomb, the bomb only counts on a much closer pass.
-
-**Difficulty:** speed, gravity, wave size and bomb frequency all rise with time and score, at a different pace in each mode.
+**Difficulty:** Easy, Normal, Hard and Insane change how fast fruit is thrown and how many bombs come with it. Easy throws the fewest bombs. Hard and Insane can throw two bombs in one wave (never in Sudden Death), and in Minefield bombs make up as much as two thirds of the throws on Insane.
 
 ## Options
 
 | Section | Settings |
 | --- | --- |
-| Audio | Sound Effects, Music and Menu Sounds sliders. Menu Music and Game Music each choose Auto or a track: Orchard Morning, Picnic Stroll, Sleepy Meadow, Lantern Walk, Still Water, Moss Garden, Bamboo Breeze, Drifting Clouds. |
-| Visuals | Art Style (3D Models or 2D Stickers), Board, Scenery, Blade, Effects (None, Low, Medium, Full), 3D Depth, Screen Shake, and speed savers: Background, Top Screen Fruit, 3D Detail, Slice Style and Transitions. |
-| Gameplay | Stylus Sensitivity, Difficulty (Easy, Normal, Hard, Insane), Fruit Speed, Bomb Amount, Slice Forgiveness, Frenzy Drain, Misses Allowed. |
-| Scores and Data | Reset scores or everything, and the Speed Test. |
+| Audio | Sound Effects, Music and Menu Sounds sliders. Menu Music and Game Music each choose Auto or a track. |
+| Visuals | Art Style (3D Models or 2D Stickers), Board, Blade, Effects, Screen Shake, 3D Detail, Slice Style, Transitions and Renderer. |
+| Gameplay | Difficulty (Easy, Normal, Hard, Insane), Fruit Speed, Bomb Amount, Slice Forgiveness, Frenzy Drain and Misses Allowed. Android adds Touch Sensitivity. |
+| Scores and Data | Reset scores or everything. |
 
-A New 3DS starts with 3D models and full effects. An Old 3DS starts with 2D stickers and lighter settings, and can still choose 3D. Every section has its own reset. Saves from 0.1.0 and 0.2.0 are upgraded automatically and keep their best scores.
+**Renderers:** Windows offers DirectX, OpenGL, Vulkan and Software. Linux and Android offer OpenGL, Vulkan and Software. Software always uses the 2D stickers. If a renderer can't start on your machine, the game picks one that can.
 
-**Speed Test:** Options > Scores and Data runs six load profiles, including Old 3DS speed on a New 3DS. It shows the results and writes them to `sdmc:/3ds/FruitSlicer/bench.txt`. Its timings only mean something on a real console, because Azahar's emulated clock doesn't show how hard the game is working.
-
-## Controls
-
-| Input | Action |
-| --- | --- |
-| Stylus | Slice, and tap anything in a menu |
-| D-Pad or Circle Pad | Move the selector, change a setting left and right |
-| A | Select |
-| B | Back one menu |
-| START | Pause and unpause. The pause menu has Resume, Options and Main Menu. |
-| SELECT | Show or hide the debug overlay |
-| START + SELECT (title screen) | Quit to the Homebrew Launcher |
-
-The bottom screen holds the menus and the slicing area. The top screen shows the score, combos, timer and meter, and throws that leave the board carry on up into it before they fall back down. Stereoscopic 3D follows the depth slider.
-
-## Install
-
-Download the files from the [Releases](https://github.com/RealAnxiousGit/fruit-slicer-3ds/releases) page.
-
-- **`.cia`:** install with FBI on a modded 3DS. It appears on the HOME Menu with its own icon and banner. Title ID: `000400000F51CE00`.
-- **`.3dsx`:** copy to `sdmc:/3ds/` and start it from the Homebrew Launcher.
-
-**No sound on real hardware?** Homebrew audio needs a DSP firmware dump at `sdmc:/3ds/dspfirm.cdc`. Create it once with DSP1 or the dump option in the Rosalina menu. The game still runs without it, silently.
-
-Scores and settings are saved to `sdmc:/3ds/FruitSlicer/save.bin`.
-
-## Test in Azahar (Windows)
-
-Double-click **`Test in Azahar.bat`**. It installs a portable Azahar into `.tools\azahar` if needed and opens the game in a window, using `dist\FruitSlicer3DS.3dsx` or the latest release if there's no local build. To open a specific build:
-
-```powershell
-.\scripts\run-azahar.ps1 -Rom path\to\FruitSlicer3DS.3dsx
-```
-
-Your mouse acts as the stylus. The setup script adds a **Keyboard** controls profile and makes it active:
-
-| Key | 3DS button |
-| --- | --- |
-| Z / X | A / B |
-| C / V | X / Y |
-| Enter | START |
-| Backspace | SELECT |
-| Arrow keys | D-Pad |
-| W A S D | Circle Pad |
-| I J K L | C-Stick |
-| Q / E | L / R |
-| 1 / 3 | ZL / ZR |
-
-It also sets the emulator up for speed: OpenGL (about half the memory of Vulkan here), vsync off, and fast shaders. To see 3D, set a stereoscopic mode and depth under **Configure > Graphics**.
-
-Audio works here because the setup script places a blank `dspfirm.cdc` on Azahar's virtual SD card. Azahar's emulated DSP doesn't read its contents, but a real 3DS needs a genuine dump.
-
-Press SELECT in-game for the debug overlay. For the full debug output, set Azahar's log filter to `*:Warning Debug.Emulated:Debug`. Once a second the game prints FPS, CPU and GPU load, draw calls, active objects and particles, and touch coordinates.
+Scores and settings are saved in `%APPDATA%\RealAnxiousGit\FruitSlicer` on Windows and `~/.local/share/RealAnxiousGit/FruitSlicer` on Linux. Android keeps them in the app's private storage. 0.4.0 uses a new save format, so everyone starts with default settings and no scores. Saves from earlier versions are not carried over.
 
 ## Build from source
 
-### With FruitSlicerCompiler.exe (Windows)
+You need CMake 3.16 or newer and a C++17 compiler. SDL 3.4.2 is downloaded and built in during the first build, so players never have to install it. On Linux, SDL also needs the usual X11, Wayland and audio development packages.
 
-Install [devkitPro](https://devkitpro.org/wiki/Getting_Started) with the `3ds-dev` group, then run `FruitSlicerCompiler.exe` and choose an output folder. The source is built into the tool. It downloads `makerom` and `bannertool` from their GitHub releases if needed, runs the build, and writes the `.3dsx`, `.cia` and `build.log` to your folder.
-
-Options: `--source DIR`, `--output DIR`, `--devkitpro DIR`, `--no-ui`.
-
-### With make
-
-You need devkitARM, libctru, citro3D, citro2D and tex3ds. The `.cia` target also needs `makerom` and `bannertool` on your `PATH`.
+**Linux:**
 
 ```bash
-make        # FruitSlicer3DS.3dsx
-make cia    # FruitSlicer3DS.cia
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/FruitSlicer
 ```
 
-`make AUTOTEST=1` builds a version that plays every mode by itself and logs the results, for unattended emulator runs.
+**Windows, cross-compiled from Linux with MinGW-w64:**
+
+```bash
+cmake -S . -B build-win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake
+cmake --build build-win
+```
+
+**Android:** install the Android SDK with NDK 28.2.13676358 and CMake 3.22.1, then:
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+`-DAUTOTEST=ON` builds a version that plays every mode by itself and logs the results.
 
 ## How it works
 
-- **Rendering:** all drawing goes through the PICA200 using citro2D on citro3D. The 3D fruit are code-generated meshes in two detail levels, drawn with a small vertex shader, and each eye gets its own per-vertex disparity so that depth is true volume. A New 3DS runs at 804 MHz with L2 cache.
-- **Slicing:** in 3D with Exact slices, a cut really splits the mesh along your swipe and caps it with a coloured face. That work runs on the New 3DS's extra core when it is available. Otherwise each fruit uses ready-made halves, rolled to show their faces.
-- **Touch:** a speed-adaptive low-pass filter smooths slow movement and stays close to the stylus on fast swipes. It also rejects pressure spikes, and curve interpolation smooths the trail. Hits are tested along the whole swept segment, so fast swipes can't skip over fruit.
-- **Memory:** fruit, halves, particles, splats, popups and spawn queues live in fixed static pools, so gameplay never allocates memory.
-- **Audio:** sound effects load at boot and play through `ndsp`, using one music channel, one looping fuse channel and 12 sound-effect channels. Only the current music track is in memory, and it loads a little each frame so that starting one never stalls the game. Cut sounds are synthesized from layers (blade tick, fibre grains, body thump, droplets and spray), balanced differently for each type of fruit.
+- **Shared game:** `source/` holds the rules, menus, scoring and cutting, and is kept byte-for-byte the same as in the 3DS repo. `port/` holds what is specific to this version. `shared-files.txt` lists the shared files, and `scripts/sync-shared.py` copies changes across and flags any drift.
+- **Rendering:** SDL 3's renderer with batched triangles. 3D fruit are code-generated meshes with HD detail maps, lit and depth-sorted on the CPU, so DirectX, OpenGL and Vulkan all share one code path.
+- **Timing:** the game advances 60 steps per second of real time, however fast frames can be shown.
+- **Slicing:** in 3D with Exact slices, a cut really splits the mesh along your swipe and caps it with a coloured face. Otherwise each fruit uses ready-made halves. Android's Frenzy always uses ready-made halves and throws a little less.
+- **Memory:** fruit, halves, particles, splats, popups and spawn queues live in fixed pools, so gameplay never allocates memory for them. A phone with under 3 GB of RAM loads pictures at half size and starts on 2D stickers with lighter effects. 3D is still in Options.
 
 ## Assets
 
-Everything is generated by [`tools/gen_assets.py`](tools/gen_assets.py), [`gen_backgrounds.py`](tools/gen_backgrounds.py), [`gen_models.py`](tools/gen_models.py), [`gen_meta.py`](tools/gen_meta.py) and [`gen_audio.py`](tools/gen_audio.py) (Pillow and numpy): sprites, backgrounds, 3D models, the banner and icon, logo, font, sound effects and music. Larger copies of the icon and banner for listings are in [`docs/store`](docs/store). The project uses no third-party art, fonts, samples or game files. The generated files are committed, so building only needs devkitPro.
+Everything is generated from code in [`tools/`](tools) with Pillow and numpy: sprites, boards, 3D models, HD textures, logo, font, sound effects and music. The project uses no third-party art, fonts, samples or game files. The generated files are committed, so building only needs a compiler. [`tools/gen_steam_art.py`](tools/gen_steam_art.py) draws the cover, banners, logo and icon in [`docs/steam`](docs/steam).
 
 **AI disclosure:** this game was made with an LLM. Claude wrote the code and the generator scripts that produce the art, sound and music, directed and playtested by the project owner.
 
+See [CHANGELOG.md](CHANGELOG.md) for what changed, and [docs/qa](docs/qa) for how each release was tested.
+
 ## Credits
 
-Programming by Claude Opus 5.5. Prompt engineering by RealAnxiousGit.
+Programming by Claude. Prompt engineering by RealAnxiousGit.
+
+**Libraries and build tools:**
+
+- [SDL 3](https://libsdl.org) (zlib license)
+- [CMake](https://cmake.org), [Ninja](https://ninja-build.org), GCC and [MinGW-w64](https://www.mingw-w64.org)
+- [Android SDK and NDK](https://developer.android.com), [Gradle](https://gradle.org) and the Android Emulator
+- [appimagetool](https://github.com/AppImage/appimagetool)
+- [Python](https://www.python.org), [Pillow](https://python-pillow.org) and [numpy](https://numpy.org), which generate the art, sound and music
+
+**Toolkits and helpers:**
+
+- [Claude Code](https://claude.com/claude-code)
+- [Claude Code Game Studios](https://github.com/Donchitos/Claude-Code-Game-Studios) by Donchitos: review and QA workflows
+- [Anti Slop](https://github.com/miqdadbadjuber/anti-slop) by miqdadbadjuber: interface rules
+- Graphify: code knowledge graph
 
 ## License
 
-Code and assets are licensed under [CC BY-NC 4.0](LICENSE): free to share and adapt with credit, not for commercial use.
+Code and assets are licensed under [CC BY-NC 4.0](LICENSE): free to share and adapt with credit, not for commercial use. SDL is used under the zlib license, and its Android Java files are included in `android/app/src/main/java/org/libsdl`.
 
-This is an independent fan project, not affiliated with or endorsed by Nintendo or any game publisher. Nintendo 3DS is a trademark of Nintendo.
+This is an independent fan project, not affiliated with or endorsed by any game publisher.

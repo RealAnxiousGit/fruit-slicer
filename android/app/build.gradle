@@ -1,0 +1,59 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The signing key stays out of the repository. Without one, a release build comes out unsigned.
+def hasKey = project.hasProperty('fruitSlicerKeystore')
+
+android {
+    namespace = "com.realanxiousgit.fruitslicer"
+    compileSdkVersion 35
+    ndkVersion = "28.2.13676358"
+    defaultConfig {
+        applicationId "com.realanxiousgit.fruitslicer"
+        minSdkVersion 21
+        targetSdkVersion 35
+        versionCode 4
+        versionName "0.4.0-alpha"
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_PLATFORM=android-21", "-DANDROID_STL=c++_static"
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+                targets "main"
+            }
+        }
+    }
+    if (hasKey) {
+        signingConfigs {
+            release {
+                storeFile file(fruitSlicerKeystore)
+                storePassword fruitSlicerKeyPassword
+                keyAlias "fruitslicer"
+                keyPassword fruitSlicerKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (hasKey) signingConfig signingConfigs.release
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path '../../CMakeLists.txt'
+            version "3.22.1"
+        }
+    }
+    sourceSets.main.assets.srcDir layout.buildDirectory.dir("gameAssets")
+    lint {
+        abortOnError = false
+    }
+}
+
+// The game looks for romfs/ inside the APK, the same folder the desktop builds keep beside the game.
+tasks.register('copyGameAssets', Copy) {
+    from('../../romfs')
+    into(layout.buildDirectory.dir("gameAssets/romfs"))
+}
+preBuild.dependsOn copyGameAssets

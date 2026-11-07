@@ -1,96 +1,265 @@
-// Nintendo 3DS entry point: system services, buttons and the stylus.
+// Windows, Linux and Android entry point: the window, the keyboard, the mouse and touch.
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include <stdio.h>
-#include <sys/stat.h>
+#include <string.h>
 
 #include "app.h"
 #include "common.h"
+#include "gfx_sdl.h"
 #include "port_api.h"
+#include "render.h"
 
 namespace port {
 struct AssetFile {
-	FILE* f;
+	SDL_IOStream* io;
 };
-static AssetFile sAssets[8];
 
 AssetFile* assetOpen(const char* path) {
-	char full[96];
-	snprintf(full, sizeof full, "romfs:/%s", path);
-	for (auto& a : sAssets) {
-		if (a.f) continue;
-		a.f = fopen(full, "rb");
-		return a.f ? &a : nullptr;
-	}
-	return nullptr;
+	char full[512];
+#if PORT_ANDROID
+	snprintf(full, sizeof full, "romfs/%s", path);
+#else
+	snprintf(full, sizeof full, "%sromfs/%s", SDL_GetBasePath() ? SDL_GetBasePath() : "", path);
+#endif
+	SDL_IOStream* io = SDL_IOFromFile(full, "rb");
+	if (!io) return nullptr;
+	return new AssetFile{io};
 }
-size_t assetRead(void* out, size_t bytes, AssetFile* a) { return fread(out, 1, bytes, a->f); }
-long assetSize(AssetFile* a) {
-	long at = ftell(a->f);
-	fseek(a->f, 0, SEEK_END);
-	long n = ftell(a->f);
-	fseek(a->f, at, SEEK_SET);
-	return n;
-}
+size_t assetRead(void* out, size_t bytes, AssetFile* a) { return SDL_ReadIO(a->io, out, bytes); }
+long assetSize(AssetFile* a) { return (long)SDL_GetIOSize(a->io); }
 void assetClose(AssetFile* a) {
-	fclose(a->f);
-	a->f = nullptr;
+	SDL_CloseIO(a->io);
+	delete a;
 }
 
-void dataPath(char* out, size_t size, const char* name) { snprintf(out, size, "sdmc:/3ds/FruitSlicer/%s", name); }
-void ensureDataDir() {
-	mkdir("sdmc:/3ds", 0777);
-	mkdir("sdmc:/3ds/FruitSlicer", 0777);
+static char sDataDir[400];
+void dataPath(char* out, size_t size, const char* name) { snprintf(out, size, "%s%s", sDataDir, name); }
+void ensureDataDir() {}  // SDL_GetPrefPath already made it
+
+static bool sRunning = true;
+bool running() {
+	// The loading screen runs before the main loop, so a close request has to be seen here too.
+	SDL_PumpEvents();
+	if (SDL_HasEvent(SDL_EVENT_QUIT)) sRunning = false;
+	return sRunning;
 }
-bool running() { return aptMainLoop(); }
 }  // namespace port
 
-static aptHookCookie sAptCookie;
-
-static void onApt(APT_HookType hook, void*) {
-	if (hook == APTHOOK_ONSUSPEND || hook == APTHOOK_ONSLEEP) app::notifySuspended();
+static void toggleFullscreen() {
+	SDL_Window* w = gfx::window();
+	SDL_SetWindowFullscreen(w, (SDL_GetWindowFlags(w) & SDL_WINDOW_FULLSCREEN) == 0);
 }
 
-int main() {
-	romfsInit();
-#ifdef AUTOTEST
-	consoleDebugInit(debugDevice_SVC);  // stderr goes to svcOutputDebugString, visible in Azahar's log
-#endif
-	osSetSpeedupEnable(true);  // New 3DS: 804 MHz + L2 cache; no effect on Old 3DS
-	APT_CheckNew3DS(&gIsNew3ds);
-	cfguInit();
-	u8 model = CFG_MODEL_3DS;
-	if (R_SUCCEEDED(CFGU_GetSystemModel(&model))) gHas3dScreen = model != CFG_MODEL_2DS && model != CFG_MODEL_N2DSXL;
+// The game runs 60 steps a second. On a 60 Hz screen vsync keeps time; on any other, a timer does.
+static bool chooseVsync() {
+	const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(gfx::window()));
+	float hz = mode && mode->refresh_rate > 0 ? mode->refresh_rate : 60;
+	bool use = hz > 58 && hz < 62 && !SDL_getenv("FRUIT_SLICER_NO_VSYNC");
+	SDL_SetRenderVSync(gfx::renderer(), use ? 1 : 0);
+	return use;
+}
 
-	if (!app::init()) {
-		// Without romfs there is nothing to draw; bail out instead of crashing.
-		cfguExit();
-		romfsExit();
+static u32 keyBits(SDL_Keycode k) {
+	switch (k) {
+		case SDLK_UP: case SDLK_W: return KEY_UP;
+		case SDLK_DOWN: case SDLK_S: return KEY_DOWN;
+		case SDLK_LEFT: case SDLK_A: return KEY_LEFT;
+		case SDLK_RIGHT: case SDLK_D: return KEY_RIGHT;
+		case SDLK_RETURN: case SDLK_SPACE: return KEY_A;
+		case SDLK_ESCAPE: case SDLK_AC_BACK: return KEY_B | KEY_START;
+		default: return 0;
+	}
+}
+
+int main(int, char**) {
+#ifdef __linux__
+	// WSL has a GPU, but left alone its OpenGL often falls back to drawing on the CPU.
+	if (SDL_getenv("WSL_DISTRO_NAME") && !SDL_getenv("GALLIUM_DRIVER")) SDL_setenv_unsafe("GALLIUM_DRIVER", "d3d12", 1);
+#endif
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");  // the click that focuses the window still counts
+	SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+	SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");  // the title bar uses the icon inside the exe
+	SDL_SetAppMetadata("Fruit Slicer", nullptr, "com.realanxiousgit.fruitslicer");
+	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+		fprintf(stderr, "[boot] %s\n", SDL_GetError());
 		return 1;
 	}
-	hidSetRepeatParameters(20, 5);
-	aptHook(&sAptCookie, onApt, nullptr);
-	gRng.s = (u32)osGetTime() | 1;
+	// The full look by default, except on a phone with little memory: it starts on the light settings.
+	gIsNew3ds = !gfx::lowMemory();
+	gHas3dScreen = false;
+	char* pref = SDL_GetPrefPath("RealAnxiousGit", "FruitSlicer");
+	snprintf(port::sDataDir, sizeof port::sDataDir, "%s", pref ? pref : "");
+	SDL_free(pref);
+	if (!app::init()) {
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fruit Slicer", "The game's files could not be loaded. Keep the romfs folder beside the game.", nullptr);
+		SDL_Quit();
+		return 1;
+	}
+	gRng.s = (u32)SDL_GetTicks() | 0x51CE0001u;
+
+	bool useVsync = chooseVsync();
 
 	app::showLoading();
 
-	while (aptMainLoop()) {
-		hidScanInput();
-		Input in{};
-		in.down = hidKeysDown();
-		in.held = hidKeysHeld();
-		in.repeat = hidKeysDownRepeat();
-		if (in.held & KEY_TOUCH) {
-			touchPosition tp;
-			hidTouchRead(&tp);
-			in.touching = true;
-			in.tx = tp.px;
-			in.ty = tp.py;
-		}
-		if (!app::frame(in)) break;
-	}
+	bool held = false, moved = false;
+	float mx = 0, my = 0;
+	u32 keysHeld = 0;
+	const Uint64 kStep = 1000000000ull / 60;
+	Uint64 last = SDL_GetTicksNS(), owed = kStep;
+#ifdef TEST_SHOTS
+	Uint64 workNs = 0, statFrom = last;
+	u32 statDraws = 0, statSteps = 0, statTris = 0, statCalls = 0;
+	float presentTotal = 0;
+#endif
+#if defined(AUTOTEST) || defined(TEST_SHOTS)
+	const char* shotDir = SDL_getenv("FRUIT_SLICER_SHOTS");
+	u32 frameNo = 0;
+#endif
+#ifdef AUTOTEST
+	useVsync = false;
+#endif
 
-	aptUnhook(&sAptCookie);
+	while (port::running()) {
+		// The game always advances 60 steps a second of real time, however fast frames can be shown.
+#ifdef TEST_BALANCE
+		int steps = 20;
+#else
+		int steps = 1;
+#endif
+#ifndef AUTOTEST
+		Uint64 now = SDL_GetTicksNS();
+		owed += now - last;
+		last = now;
+		if (useVsync && owed > kStep * 3 / 4 && owed < kStep * 5 / 4) owed = kStep;  // vsync's small jitter isn't a missed frame
+		steps = (int)(owed / kStep);
+		if (steps == 0) {
+			SDL_DelayPrecise(kStep - owed);
+			continue;
+		}
+		owed -= steps * kStep;
+		if (steps > 6) steps = 6;  // after a long stall the game just carries on, rather than leaping ahead
+#endif
+#ifdef TEST_SHOTS
+		Uint64 workFrom = SDL_GetTicksNS();
+		statSteps += steps;
+#endif
+		Input in{};
+		SDL_Event e;
+		bool pressedNow = false, releaseAfter = false;
+		while (SDL_PollEvent(&e)) {
+			switch (e.type) {
+				case SDL_EVENT_QUIT:
+					port::sRunning = false;
+					break;
+				case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+				case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
+					useVsync = chooseVsync();  // moved to a screen with another refresh rate
+					break;
+				case SDL_EVENT_KEY_DOWN: {
+					if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT))) {
+						if (!e.key.repeat) toggleFullscreen();
+						break;
+					}
+					u32 b = keyBits(e.key.key);
+					in.repeat |= b;
+					if (!e.key.repeat) {
+						in.down |= b;
+						keysHeld |= b;
+					}
+					break;
+				}
+				case SDL_EVENT_KEY_UP:
+					keysHeld &= ~keyBits(e.key.key);
+					break;
+				case SDL_EVENT_MOUSE_MOTION:
+					mx = e.motion.x;
+					my = e.motion.y;
+					moved = true;
+					break;
+				case SDL_EVENT_MOUSE_WHEEL:
+					in.wheel += e.wheel.y > 0 ? 1 : (e.wheel.y < 0 ? -1 : 0);
+					break;
+				case SDL_EVENT_MOUSE_BUTTON_DOWN:
+					if (e.button.button == SDL_BUTTON_LEFT) {
+						mx = e.button.x;
+						my = e.button.y;
+						held = true;
+						pressedNow = true;
+					}
+					break;
+				case SDL_EVENT_MOUSE_BUTTON_UP:
+					if (e.button.button == SDL_BUTTON_LEFT) {
+						// A quick tap on a slow device can start and end between two frames. The game still sees it.
+						if (pressedNow) releaseAfter = true;
+						else held = false;
+					}
+					break;
+				case SDL_EVENT_WINDOW_FOCUS_LOST:
+				case SDL_EVENT_DID_ENTER_BACKGROUND:
+					held = false;
+					keysHeld = 0;
+					app::notifySuspended();
+					break;
+				default:
+					break;
+			}
+		}
+		in.held = keysHeld;
+		float rx = mx, ry = my;
+		SDL_RenderCoordinatesFromWindow(gfx::renderer(), mx, my, &rx, &ry);
+		int tx = 0, ty = 0;
+		gfx::windowToGame(rx, ry, app::inFieldView(), &tx, &ty);
+		in.tx = tx;
+		in.ty = ty;
+		in.touching = held;
+		in.hovering = moved && !held;
+		moved = false;
+		if (releaseAfter) held = false;
+
+#if defined(AUTOTEST) || defined(TEST_SHOTS)
+		if (shotDir) {
+			// Test runs ask for a picture by creating a file; bots get one every few seconds as well.
+			char path[300];
+			snprintf(path, sizeof path, "%s/shot", shotDir);
+			SDL_PathInfo info;
+			if (SDL_GetPathInfo(path, &info)) {
+				char name[300];
+				SDL_IOStream* f = SDL_IOFromFile(path, "r");
+				size_t n = f ? SDL_ReadIO(f, name, sizeof name - 1) : 0;
+				if (f) SDL_CloseIO(f);
+				name[n] = 0;
+				while (n > 0 && (name[n - 1] == '\n' || name[n - 1] == '\r')) name[--n] = 0;
+				SDL_RemovePath(path);
+				snprintf(path, sizeof path, "%s/%s.png", shotDir, name);
+				gfx::requestShot(path);
+			}
+#ifdef AUTOTEST
+			if (++frameNo % 150 == 0) {
+				snprintf(path, sizeof path, "%s/f%06u.png", shotDir, frameNo);
+				gfx::requestShot(path);
+			}
+#endif
+		}
+#endif
+		if (!app::frame(in, steps)) break;
+#ifdef TEST_SHOTS
+		workNs += SDL_GetTicksNS() - workFrom;
+		presentTotal += gfx::presentMs();
+		statTris += gfx::trisDrawn();
+		statCalls += gfx::drawCalls;
+		if (++statDraws == 120) {
+			double secs = (SDL_GetTicksNS() - statFrom) / 1e9;
+			fprintf(stderr, "[perf] %.1f draws/s, %.1f steps/s, draw+update %.2f ms (present %.2f ms), tris %u calls %u\n", statDraws / secs, statSteps / secs, workNs / 1e6 / statDraws, presentTotal / statDraws, statTris / statDraws, statCalls / statDraws);
+			statDraws = statSteps = statTris = statCalls = 0;
+			workNs = 0;
+			presentTotal = 0;
+			statFrom = SDL_GetTicksNS();
+		}
+#endif
+	}
 	app::shutdown();
-	cfguExit();
-	romfsExit();
+	SDL_Quit();
 	return 0;
 }

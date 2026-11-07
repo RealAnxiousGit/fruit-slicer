@@ -1,33 +1,76 @@
-// Everything the shared game needs to know about this port: Nintendo 3DS, two screens, stylus.
+// Everything the shared game needs to know about this port: Windows, Linux and Android, one screen.
 #pragma once
-#include <3ds.h>
-#include <citro2d.h>
-#include <citro3d.h>
+#include <stddef.h>
+#include <stdint.h>
 
-#define PORT_3DS 1
-#define PORT_TWO_SCREENS 1
-#define PORT_HAS_SENSITIVITY 1
-#define PORT_PAUSE_BUTTON 0
-#define PORT_MOUSE 0
-#define PORT_SENSITIVITY_LABEL "Stylus Sensitivity"
-#define PORT_SENSITIVITY_HINT "Higher follows small, quick moves."
-#define PORT_ART_HINT "2D is lighter on an Old 3DS."
-#define PORT_DETAIL_HINT "Low suits an Old 3DS."
-#define PORT_RESET_HINT "Back to the best settings for this console."
-#define PORT_HOWTO_PAUSE "START pauses. B goes back."
-#define PORT_VISUALS_HINT "Art style, board, scenery, blade,"
-#define PORT_GAMEPLAY_HINT "Stylus, difficulty, and how the"
-#define PORT_LOADING_TEXT (gIsNew3ds ? "Setting up for New 3DS" : "Setting up for Old 3DS")
-#define PORT_NO_SOUND_TEXT "No sound: needs 3ds/dspfirm.cdc"
-#define PORT_DEFAULT_SENSITIVITY 40
-#define PORT_SETTINGS_FIELDS
-#define PORT_EXTRA_VISUAL_ROWS
+#ifdef __ANDROID__
+#define PORT_ANDROID 1
+#else
+#define PORT_ANDROID 0
+#endif
 
-// The field fruit flies over, in game units.
-constexpr int kFieldW = 320;
+#define PORT_3DS 0
+#define PORT_TWO_SCREENS 0
+#define PORT_HAS_SENSITIVITY PORT_ANDROID
+#define PORT_PAUSE_BUTTON PORT_ANDROID
+#define PORT_MOUSE (!PORT_ANDROID)
+#define PORT_LIGHT_FRENZY PORT_ANDROID
+#define PORT_SENSITIVITY_LABEL "Touch Sensitivity"
+#define PORT_SENSITIVITY_HINT "Higher follows quick finger flicks."
+#define PORT_ART_HINT "2D suits the Software renderer."
+#define PORT_DETAIL_HINT "Low suits older devices."
+#define PORT_RESET_HINT "Back to the default look."
+#define PORT_VISUALS_HINT "Art style, board, blade,"
+#define PORT_DATA_HINT "Resetting scores and settings."
+#define PORT_LOADING_TEXT "Getting the fruit ready"
+#define PORT_NO_SOUND_TEXT "No sound device found"
+#if PORT_ANDROID
+#define PORT_HOWTO_PAUSE "The pause sign stops the game."
+#define PORT_CONFIRM_TEXT "Tap again to confirm"
+#define PORT_GAMEPLAY_HINT "Touch, difficulty, and how the"
+#define PORT_DEFAULT_SENSITIVITY 70
+#else
+#define PORT_HOWTO_PAUSE "Escape pauses and goes back."
+#define PORT_CONFIRM_TEXT "Press again to confirm"
+#define PORT_GAMEPLAY_HINT "Difficulty, and how the"
+#define PORT_DEFAULT_SENSITIVITY 75
+#endif
+
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int8_t s8;
+typedef int16_t s16;
+
+// The buttons the shared menus read. The keyboard fills these in.
+enum {
+	KEY_A = 1u << 0, KEY_B = 1u << 1, KEY_SELECT = 1u << 2, KEY_START = 1u << 3,
+	KEY_RIGHT = 1u << 4, KEY_LEFT = 1u << 5, KEY_UP = 1u << 6, KEY_DOWN = 1u << 7,
+	KEY_L = 1u << 9, KEY_R = 1u << 8, KEY_X = 1u << 10, KEY_Y = 1u << 11, KEY_TOUCH = 1u << 20,
+};
+
+constexpr u32 C2D_Color32(u8 r, u8 g, u8 b, u8 a) { return (u32)r | ((u32)g << 8) | ((u32)b << 16) | ((u32)a << 24); }
+
+// The renderer choices this platform offers, in the order the Visuals row shows them.
+extern const char* const kRendererNames[];
+extern const int kRendererCount;
+#define PORT_SETTINGS_FIELDS u8 renderer;
+#define PORT_CREDITS_TOOLS_1 "SDL 3, CMake, Ninja, GCC, MinGW-w64"
+#define PORT_CREDITS_TOOLS_2 "Android SDK and NDK, Gradle, appimagetool"
+#define PORT_RESET_VISUALS gSave.renderer = 0;
+#define PORT_CHECK_SETTINGS if (gSave.renderer >= kRendererCount) gSave.renderer = 0;
+#define PORT_EXTRA_VISUAL_ROWS {ROW_CHOICE, "Renderer", &gSave.renderer, 0, (u8)(kRendererCount - 1), kRendererNames, 0, 0, ACT_NONE, "How the game draws. Takes effect", "the next time the game starts."},
+
+// The field fruit flies over, in game units: 16:9, the same height as the 3DS field.
+constexpr int kFieldW = 427;
 constexpr int kFieldH = 240;
-constexpr float kFieldTop = 0;     // nothing covers the field here: the score has its own screen
-constexpr float kFillX = 0;        // full-field washes cover this much
-constexpr float kFillW = 320;
-constexpr float kJumpReject = 150.0f;  // resistive panels spike when pressure changes
-constexpr float kCutReach = 1.0f;      // scales how close a swipe must pass
+constexpr float kFieldTop = 34;      // the score sign covers this much
+constexpr float kFillX = -500;       // full-field washes also cover any bars beside the field
+constexpr float kFillW = 1427;
+constexpr float kJumpReject = 1e6f;  // mice and glass don't spike, so a real flick must never restart a stroke
+#if PORT_ANDROID
+constexpr float kCutReach = 1.2f;    // a fingertip is wider than the point it reports
+#else
+constexpr float kCutReach = 1.0f;
+#endif
