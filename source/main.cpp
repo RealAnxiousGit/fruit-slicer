@@ -9,10 +9,11 @@
 #include "render.h"
 #include "sprites.h"
 
-#include "bgtop.h"
+#include "bgbot.h"
+#include "bgtop0.h"
 #include "logo.h"
 
-#define VERSION_STRING "0.1.0-alpha"
+#define VERSION_STRING "0.2.0-alpha"
 
 enum Screen { SCREEN_MENU, SCREEN_OPTIONS, SCREEN_GAME, SCREEN_PAUSE, SCREEN_RESULT };
 
@@ -38,22 +39,32 @@ struct Button {
 };
 
 static const Button kMenuButtons[] = {
-	{6, 8, 150, 50, "Classic"},        {164, 8, 150, 50, "Arcade"},
-	{6, 64, 150, 50, "Zen"},           {164, 64, 150, 50, "Blitz"},
-	{6, 120, 150, 50, "Sudden Death"}, {164, 120, 150, 50, "Minefield"},
-	{70, 182, 180, 46, "Options"},
+	{6, 6, 150, 52, "Classic"},        {164, 6, 150, 52, "Arcade"},
+	{6, 64, 150, 52, "Zen"},           {164, 64, 150, 52, "Blitz"},
+	{6, 122, 150, 52, "Sudden Death"}, {164, 122, 150, 52, "Minefield"},
+	{6, 180, 150, 52, "Combo Rush"},   {164, 180, 150, 52, "Options"},
 };
-static constexpr int kMenuCount = 7;
-static const u32 kModeTints[] = {0xFF4A7AF2u, 0xFF3AA4F5u, 0xFFB0A84Au, 0xFF8C5AE8u, 0xFF4C50D8u, 0xFF6A6A6Au, 0xFF9A7A5Au};
+static constexpr int kMenuCount = 8;
+static const u32 kModeTints[] = {0xFF4A7AF2u, 0xFF3AA4F5u, 0xFFB0A84Au, 0xFF8C5AE8u, 0xFF4C50D8u, 0xFF6A6A6Au, 0xFFC0609Au, 0xFF9A7A5Au};
 
 static const Button kResultButtons[] = {{20, 170, 134, 52, "Again"}, {166, 170, 134, 52, "Menu"}};
 static const Button kPauseButtons[] = {{50, 66, 220, 52, "Resume"}, {50, 130, 220, 52, "Quit"}};
-static const Button kOptButtons[] = {
-	{30, 10, 260, 40, nullptr}, {30, 56, 260, 40, nullptr}, {30, 102, 260, 40, nullptr},
-	{30, 148, 260, 40, nullptr}, {90, 196, 140, 38, "Back"},
+
+enum OptionId { OPT_SOUND, OPT_MUSIC, OPT_BOARD, OPT_SCENE, OPT_BLADE, OPT_JUICE, OPT_DEPTH, OPT_SHAKE, OPT_RESET, OPT_BACK, OPT_COUNT };
+static constexpr int kOptCount = OPT_COUNT;
+static const Button kOptButtons[kOptCount] = {
+	{6, 4, 150, 44, nullptr},   {164, 4, 150, 44, nullptr},
+	{6, 51, 150, 44, nullptr},  {164, 51, 150, 44, nullptr},
+	{6, 98, 150, 44, nullptr},  {164, 98, 150, 44, nullptr},
+	{6, 145, 150, 44, nullptr}, {164, 145, 150, 44, nullptr},
+	{6, 192, 150, 44, nullptr}, {164, 192, 150, 44, nullptr},
 };
-static constexpr int kOptCount = 5;
-static const char* const kBladeNames[] = {"Ember", "Azure", "Rose", "Mint"};
+static const char* const kBladeNames[kBladeCount] = {"Ember", "Azure", "Rose", "Mint", "Gold", "Rainbow"};
+static const char* const kBoardNames[kBoardCount] = {"Picnic Blanket", "Cutting Board", "Plate", "Marble", "Beach", "Starlight"};
+static const char* const kSceneNames[kSceneCount] = {"Dusk Orchard", "Morning Meadow", "Moonlit Bay"};
+static const char* const kVolumeNames[kVolumeLevels] = {"Off", "Low", "Medium", "High", "Full"};
+static const char* const kJuiceNames[] = {"Low", "Normal", "Extra"};
+static const char* const kDepthNames[] = {"Off", "Normal", "Strong"};
 
 static bool hit(const Button& b, int x, int y) {
 	return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
@@ -87,7 +98,7 @@ static int handleButtons(const Button* btns, int n, const Input& in, bool wasTou
 
 static void dpadGrid(int& sel, int count, u32 down, int cols) {
 	if (down & KEY_DOWN) sel = (sel + cols) < count ? sel + cols : count - 1;
-	if (down & KEY_UP) sel = sel - cols >= 0 ? sel - cols : (sel == count - 1 ? count - 2 : sel);
+	if ((down & KEY_UP) && sel - cols >= 0) sel -= cols;
 	if ((down & KEY_RIGHT) && (sel % cols) + 1 < cols && sel + 1 < count) sel++;
 	if ((down & KEY_LEFT) && (sel % cols) > 0) sel--;
 }
@@ -97,13 +108,13 @@ static void drawTopBackground() {
 	const float d = sTime;
 	// Layers sit behind the screen plane and slowly drift for life.
 	gfx::setDepth(-2.0f);
-	gfx::image(SHEET_BGTOP, bgtop_sky_idx, -12, 0, 424, 240);
+	gfx::image(SHEET_BGTOP, bgtop0_sky_idx, -12, 0, 424, 240);
 	gfx::setDepth(-1.3f);
-	gfx::image(SHEET_BGTOP, bgtop_far_idx, -12 + sinf(d * 0.11f) * 2, 120, 424, 120);
+	gfx::image(SHEET_BGTOP, bgtop0_far_idx, -12 + sinf(d * 0.11f) * 2, 120, 424, 120);
 	gfx::setDepth(-0.7f);
-	gfx::image(SHEET_BGTOP, bgtop_mid_idx, -12 + sinf(d * 0.15f) * 3, 130, 424, 110);
+	gfx::image(SHEET_BGTOP, bgtop0_mid_idx, -12 + sinf(d * 0.15f) * 3, 130, 424, 110);
 	gfx::setDepth(-0.15f);
-	gfx::image(SHEET_BGTOP, bgtop_near_idx, -12, 170, 424, 70);
+	gfx::image(SHEET_BGTOP, bgtop0_near_idx, -12, 170, 424, 70);
 }
 
 static void drawBestTable() {
@@ -119,7 +130,7 @@ static void drawBestTable() {
 		gfx::text(buf, 200, 192, 0.56f, rgba(170, 240, 255), ALIGN_CENTER);
 	} else {
 		gfx::text("Options", 200, 128, 0.56f, rgba(255, 226, 120), ALIGN_CENTER);
-		gfx::text("Sound, music and blade colour", 200, 160, 0.38f, rgba(255, 246, 226), ALIGN_CENTER);
+		gfx::text("Boards, scenery, sound and more", 200, 160, 0.38f, rgba(255, 246, 226), ALIGN_CENTER);
 	}
 }
 
@@ -154,8 +165,10 @@ static void drawTop() {
 			gfx::text("Art, sound and music generated", 200, 130, 0.36f, rgba(255, 246, 226), ALIGN_CENTER);
 			gfx::text("from code in the source repo.", 200, 146, 0.36f, rgba(255, 246, 226), ALIGN_CENTER);
 			gfx::text("Not affiliated with any publisher.", 200, 164, 0.36f, rgba(255, 246, 226), ALIGN_CENTER);
-			if (!audio::available()) gfx::text("No sound: needs 3ds/dspfirm.cdc", 200, 184, 0.36f, rgba(255, 130, 110), ALIGN_CENTER);
-			gfx::text("V" VERSION_STRING, 200, 204, 0.38f, rgba(170, 240, 255), ALIGN_CENTER);
+			if (!audio::available()) gfx::text("No sound: needs 3ds/dspfirm.cdc", 200, 178, 0.32f, rgba(255, 130, 110), ALIGN_CENTER);
+			snprintf(buf, sizeof buf, "FRUIT SLICED %lu  BEST COMBO %lu", (unsigned long)gSave.totalFruit, (unsigned long)gSave.bestCombo);
+			gfx::text(buf, 200, 194, 0.34f, rgba(255, 226, 120), ALIGN_CENTER);
+			gfx::text("V" VERSION_STRING, 200, 211, 0.34f, rgba(170, 240, 255), ALIGN_CENTER);
 			break;
 		case SCREEN_GAME:
 			sGame.drawHud();
@@ -192,24 +205,38 @@ static void drawTop() {
 }
 
 static void drawBottom() {
-	char buf[40];
 	switch (sScreen) {
 		case SCREEN_MENU:
-			gfx::image(SHEET_BGBOT, 0, 0, 0, 320, 240);
+			gfx::image(SHEET_BGBOT, bgbot_board0_idx + gSave.board, 0, 0, 320, 240);
 			for (int i = 0; i < kMenuCount; i++)
-				drawButton(kMenuButtons[i], kMenuButtons[i].label, kModeTints[i], sMenuSel == i, sPressed == i, i == 4 ? 0.48f : 0.56f);
+				drawButton(kMenuButtons[i], kMenuButtons[i].label, kModeTints[i], sMenuSel == i, sPressed == i, (i == 4 || i == 6) ? 0.48f : 0.56f);
 			break;
-		case SCREEN_OPTIONS:
-			gfx::image(SHEET_BGBOT, 0, 0, 0, 320, 240);
-			snprintf(buf, sizeof buf, "Sound: %s", gSave.sfx ? "On" : "Off");
-			drawButton(kOptButtons[0], buf, rgba(66, 150, 200), sOptSel == 0, sPressed == 0, 0.5f);
-			snprintf(buf, sizeof buf, "Music: %s", gSave.music ? "On" : "Off");
-			drawButton(kOptButtons[1], buf, rgba(90, 170, 130), sOptSel == 1, sPressed == 1, 0.5f);
-			snprintf(buf, sizeof buf, "Blade: %s", kBladeNames[gSave.blade % 4]);
-			drawButton(kOptButtons[2], buf, rgba(230, 150, 70), sOptSel == 2, sPressed == 2, 0.5f);
-			drawButton(kOptButtons[3], sResetArmed ? "Tap again to erase" : "Reset best scores", rgba(200, 80, 90), sOptSel == 3, sPressed == 3, 0.44f);
-			drawButton(kOptButtons[4], "Back", rgba(110, 100, 150), sOptSel == 4, sPressed == 4, 0.5f);
+		case SCREEN_OPTIONS: {
+			gfx::image(SHEET_BGBOT, bgbot_board0_idx + gSave.board, 0, 0, 320, 240);
+			const u32 tints[kOptCount] = {
+				rgba(66, 150, 200), rgba(90, 170, 130), rgba(176, 116, 66), rgba(120, 100, 190), rgba(230, 150, 70),
+				rgba(226, 92, 110), rgba(70, 130, 170), rgba(150, 120, 90), rgba(200, 80, 90), rgba(110, 100, 150),
+			};
+			const char* titles[OPT_RESET] = {"SOUND", "MUSIC", "BOARD", "SCENERY", "BLADE", "JUICE", "3D DEPTH", "SCREEN SHAKE"};
+			const char* values[OPT_RESET] = {
+				kVolumeNames[gSave.sfx], kVolumeNames[gSave.music], kBoardNames[gSave.board], kSceneNames[gSave.scene],
+				kBladeNames[gSave.blade], kJuiceNames[gSave.juice % 3], kDepthNames[gSave.depth % 3], gSave.shake ? "On" : "Off",
+			};
+			for (int i = 0; i < OPT_RESET; i++) {
+				const Button& b = kOptButtons[i];
+				float dy = sPressed == i ? 2 : 0;
+				if (sOptSel == i) gfx::image(SHEET_SPRITES, sprites_button_idx, b.x - 2, b.y - 2 + dy, b.w + 4, b.h + 4, rgba(255, 236, 150));
+				gfx::image(SHEET_SPRITES, sprites_button_idx, b.x, b.y + dy, b.w, b.h, tints[i]);
+				gfx::text(titles[i], b.x + b.w * 0.5f, b.y + 2 + dy, 0.3f, rgba(255, 240, 200), ALIGN_CENTER);
+				float vs = 0.46f;
+				float w = gfx::textWidth(values[i], vs);
+				if (w > b.w - 12) vs *= (b.w - 12) / w;
+				gfx::text(values[i], b.x + b.w * 0.5f, b.y + 16 + dy + (0.46f - vs) * 18, vs, WHITE, ALIGN_CENTER);
+			}
+			drawButton(kOptButtons[OPT_RESET], sResetArmed ? "Tap to erase" : "Reset scores", tints[OPT_RESET], sOptSel == OPT_RESET, sPressed == OPT_RESET, 0.4f);
+			drawButton(kOptButtons[OPT_BACK], "Back", tints[OPT_BACK], sOptSel == OPT_BACK, sPressed == OPT_BACK, 0.5f);
 			break;
+		}
 		case SCREEN_GAME:
 			sGame.drawField(sBlade);
 			break;
@@ -254,29 +281,45 @@ static void activateMenu(int i) {
 }
 
 static void activateOption(int i) {
-	audio::play(SFX_CLICK);
 	sOptSel = i;
-	if (i != 3) sResetArmed = false;
+	if (i != OPT_RESET) sResetArmed = false;
 	switch (i) {
-		case 0: gSave.sfx = !gSave.sfx; saveWrite(); break;
-		case 1: gSave.music = !gSave.music; audio::refreshMusicVolume(); saveWrite(); break;
-		case 2: gSave.blade = (gSave.blade + 1) % 4; saveWrite(); break;
-		case 3:
-			if (sResetArmed) {
-				memset(gSave.best, 0, sizeof gSave.best);
-				saveWrite();
-				sResetArmed = false;
-			} else {
-				sResetArmed = true;
-			}
+		case OPT_SOUND: gSave.sfx = (gSave.sfx + 1) % kVolumeLevels; break;
+		case OPT_MUSIC: gSave.music = (gSave.music + 1) % kVolumeLevels; audio::refreshVolumes(); break;
+		case OPT_BOARD: gSave.board = (gSave.board + 1) % kBoardCount; break;
+		case OPT_SCENE:
+			gSave.scene = (gSave.scene + 1) % kSceneCount;
+			gfx::setScene(gSave.scene);
 			break;
-		case 4: sScreen = SCREEN_MENU; break;
+		case OPT_BLADE: gSave.blade = (gSave.blade + 1) % kBladeCount; break;
+		case OPT_JUICE: gSave.juice = (gSave.juice + 1) % 3; break;
+		case OPT_DEPTH: gSave.depth = (gSave.depth + 1) % 3; break;
+		case OPT_SHAKE: gSave.shake = !gSave.shake; break;
+		case OPT_RESET:
+			if (!sResetArmed) {
+				sResetArmed = true;
+				audio::play(SFX_CLICK);
+				return;
+			}
+			memset(gSave.best, 0, sizeof gSave.best);
+			gSave.totalFruit = 0;
+			gSave.bestCombo = 0;
+			sResetArmed = false;
+			break;
+		case OPT_BACK:
+			audio::play(SFX_CLICK);
+			saveWrite();
+			sScreen = SCREEN_MENU;
+			return;
 	}
+	audio::play(SFX_CLICK);
+	saveWrite();
 }
 
 static void pauseGame() {
 	if (sScreen != SCREEN_GAME || sGame.phase == PHASE_OVER) return;
 	sScreen = SCREEN_PAUSE;
+	audio::fuse(false);
 	sPauseSel = 0;
 	sPressed = -1;
 	sBlade.reset();
@@ -314,12 +357,11 @@ static void updateFrame(const Input& in, bool wasTouching) {
 			break;
 		}
 		case SCREEN_OPTIONS: {
-			if (in.down & KEY_DOWN) sOptSel = (sOptSel + 1) % kOptCount;
-			if (in.down & KEY_UP) sOptSel = (sOptSel + kOptCount - 1) % kOptCount;
+			dpadGrid(sOptSel, kOptCount, in.down, 2);
 			int tapped = handleButtons(kOptButtons, kOptCount, in, wasTouching);
 			if (tapped >= 0) activateOption(tapped);
 			else if (in.down & KEY_A) activateOption(sOptSel);
-			else if (in.down & KEY_B) activateOption(4);
+			else if (in.down & KEY_B) activateOption(OPT_BACK);
 			break;
 		}
 		case SCREEN_GAME:
@@ -399,6 +441,7 @@ int main() {
 		romfsExit();
 		return 1;
 	}
+	if (gSave.scene != 0) gfx::setScene(gSave.scene);
 	audio::music(MUSIC_MENU);
 	sLastTick = osGetTime();
 

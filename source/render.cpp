@@ -18,6 +18,9 @@ static int sEye;
 static float sIod;
 static float sOffX, sOffY;
 static float sShakeX, sShakeY;
+static bool sRightEye;
+static C2D_SpriteSheet sRetired;
+static int sRetiredFrames;
 
 // Pixels of total disparity at full slider per unit of depth.
 static constexpr float kMaxDisparity = 5.0f;
@@ -47,7 +50,7 @@ bool init() {
 	sBottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
 
 	static const char* const paths[SHEET_COUNT] = {
-		"romfs:/gfx/sprites.t3x", "romfs:/gfx/font.t3x", "romfs:/gfx/bgtop.t3x",
+		"romfs:/gfx/sprites.t3x", "romfs:/gfx/font.t3x", "romfs:/gfx/bgtop0.t3x",
 		"romfs:/gfx/bgbot.t3x",   "romfs:/gfx/logo.t3x",
 	};
 	bool ok = true;
@@ -58,7 +61,19 @@ bool init() {
 	return ok;
 }
 
+void setScene(int scene) {
+	if (sRetired) return;  // a swap is already settling; the Options screen will ask again
+	char path[40];
+	snprintf(path, sizeof path, "romfs:/gfx/bgtop%d.t3x", scene);
+	C2D_SpriteSheet next = load(path);
+	if (!next) return;
+	sRetired = sSheets[SHEET_BGTOP];
+	sRetiredFrames = 3;
+	sSheets[SHEET_BGTOP] = next;
+}
+
 void shutdown() {
+	if (sRetired) C2D_SpriteSheetFree(sRetired);
 	for (auto& s : sSheets)
 		if (s) C2D_SpriteSheetFree(s);
 	C2D_Fini();
@@ -67,8 +82,14 @@ void shutdown() {
 }
 
 void beginFrame() {
-	sIod = osGet3DSliderState();
+	static const float kDepthScale[] = {0.0f, 1.0f, 1.8f};
+	sIod = osGet3DSliderState() * kDepthScale[gSave.depth % 3];
+	sRightEye = osGet3DSliderState() > 0.0f;
 	C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+	if (sRetired && --sRetiredFrames <= 0) {
+		C2D_SpriteSheetFree(sRetired);
+		sRetired = nullptr;
+	}
 	C2D_SetTintMode(C2D_TintMult);
 	drawCallsLive = 0;
 }
@@ -79,7 +100,8 @@ void endFrame() {
 }
 
 bool beginTop(int eye) {
-	if (eye == 1 && sIod <= 0.0f) return false;
+	// The right eye still has to be drawn at depth "Off" while the slider is up, just without offset.
+	if (eye == 1 && !sRightEye) return false;
 	C3D_RenderTarget* t = eye == 0 ? sTopL : sTopR;
 	C2D_TargetClear(t, C2D_Color32(0, 0, 0, 255));
 	C2D_SceneBegin(t);

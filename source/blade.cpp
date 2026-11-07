@@ -81,8 +81,13 @@ void Blade::update(const Input& in) {
 	pushPoint(x, y);
 }
 
-void Blade::draw(u32 color) const {
+u32 hueColor(float t);
+
+void Blade::draw() const {
 	if (count < 2) return;
+	static const u32 kColors[kBladeCount] = {0xFF3A8CFFu, 0xFFFFD060u, 0xFFA070FFu, 0xFF70F090u, 0xFF30C0FFu, 0};
+	const bool rainbow = gSave.blade == kBladeCount - 1;
+	const u32 baseColor = kColors[gSave.blade % kBladeCount];
 	// Rebuilt every frame as a tapered triangle strip in citro2D's dynamic vertex buffer.
 	float prevLx = 0, prevLy = 0, prevRx = 0, prevRy = 0;
 	u32 prevCol = 0, prevCore = 0;
@@ -99,6 +104,7 @@ void Blade::draw(u32 color) const {
 		float w = kMaxHalfWidth * sinf(clampf(t, 0.02f, 1.0f) * kPi * 0.62f) * clampf(fade + 0.2f, 0, 1);
 		float lx = p.x + nx * w, ly = p.y + ny * w;
 		float rx = p.x - nx * w, ry = p.y - ny * w;
+		u32 color = rainbow ? hueColor(t * 0.8f + (float)strokeId * 0.13f) : baseColor;
 		u32 col = withAlpha(color, fade * 0.75f);
 		u32 core = withAlpha(WHITE, fade);
 		if (i > 0) {

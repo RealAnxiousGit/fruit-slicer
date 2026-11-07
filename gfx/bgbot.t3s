@@ -1,2 +1,7 @@
 --atlas -f rgb565 -z auto --border transparent
-png/bgbot/blanket.png
+png/bgbot/board0.png
+png/bgbot/board1.png
+png/bgbot/board2.png
+png/bgbot/board3.png
+png/bgbot/board4.png
+png/bgbot/board5.png

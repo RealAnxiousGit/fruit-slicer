@@ -23,6 +23,15 @@ png/sprites/kiwi_r.png
 png/sprites/berry.png
 png/sprites/berry_l.png
 png/sprites/berry_r.png
+png/sprites/peach.png
+png/sprites/peach_l.png
+png/sprites/peach_r.png
+png/sprites/pineapple.png
+png/sprites/pineapple_l.png
+png/sprites/pineapple_r.png
+png/sprites/coconut.png
+png/sprites/coconut_l.png
+png/sprites/coconut_r.png
 png/sprites/gold.png
 png/sprites/gold_l.png
 png/sprites/gold_r.png
@@ -37,6 +46,8 @@ png/sprites/drop.png
 png/sprites/spark.png
 png/sprites/glow.png
 png/sprites/ring.png
+png/sprites/crack.png
+png/sprites/sunburst.png
 png/sprites/pip_on.png
 png/sprites/pip_off.png
 png/sprites/button.png

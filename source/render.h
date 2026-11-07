@@ -14,6 +14,8 @@ enum SheetId { SHEET_SPRITES, SHEET_FONT, SHEET_BGTOP, SHEET_BGBOT, SHEET_LOGO, 
 namespace gfx {
 bool init();
 void shutdown();
+// Swaps the top-screen scenery. The old texture is freed a few frames later, once the GPU is done.
+void setScene(int scene);
 void beginFrame();
 void endFrame();
 // eye: 0 = left, 1 = right. Returns false if that eye does not need drawing.

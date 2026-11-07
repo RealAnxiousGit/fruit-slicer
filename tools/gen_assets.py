@@ -12,9 +12,7 @@ Requires Pillow and numpy. Output is deterministic.
 import math
 import os
 import random
-import struct
 import sys
-import wave
 
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
@@ -229,6 +227,80 @@ def f_gold_top(d):
                fill=(255, 238, 150, 255), width=int(1.5 * SS))
 
 
+def f_peach(d):
+    el(d, 32, 34, 21, 20, (250, 164, 110, 255))
+    el(d, 24, 30, 12, 13, (240, 96, 92, 200))
+
+
+def f_peach_top(d):
+    d.arc([22 * SS, 12 * SS, 44 * SS, 56 * SS], 100, 260, fill=(214, 92, 70, 255), width=int(1.6 * SS))
+    stem(d, 32, 15, 33, 8, 2)
+    leaf(d, 33, 10, -15, 12, (86, 170, 72, 255))
+
+
+def f_pineapple(d):
+    el(d, 32, 39, 16, 20, (240, 178, 50, 255))
+
+
+def f_pineapple_top(d):
+    # Diamond lattice, sampled so that it stays inside the body.
+    for i in range(-4, 6):
+        for sign in (-1, 1):
+            for t in range(61):
+                y = 19 + t * 40 / 60
+                x = 32 + sign * (i * 8 - 16 + (y - 21) * 0.42)
+                if ((x - 32) / 15.2) ** 2 + ((y - 39) / 19.2) ** 2 < 1:
+                    el(d, x, y, 0.55, 0.55, (190, 122, 30, 255))
+    for a in (-135, -112, -90, -68, -45):
+        leaf(d, 32, 21, a, 19, (66, 156, 70, 255))
+
+
+def f_coconut(d):
+    el(d, 32, 33, 22, 21, (92, 62, 42, 255))
+
+
+def f_coconut_top(d):
+    rng = random.Random(14)
+    for _ in range(90):
+        a, r = rng.uniform(0, 6.28), rng.uniform(0, 20)
+        x, y = 32 + math.cos(a) * r, 33 + math.sin(a) * r
+        d.line([x * SS, y * SS, (x + 2) * SS, (y + 2.4) * SS], fill=(62, 40, 28, 255), width=SS // 2 + 1)
+    for x, y in ((25, 21), (32, 18), (39, 21)):
+        el(d, x, y, 2, 2, (40, 26, 20, 255))
+
+
+def spr_sunburst():
+    """The finale fruit: an original, oversized star-ridged fruit with a leafy crown."""
+    size = 104
+    cx, cy = size / 2, size / 2 + 4
+    img = canvas(size)
+    d = ImageDraw.Draw(img)
+    for a in (-150, -125, -100, -80, -55, -30):
+        leaf(d, cx, cy - 34, a, 20, (72, 170, 92, 255))
+
+    def star(r0, wave, fill):
+        pts = []
+        for i in range(240):
+            th = i / 240 * math.tau
+            r = r0 + wave * math.cos(10 * th)
+            pts.append(((cx + math.cos(th) * r) * SS, (cy + math.sin(th) * r) * SS))
+        d.polygon(pts, fill=fill)
+
+    star(41, 4.5, (214, 62, 88, 255))
+    star(37, 4.0, (250, 104, 70, 255))
+    star(30, 3.2, (255, 160, 62, 255))
+    star(21, 2.4, (255, 208, 86, 255))
+    star(11, 1.4, (255, 244, 170, 255))
+    for i in range(10):
+        th = i / 10 * math.tau
+        d.line([(cx + math.cos(th) * 12) * SS, (cy + math.sin(th) * 12) * SS, (cx + math.cos(th) * 42) * SS, (cy + math.sin(th) * 42) * SS],
+               fill=(150, 40, 70, 170), width=SS)
+        th2 = th + math.pi / 10
+        el(d, cx + math.cos(th2) * 24, cy + math.sin(th2) * 24, 2.2, 2.2, (120, 36, 60, 255))
+    el(d, cx - 16, cy - 20, 8, 5, (255, 244, 214, 150))
+    return shrink(sticker(img, 2.4))
+
+
 # name, body, details, flesh colour, rim colour, seed colour, half-width of cut face
 FRUITS = [
     ("apple", f_apple, f_apple_top, (255, 240, 190, 255), (246, 216, 150, 255), (92, 54, 34, 255), 9),
@@ -239,6 +311,9 @@ FRUITS = [
     ("melon", f_melon, f_melon_top, (238, 66, 82, 255), (244, 244, 190, 255), (40, 26, 30, 255), 12),
     ("kiwi", f_kiwi, f_kiwi_top, (150, 208, 80, 255), (214, 232, 170, 255), (34, 30, 26, 255), 9),
     ("berry", f_berry, f_berry_top, (252, 120, 140, 255), (255, 196, 200, 255), (255, 230, 190, 255), 8),
+    ("peach", f_peach, f_peach_top, (255, 214, 130, 255), (250, 150, 110, 255), (150, 70, 50, 255), 10),
+    ("pineapple", f_pineapple, f_pineapple_top, (255, 232, 110, 255), (255, 246, 190, 255), (232, 190, 60, 255), 9),
+    ("coconut", f_coconut, f_coconut_top, (250, 250, 244, 255), (255, 255, 255, 255), (226, 226, 214, 255), 11),
     ("gold", f_gold, f_gold_top, (255, 236, 120, 255), (255, 250, 200, 255), (214, 150, 20, 255), 8),
 ]
 
@@ -409,6 +484,15 @@ def spr_panel():
     return shrink(img)
 
 
+def spr_crack():
+    img = canvas(CELL)
+    d = ImageDraw.Draw(img)
+    pts = [(14, 18), (24, 28), (20, 36), (32, 38), (30, 48), (42, 44), (50, 52)]
+    d.line([(x * SS, y * SS) for x, y in pts], fill=(250, 244, 226, 255), width=int(2.2 * SS), joint="curve")
+    d.line([(24 * SS, 28 * SS), (36 * SS, 20 * SS)], fill=(250, 244, 226, 255), width=int(1.6 * SS))
+    return shrink(img)
+
+
 def spr_ring():
     img = canvas(64)
     d = ImageDraw.Draw(img)
@@ -566,7 +650,7 @@ def v_gradient(w, h, stops):
     return Image.fromarray(arr, "RGBA")
 
 
-def hill_layer(w, h, base, amp, freq, color, seed, trees=0, tree_color=None):
+def hill_layer(w, h, base, amp, freq, color, seed, trees=0, tree_color=None, dots=(236, 118, 88, 255)):
     rng = random.Random(seed)
     img = Image.new("RGBA", (w * 2, h * 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -587,53 +671,11 @@ def hill_layer(w, h, base, amp, freq, color, seed, trees=0, tree_color=None):
         for _ in range(5):
             a, q = rng.uniform(0, 6.28), rng.uniform(0, r * 0.9)
             fx, fy = x + math.cos(a) * q, y - r * 1.2 + math.sin(a) * q * 0.8
-            d.ellipse([(fx - 1.6) * 2, (fy - 1.6) * 2, (fx + 1.6) * 2, (fy + 1.6) * 2], fill=(236, 118, 88, 255))
+            d.ellipse([(fx - 1.6) * 2, (fy - 1.6) * 2, (fx + 1.6) * 2, (fy + 1.6) * 2], fill=dots)
     return img.resize((w, h), Image.LANCZOS)
 
 
-def bg_top():
-    W, H = 424, 240
-    sky = v_gradient(W, H, [(0, (44, 34, 92)), (0.42, (150, 66, 128)), (0.72, (246, 136, 96)), (1, (255, 206, 130))])
-    d = ImageDraw.Draw(sky)
-    rng = random.Random(21)
-    for _ in range(46):
-        x, y = rng.uniform(0, W), rng.uniform(0, 96)
-        r = rng.choice((0.5, 0.8, 1.1))
-        d.ellipse([x - r, y - r, x + r, y + r], fill=(255, 244, 220, 220))
-    sun = spr_soft(190, 1.3)
-    sun_c = np.array(sun)
-    sun_c[..., 0], sun_c[..., 1], sun_c[..., 2] = 255, 226, 150
-    sky.alpha_composite(Image.fromarray(sun_c, "RGBA"), (W // 2 + 30 - 95, 140 - 95))
-    d = ImageDraw.Draw(sky)
-    d.ellipse([W // 2 + 30 - 30, 110, W // 2 + 30 + 30, 170], fill=(255, 238, 186, 255))
-    far = hill_layer(W, 120, 42, 16, 0.016, (120, 62, 124, 255), 3)
-    mid = hill_layer(W, 110, 42, 14, 0.021, (76, 46, 104, 255), 5, trees=11)
-    near = hill_layer(W, 70, 30, 9, 0.028, (42, 30, 74, 255), 8, trees=5)
-    return sky, far, mid, near
-
-
-def bg_bottom():
-    """Picnic blanket seen from above: woven two-tone squares with a dark vignette."""
-    W, H = 320, 240
-    arr = np.zeros((H, W, 3), np.float32)
-    y, x = np.mgrid[0:H, 0:W]
-    size = 32
-    a = (x // size) % 2
-    b = (y // size) % 2
-    base = np.array([38, 62, 92], np.float32)
-    band = np.array([58, 92, 122], np.float32)
-    both = np.array([84, 124, 142], np.float32)
-    arr[:] = base
-    arr[(a == 1) ^ (b == 1)] = band
-    arr[(a == 1) & (b == 1)] = both
-    weave = (((x + y) % 3 == 0) * 5.0 - ((x - y) % 4 == 0) * 4.0)[..., None]
-    arr += weave
-    rng = np.random.default_rng(11)
-    arr += rng.normal(0, 1.8, (H, W, 1))
-    d = np.sqrt(((x - W / 2) / (W * 0.72)) ** 2 + ((y - H / 2) / (H * 0.72)) ** 2)
-    arr *= np.clip(1.05 - d * d * 0.85, 0.35, 1.05)[..., None]
-    rgb = np.clip(arr, 0, 255).astype(np.uint8)
-    return Image.fromarray(np.dstack([rgb, np.full((H, W), 255, np.uint8)]), "RGBA")
+from gen_backgrounds import bg_top, bg_boards  # noqa: E402
 
 
 # ---------------------------------------------------------------- meta art
@@ -651,7 +693,7 @@ def meta_art():
     icon.save(path("meta", "icon.png"))
 
     W, H = 256, 128
-    sky, far, mid, near = bg_top()
+    sky, far, mid, near = bg_top(0, hill_layer, v_gradient, spr_soft)
     box = (84, 56, 84 + W, 56 + H)
     banner = sky.crop(box)
     banner.alpha_composite(far.crop((84, 0, 84 + W, 120)), (0, 62))
@@ -692,6 +734,8 @@ def build_graphics():
         ("spark", spr_spark()),
         ("glow", spr_soft(48)),
         ("ring", spr_ring()),
+        ("crack", spr_crack()),
+        ("sunburst", spr_sunburst()),
         ("pip_on", spr_pip(True)),
         ("pip_off", spr_pip(False)),
         ("button", spr_button()),
@@ -714,202 +758,10 @@ def build_graphics():
         f.write("static const signed char kFontIndex[96] = {" + ",".join(map(str, index)) + "};\n")
         f.write("static const unsigned char kFontAdvance[96] = {" + ",".join(map(str, adv)) + "};\n")
 
-    sky, far, mid, near = bg_top()
-    write_sheet("bgtop", [("sky", sky), ("far", far), ("mid", mid), ("near", near)])
-    write_sheet("bgbot", [("blanket", bg_bottom())], fmt="rgb565")
-
-
-# ---------------------------------------------------------------- audio
-RATE = 22050
-
-
-def t_(sec):
-    return np.arange(int(sec * RATE)) / RATE
-
-
-def lowpass(x, cutoff):
-    """One-pole low-pass; cutoff may be an array."""
-    c = np.broadcast_to(np.asarray(cutoff, np.float64), x.shape)
-    a = 1 - np.exp(-2 * np.pi * c / RATE)
-    y = np.zeros_like(x)
-    s = 0.0
-    for i in range(len(x)):
-        s += a[i] * (x[i] - s)
-        y[i] = s
-    return y
-
-
-def env(n, attack, decay_power=2.0):
-    a = max(1, int(attack * RATE))
-    e = np.ones(n)
-    e[:a] = np.linspace(0, 1, a)
-    e[a:] = (1 - np.linspace(0, 1, n - a)) ** decay_power
-    return e
-
-
-def norm(x, peak=0.9):
-    m = np.max(np.abs(x)) or 1
-    return x / m * peak
-
-
-def swish(seed, dur, f0, f1):
-    r = np.random.default_rng(seed)
-    n = int(dur * RATE)
-    noise = r.normal(0, 1, n)
-    sweep = np.geomspace(f0, f1, n)
-    hi = lowpass(noise, sweep)
-    band = hi - lowpass(hi, sweep * 0.35)
-    return norm(band * np.sin(np.linspace(0, np.pi, n)) ** 1.5, 0.6)
-
-
-def squish(seed, dur=0.26, pitch=190):
-    r = np.random.default_rng(seed)
-    n = int(dur * RATE)
-    t = np.arange(n) / RATE
-    noise = lowpass(r.normal(0, 1, n), np.geomspace(5200, 400, n))
-    blob = np.sin(2 * np.pi * np.cumsum(np.geomspace(pitch * 2.4, pitch * 0.6, n)) / RATE)
-    drip = np.sin(2 * np.pi * np.cumsum(np.geomspace(760, 300, n)) / RATE) * (t > dur * 0.5) * 0.3
-    return norm(noise * env(n, 0.002, 3.2) * 1.3 + blob * env(n, 0.003, 2.4) + drip * env(n, 0.09, 2.0), 0.85)
-
-
-def boom():
-    r = np.random.default_rng(77)
-    n = int(1.1 * RATE)
-    noise = lowpass(r.normal(0, 1, n), np.geomspace(5200, 120, n))
-    sub = np.sin(2 * np.pi * np.cumsum(np.geomspace(150, 34, n)) / RATE)
-    crack = r.normal(0, 1, n) * np.exp(-np.arange(n) / (0.02 * RATE))
-    return norm(noise * env(n, 0.002, 2.4) * 1.6 + sub * env(n, 0.004, 1.6) * 1.2 + crack * 0.6, 0.98)
-
-
-def tone(freq, dur, kind="pluck", vol=1.0):
-    t = t_(dur)
-    if kind == "pluck":
-        s = np.sin(2 * np.pi * freq * t) + 0.42 * np.sin(4 * np.pi * freq * t) * np.exp(-t * 16) + 0.2 * np.sin(8.1 * np.pi * freq * t) * np.exp(-t * 30)
-        return s * np.exp(-t * 7) * vol
-    if kind == "bell":
-        s = np.sin(2 * np.pi * freq * t) + 0.5 * np.sin(2 * np.pi * freq * 2.76 * t) * np.exp(-t * 5)
-        return s * np.exp(-t * 4.5) * vol
-    if kind == "square":
-        s = np.sign(np.sin(2 * np.pi * freq * t)) * 0.5
-        return s * np.exp(-t * 9) * vol
-    if kind == "bass":
-        s = np.sin(2 * np.pi * freq * t) + 0.3 * np.sin(4 * np.pi * freq * t)
-        return s * np.exp(-t * 3.2) * vol
-    raise ValueError(kind)
-
-
-def seq(notes, kind="bell", spacing=0.08, length=0.5):
-    total = spacing * len(notes) + length
-    out = np.zeros(int(total * RATE))
-    for i, f in enumerate(notes):
-        s = tone(f, length, kind)
-        p = int(i * spacing * RATE)
-        out[p:p + len(s)] += s
-    return norm(out, 0.8)
-
-
-def mtof(m):
-    return 440.0 * 2 ** ((m - 69) / 12)
-
-
-def compose(bpm, bars, chords, scale, seed, density, lead_kind="pluck"):
-    """A small loopable arranger; note tails wrap to the start for a seamless loop."""
-    rng = random.Random(seed)
-    beat = 60.0 / bpm
-    n = int(round(bars * 4 * beat * RATE))
-    mix = np.zeros(n)
-
-    def place(sig, when, gain=1.0):
-        p = int(when * RATE) % n
-        end = p + len(sig)
-        if end <= n:
-            mix[p:end] += sig * gain
-        else:
-            k = n - p
-            mix[p:] += sig[:k] * gain
-            mix[:end - n] += sig[k:] * gain
-
-    shaker_rng = np.random.default_rng(seed)
-    hat = lowpass(shaker_rng.normal(0, 1, int(0.05 * RATE)), 7000)
-    hat = (hat - lowpass(hat, 2500)) * env(len(hat), 0.002, 3)
-    thump = np.sin(2 * np.pi * np.cumsum(np.geomspace(150, 58, int(0.16 * RATE))) / RATE) * env(int(0.16 * RATE), 0.001, 2.6)
-
-    for bar in range(bars):
-        chord = chords[bar % len(chords)]
-        t0 = bar * 4 * beat
-        place(tone(mtof(chord[0] - 12), beat * 2.2, "bass", 0.55), t0)
-        place(tone(mtof(chord[0] - 12), beat * 1.4, "bass", 0.42), t0 + beat * 2.5)
-        for b in range(8):
-            place(hat, t0 + b * beat / 2, 0.11 if b % 2 else 0.06)
-            note = chord[b % len(chord)] + (12 if b % 4 == 3 else 0)
-            place(tone(mtof(note), 0.5, "pluck", 0.17), t0 + b * beat / 2)
-        place(thump, t0, 0.5)
-        place(thump, t0 + beat * 2, 0.4)
-        # Lead phrase: walks the scale near the chord; repeats on odd bars for a hook.
-        if bar % 2 == 0:
-            rng_state = rng.getstate()
-        else:
-            rng.setstate(rng_state)
-        idx = rng.randrange(2, len(scale) - 2)
-        for step in range(8):
-            if rng.random() < density:
-                idx = max(0, min(len(scale) - 1, idx + rng.choice((-2, -1, 1, 1, 2))))
-                place(tone(mtof(scale[idx]), 0.6, lead_kind, 0.34), t0 + step * beat / 2)
-    return norm(mix, 0.72)
-
-
-def write_pcm(name, samples):
-    pcm = (np.clip(samples, -1, 1) * 32000).astype("<i2")
-    with open(path("romfs", "audio", name + ".pcm"), "wb") as f:
-        f.write(b"FSA1" + struct.pack("<II", len(pcm), RATE) + pcm.tobytes())
-
-
-def build_audio():
-    write_pcm("swish0", swish(1, 0.18, 2600, 900))
-    write_pcm("swish1", swish(2, 0.22, 1600, 3400))
-    write_pcm("swish2", swish(3, 0.16, 3200, 1400))
-    write_pcm("squish0", squish(4, 0.24, 210))
-    write_pcm("squish1", squish(5, 0.28, 170))
-    write_pcm("squish2", squish(6, 0.22, 250))
-    write_pcm("throw", norm(swish(9, 0.26, 500, 1300), 0.28))
-    write_pcm("boom", boom())
-    c = [72, 76, 79, 84, 88, 91, 96]
-    write_pcm("combo3", seq([mtof(n) for n in c[:3]], "bell", 0.06))
-    write_pcm("combo4", seq([mtof(n) for n in c[:4]], "bell", 0.055))
-    write_pcm("combo5", seq([mtof(n) for n in c], "bell", 0.05))
-    write_pcm("strike", norm(np.concatenate([tone(196, 0.14, "square"), tone(147, 0.28, "square")]), 0.6))
-    write_pcm("click", norm(tone(880, 0.07, "pluck") + tone(1320, 0.07, "pluck") * 0.5, 0.55))
-    write_pcm("power", seq([mtof(n) for n in (79, 83, 86, 91)], "bell", 0.05, 0.4))
-    write_pcm("freeze", seq([mtof(n) for n in (96, 91, 88, 84, 79)], "bell", 0.07, 0.6))
-    write_pcm("go", seq([mtof(72), mtof(84)], "pluck", 0.12, 0.5))
-    write_pcm("over", seq([mtof(n) for n in (72, 67, 63, 60)], "pluck", 0.16, 0.7))
-    write_pcm("best", seq([mtof(n) for n in (72, 76, 79, 84, 79, 84, 88)], "bell", 0.1, 0.8))
-    write_pcm("gold", seq([mtof(n) for n in (88, 93, 100)], "bell", 0.045, 0.5))
-
-    # Original tracks, composed by the deterministic arranger above.
-    menu_ch = [[60, 64, 67, 71], [57, 60, 64, 67], [65, 69, 72, 76], [55, 59, 62, 67]]
-    play_ch = [[57, 60, 64, 69], [65, 69, 72, 77], [60, 64, 67, 72], [55, 59, 62, 67]]
-    penta_c = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84]
-    penta_a = [57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81]
-    write_pcm("music_menu", compose(92, 8, menu_ch, penta_c, 5, 0.42))
-    write_pcm("music_play", compose(128, 8, play_ch, penta_a, 12, 0.6))
-    write_pcm("music_zen", compose(68, 8, menu_ch, penta_c, 31, 0.3, "bell"))
-
-    # Three-second banner jingle for the HOME Menu.
-    jingle = np.zeros(int(2.9 * RATE))
-    for i, m in enumerate((72, 76, 79, 84)):
-        s = tone(mtof(m), 1.4, "bell", 0.8)
-        p = int(i * 0.16 * RATE)
-        jingle[p:p + len(s)] += s
-    cut = swish(13, 0.3, 1600, 4200) * 0.5
-    jingle[:len(cut)] += cut
-    jingle = norm(jingle, 0.8) * np.minimum(1, np.linspace(6, 0, len(jingle)))
-    with wave.open(path("meta", "banner.wav"), "wb") as w:
-        w.setnchannels(2)
-        w.setsampwidth(2)
-        w.setframerate(RATE)
-        pcm = (jingle * 32000).astype("<i2")
-        w.writeframes(np.repeat(pcm, 2).tobytes())
+    for i in range(3):
+        sky, far, mid, near = bg_top(i, hill_layer, v_gradient, spr_soft)
+        write_sheet(f"bgtop{i}", [("sky", sky), ("far", far), ("mid", mid), ("near", near)])
+    write_sheet("bgbot", [(f"board{i}", b) for i, b in enumerate(bg_boards())], fmt="rgb565")
 
 
 if __name__ == "__main__":
@@ -918,5 +770,6 @@ if __name__ == "__main__":
         build_graphics()
         meta_art()
     if what in ("all", "audio"):
-        build_audio()
+        import gen_audio
+        gen_audio.build_audio()
     print("assets generated")

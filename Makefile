@@ -23,7 +23,7 @@ GFXBUILD	:=	romfs/gfx
 ROMFS		:=	romfs
 
 APP_TITLE		:=	Fruit Slicer 3DS
-APP_DESCRIPTION	:=	Slice fruit, dodge bombs. Fan-made, free, non-commercial.
+APP_DESCRIPTION	:=	Slice fruit, chain combos, dodge bombs. Free fan game.
 APP_AUTHOR		:=	RealAnxiousGit
 ICON			:=	meta/icon.png
 
@@ -32,7 +32,7 @@ ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS	:=	-g -Wall -O2 -mword-relocations -ffunction-sections -fdata-sections $(ARCH)
 CFLAGS	+=	$(INCLUDE) -D__3DS__
 ifneq ($(strip $(AUTOTEST)),)
-CFLAGS	+=	-DAUTOTEST
+CFLAGS	+=	-DAUTOTEST $(TESTDEFS)
 endif
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17

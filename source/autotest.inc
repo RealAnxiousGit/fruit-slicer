@@ -1,6 +1,10 @@
 // Test-only bot, compiled with `make AUTOTEST=1`. It presses what a player presses: all of its
 // input goes through the same Input struct as the hardware. It plays every mode, then quits.
+#ifdef BOT_ONLY
+static int sBotMode = BOT_ONLY;
+#else
 static int sBotMode = 0;
+#endif
 static int sBotPhaseFrames = 0;
 static int sBotStroke = 0;
 static float sBotX, sBotY, sBotDX, sBotDY;
@@ -8,7 +12,11 @@ static int sBotTapFrames = 0;
 static bool sBotDone = false;
 static int sBotTapX, sBotTapY;
 static u32 sBotModeFrames = 0;
+#ifdef BOT_ONLY
+static bool sBotOptionsDone = true;
+#else
 static bool sBotOptionsDone = false;
+#endif
 static int sBotOptionsStep = 0;
 
 static bool autotestDone() { return sBotDone; }
@@ -44,10 +52,14 @@ static void autotestInput(Input& in) {
 			if (sBotPhaseFrames < 45) return;
 			sBotPhaseFrames = 0;
 			if (!sBotOptionsDone) {
-				botTap(in, kMenuButtons[6]);
+				botTap(in, kMenuButtons[7]);
 				return;
 			}
+#ifdef BOT_ONLY
+			if (sBotMode != BOT_ONLY) {
+#else
 			if (sBotMode >= MODE_COUNT) {
+#endif
 				sBotDone = true;
 				fprintf(stderr, "[bot] all modes finished\n");
 				return;
@@ -57,25 +69,44 @@ static void autotestInput(Input& in) {
 			botTap(in, kMenuButtons[sBotMode]);
 			return;
 
-		case SCREEN_OPTIONS:
-			if (sBotPhaseFrames < 30) return;
+		case SCREEN_OPTIONS: {
+			if (sBotPhaseFrames < 24) return;
 			sBotPhaseFrames = 0;
-			// Toggle each setting twice so the save ends where it started.
-			if (sBotOptionsStep < 6) {
-				botTap(in, kOptButtons[sBotOptionsStep / 2]);
-				sBotOptionsStep++;
-				if (sBotOptionsStep == 6) fprintf(stderr, "[bot] options exercised blade=%d\n", gSave.blade);
+			// Cycle each setting all the way round, so the save ends where it started.
+			static const u8 kSeq[] = {
+				OPT_BOARD, OPT_BOARD, OPT_BOARD, OPT_BOARD, OPT_BOARD, OPT_BOARD,
+				OPT_SCENE, OPT_SCENE, OPT_SCENE,
+				OPT_BLADE, OPT_BLADE, OPT_BLADE, OPT_BLADE, OPT_BLADE, OPT_BLADE,
+				OPT_JUICE, OPT_JUICE, OPT_JUICE, OPT_DEPTH, OPT_DEPTH, OPT_DEPTH,
+				OPT_SHAKE, OPT_SHAKE,
+				OPT_SOUND, OPT_SOUND, OPT_SOUND, OPT_SOUND, OPT_SOUND,
+				OPT_MUSIC, OPT_MUSIC, OPT_MUSIC, OPT_MUSIC, OPT_MUSIC,
+			};
+			constexpr int kSteps = sizeof kSeq / sizeof kSeq[0];
+			if (sBotOptionsStep < kSteps) {
+				botTap(in, kOptButtons[kSeq[sBotOptionsStep++]]);
 				return;
 			}
+			fprintf(stderr, "[bot] options exercised blade=%d board=%d scene=%d sfx=%d music=%d\n", gSave.blade, gSave.board, gSave.scene, gSave.sfx, gSave.music);
 			sBotOptionsDone = true;
-			botTap(in, kOptButtons[4]);
+			botTap(in, kOptButtons[OPT_BACK]);
 			return;
+		}
 
 		case SCREEN_RESULT:
 			if (sBotPhaseFrames < 80) return;
 			sBotPhaseFrames = 0;
-			fprintf(stderr, "[bot] result mode=%s score=%lu sliced=%d combo=%d best=%lu newBest=%d strikes=%d\n", kModes[sGame.mode].name,
-			        (unsigned long)sGame.score, sGame.sliced, sGame.bestCombo, (unsigned long)sGame.best, sGame.newBest, sGame.strikes);
+			fprintf(stderr, "[bot] result mode=%s score=%lu sliced=%d combo=%d best=%lu newBest=%d strikes=%d waves=%lu bombFrames=%lu overlapFrames=%lu finaleHits=%d\n", kModes[sGame.mode].name,
+			        (unsigned long)sGame.score, sGame.sliced, sGame.bestCombo, (unsigned long)sGame.best, sGame.newBest, sGame.strikes,
+			        (unsigned long)sGame.statWaves, (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames, sGame.finaleHits);
+			{
+				// Azahar buffers its log, so measurement runs read the result from the SD card.
+				FILE* f = fopen("sdmc:/3ds/FruitSlicer/bot.txt", "a");
+				if (f) {
+					fprintf(f, "%s waves=%lu bombFrames=%lu overlapFrames=%lu\n", kModes[sGame.mode].name, (unsigned long)sGame.statWaves, (unsigned long)sGame.statBombFrames, (unsigned long)sGame.statOverlapFrames);
+					fclose(f);
+				}
+			}
 			sBotMode++;
 			botTap(in, kResultButtons[1]);
 			return;
@@ -99,8 +130,22 @@ static void autotestInput(Input& in) {
 	}
 	if (sBotModeFrames % 2400 == 0) fprintf(stderr, "[bot] t=%lus score=%lu\n", (unsigned long)(sBotModeFrames / 60), (unsigned long)sGame.score);
 
+	if (sGame.phase == PHASE_FINALE) {
+		// Scrub back and forth over the finale fruit, like a player would.
+		in.touching = true;
+		in.tx = (int)(160 + sinf(sBotModeFrames * 0.2f) * 75);
+		in.ty = 112 + (int)(cosf(sBotModeFrames * 0.31f) * 18);
+		return;
+	}
+#ifdef BOT_ONLY
+	// Measurement run: keep hands off so every throw flies its whole path, then end the game.
+	if (sBotModeFrames < 7200) return;
+	bool suicide = true;
+#else
 	// After 25 seconds, go looking for bombs so the bomb and game-over paths get covered.
-	bool suicide = sBotModeFrames > 1500;
+	// Timed modes stay alive instead, so that their finale always gets exercised.
+	bool suicide = sBotModeFrames > 1500 && sGame.timeLeft <= 0;
+#endif
 	if (sBotStroke > 0) {
 		sBotStroke--;
 		sBotX += sBotDX;

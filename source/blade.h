@@ -23,7 +23,7 @@ struct Blade {
 
 	void reset();
 	void update(const Input& in);
-	void draw(u32 color) const;
+	void draw() const;  // uses the blade chosen in Options
 
 private:
 	void pushPoint(float nx, float ny);
