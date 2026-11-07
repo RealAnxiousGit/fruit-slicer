@@ -130,6 +130,10 @@ static u32 keyBits(SDL_Keycode k) {
 	}
 }
 
+namespace port {
+void updateAfterQuit();  // update_port.cpp
+}
+
 int main(int, char**) {
 #ifdef __linux__
 	// WSL has a GPU, but left alone its OpenGL often falls back to drawing on the CPU.
@@ -364,11 +368,14 @@ int main(int, char**) {
 	}
 	app::shutdown();
 	SDL_Quit();
+	port::updateAfterQuit();  // a finished update starts the new version now
 	return 0;
 }
 
 // Vibration: the phone's own motor. Controllers rumble through SDL's gamepad API instead.
 namespace port {
+void openLink(const char* url) { SDL_OpenURL(url); }
+
 void vibrate(float strength, int ms) {
 	if (!gSave.vibration) return;
 #if PORT_ANDROID

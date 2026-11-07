@@ -28,3 +28,5 @@ source/progress.cpp
 source/progress.h
 source/practice.cpp
 source/beat.cpp
+source/update.cpp
+source/update.h
