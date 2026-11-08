@@ -44,6 +44,7 @@ The first full release. Saves from 0.4 carry over: your scores and settings are 
 ### Fixed
 
 - **Daily Fruit's calendar** counts your own days: Day 1 is the first day you play, and today's box moves along the row each day instead of always sitting on the seventh. Day 8 starts the next row.
+- The lesson and "TRY AGAIN!" words no longer show behind the PAUSED sign.
 
 ## 0.4.0-alpha
 
