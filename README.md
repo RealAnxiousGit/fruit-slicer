@@ -37,7 +37,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | --- | --- |
 | Mouse | Hold the button and swipe to slice. Click anything in a menu. |
 | Mouse wheel | Scroll a settings list |
-| Escape | Pause, and go back one menu |
+| Escape | Pause, and go back one menu. Hold it for 3 seconds on the title to quit. |
 | Arrow keys or WASD | Move the selector, change a setting |
 | Enter or Space | Select |
 | F11 or Alt+Enter | Fullscreen |
@@ -56,7 +56,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | B (Circle) | Go back |
 | Start | Pause |
 
-**Menus** are fruit: swipe across one to slice it and pick it. With a mouse, a click works too. The selector and Enter or A slice the selected fruit. The GitHub, X and YouTube icons in the title's bottom-left corner open those pages in your browser. The bomb in the top-left corner, Quit Game, closes the game.
+**Menus** are fruit: swipe across one to slice it and pick it. With a mouse, a click works too. The selector and Enter or A slice the selected fruit. The GitHub, X and YouTube icons in the title's bottom-left corner open those pages in your browser. Hold the bomb in the top-left corner, Quit Game, for 3 seconds (or hold Escape on the title) to close the game.
 
 ## Modes
 

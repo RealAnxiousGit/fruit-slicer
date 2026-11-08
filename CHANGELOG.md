@@ -23,7 +23,7 @@ The first full release. Saves from 0.4 carry over: your scores and settings are 
 - **Update check:** with your OK, the game looks on GitHub once a day for a newer release, shows what's new and installs it. Nothing about you is sent. Options has Check Now.
 - **GitHub, X and YouTube icons** in the title's bottom-left corner.
 - **Splash lines** over the logo, a new one each time.
-- **Quit Game:** a bomb in the top-left corner of the title. Click or tap it and the screen blows up, then the game closes.
+- **Quit Game:** a bomb in the top-left corner of the title. Hold it down (or hold Escape on the title) for 3 seconds while its fuse ticks, and the screen blows up and the game closes. Let go sooner and nothing happens.
 - **New bomb blasts:** a fireball, a shockwave, smoke and flying shards.
 
 ### Changed
@@ -35,6 +35,7 @@ The first full release. Saves from 0.4 carry over: your scores and settings are 
 - Letter outlines no longer cut into the letter beside them.
 - The 3D menu labels sway gently instead of spinning, and are easier to read.
 - The Shop picks an item when you click or tap it, not when you point at it.
+- A sliced menu fruit no longer stays whole on the title screen while its halves fly apart.
 - Swipe and combo popups that land together are stacked instead of overlapping.
 
 ## 0.4.0-alpha
