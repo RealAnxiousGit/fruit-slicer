@@ -4,16 +4,17 @@ A free, fan-made fruit-slicing arcade game for Windows, Linux and Android. Swipe
 
 **Version 1.0.0.** Tested on Windows 11 on all four renderers, on Linux under WSL, and on a real Android phone as well as the Android emulator. Native Linux desktops and more phones are still untested, so reports are welcome.
 
-All screenshots are from the Windows version.
+All screenshots are from the Linux version.
 
 <p>
-  <img src="docs/screenshots/title.png" width="400" alt="Title screen with the logo and menu signs side by side">
-  <img src="docs/screenshots/gameplay.png" width="400" alt="Slicing 3D fruit in Arcade mode">
-  <img src="docs/screenshots/frenzy.png" width="400" alt="A Fruit Frenzy filling the board with fruit">
-  <img src="docs/screenshots/combo.png" width="400" alt="A swipe through several fruit earning a combo bonus">
+  <img src="docs/screenshots/title.png" width="400" alt="Title screen with the logo and a menu of fruit to slice">
+  <img src="docs/screenshots/gameplay.png" width="400" alt="Slicing 3D fruit in Zen mode">
+  <img src="docs/screenshots/frenzy.png" width="400" alt="A Fruit Frenzy filling the board with 3D fruit">
+  <img src="docs/screenshots/combo.png" width="400" alt="A swipe through three fruit earning a combo bonus">
+  <img src="docs/screenshots/stickers.png" width="400" alt="The 2D sticker art style during a long combo">
+  <img src="docs/screenshots/beat.png" width="400" alt="Beat Slice, where only slices on the beat score">
   <img src="docs/screenshots/sunburst.png" width="400" alt="Scrubbing the blade across the Sunburst Fruit at the end of a run">
   <img src="docs/screenshots/result.png" width="400" alt="The result sign after an Arcade run with a new best score">
-  <img src="docs/screenshots/pause.png" width="400" alt="The pause menu">
 </p>
 
 ## Download
