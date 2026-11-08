@@ -56,7 +56,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | B (Circle) | Go back |
 | Start | Pause |
 
-**Menus** are fruit: swipe across one to slice it and pick it. With a mouse, a click works too. The selector and Enter or A slice the selected fruit. The GitHub, X and YouTube icons in the title's bottom-left corner open those pages in your browser.
+**Menus** are fruit: swipe across one to slice it and pick it. With a mouse, a click works too. The selector and Enter or A slice the selected fruit. The GitHub, X and YouTube icons in the title's bottom-left corner open those pages in your browser. The bomb in the top-left corner, Quit Game, closes the game.
 
 ## Modes
 
@@ -162,7 +162,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed, and [docs/qa](docs/qa) for ho
 
 ## Credits
 
-Programming by Claude. Prompt engineering by RealAnxiousGit.
+Programming by NickBin, with the Claude Code toolkit.
 
 **Music:** the six Shop tracks (Summer House, 8-Bit Hero Quest, Friendly Trap, Unruly Beat, Vengeance Electro and Eternal Explorer) are by [Of Far Different Nature](https://fardifferent.carrd.co/), from "Loop Box #1" and "Loop Box #4" on [OpenGameArt.org](https://opengameart.org), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They were converted (to Ogg Vorbis) and turned down to match the game's loudness.
 

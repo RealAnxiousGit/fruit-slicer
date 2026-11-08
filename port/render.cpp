@@ -368,6 +368,24 @@ void beginBottom() {
 	clipTo(m.signX, m.signY, 320 * m.signScale, 240 * m.signScale);
 }
 
+void windowArea(float* x, float* y, float* w, float* h) {
+	MenuLayout m = menuLayout();
+	*x = -m.signX / m.signScale;
+	*y = -m.signY / m.signScale;
+	*w = sWinW / m.signScale;
+	*h = sWinH / m.signScale;
+}
+
+void beginCorner() {
+	MenuLayout m = menuLayout();
+	flush();
+	clipToWindow();
+	sScale = m.signScale;
+	sOx = m.signX;
+	sOy = m.signY;
+	sShaking = false;
+}
+
 static inline float fieldUnit() {
 	float a = sWinW / kFieldW, b = sWinH / kFieldH;
 	return a < b ? a : b;

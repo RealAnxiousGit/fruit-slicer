@@ -53,7 +53,8 @@ def logo_list():
 
 
 def font_list():
-    return [(f"g{i:02d}", gl[1]) for i, gl in enumerate(g.font_glyphs())]
+    glyphs = g.font_glyphs()
+    return [(f"g{i:02d}", gl[1]) for i, gl in enumerate(glyphs)] + [(f"f{i:02d}", gl[3]) for i, gl in enumerate(glyphs)]
 
 
 def pack(images, width):
@@ -119,5 +120,20 @@ def main():
         f.write("\n".join(lines) + "\n")
 
 
+def font_only():
+    """Rebuilds just the font atlas and its line in sheet_rects.h."""
+    lines = []
+    write_atlas("font", font_list, 2048, lines, defines=False)
+    header = os.path.join(OUT_H, "sheet_rects.h")
+    with open(header) as f:
+        old = f.read().split("\n")
+    new = [lines[0] if l.startswith("static const SheetRect kRectsFont[]") else l for l in old]
+    with open(header, "w", newline="\n") as f:
+        f.write("\n".join(new))
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "font":
+        font_only()
+    else:
+        main()

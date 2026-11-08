@@ -23,11 +23,18 @@ The first full release. Saves from 0.4 carry over: your scores and settings are 
 - **Update check:** with your OK, the game looks on GitHub once a day for a newer release, shows what's new and installs it. Nothing about you is sent. Options has Check Now.
 - **GitHub, X and YouTube icons** in the title's bottom-left corner.
 - **Splash lines** over the logo, a new one each time.
+- **Quit Game:** a bomb in the top-left corner of the title. Click or tap it and the screen blows up, then the game closes.
+- **New bomb blasts:** a fireball, a shockwave, smoke and flying shards.
 
 ### Changed
 
 - New renderer defaults: DirectX on Windows, OpenGL on Linux and Android.
 - Text that would run past the edge of its sign is made smaller to fit.
+- **Auto music** shuffles: when a track ends, another one you own starts. A track you pick loops. Music starts as soon as its first half second is ready, so Shop previews play straight away.
+- **Blade and Trail** are separate: Blade sets the colour of the cutting edge, Trail is the Shop streak behind it.
+- Letter outlines no longer cut into the letter beside them.
+- The 3D menu labels sway gently instead of spinning, and are easier to read.
+- The Shop picks an item when you click or tap it, not when you point at it.
 - Swipe and combo popups that land together are stacked instead of overlapping.
 
 ## 0.4.0-alpha

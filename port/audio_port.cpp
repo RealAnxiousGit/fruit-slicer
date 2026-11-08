@@ -18,6 +18,7 @@ struct Voice {
 	float left, right;
 	bool on, loop;
 	int ch = 1;  // 2: interleaved stereo (recorded music)
+	u32 avail = 0;  // music still arriving: frames that are here (0: all of them)
 };
 static Voice sVoices[kVoices];
 static Voice sMusic, sFuse;
@@ -38,6 +39,8 @@ static void mixVoice(Voice& v, float l, float r, int frames) {
 	}
 	for (int i = 0; i < frames; i++) {
 		u32 at = (u32)v.pos;
+		// A track still arriving waits at the edge of what is here, in silence, rather than read past it.
+		if (v.avail && at + 1 >= v.avail) return;
 		if (at >= v.samples) {
 			if (!v.loop) {
 				v.on = false;
@@ -213,11 +216,22 @@ void playSfx(const Clip& c, float left, float right, float rate) {
 	SDL_UnlockMutex(sLock);
 }
 
-void musicStart(const Clip& c) {
+void musicStart(const Clip& c, bool loop) {
 	SDL_LockMutex(sLock);
 	sMusicBase = (double)c.rate / kRate;
-	sMusic = {c.pcm, c.samples, 0.0, sMusicBase * sMusicSpeed, 1, 1, true, true};
+	const u32 avail = sMusic.pcm == c.pcm ? sMusic.avail : 0;
+	sMusic = {c.pcm, c.samples, 0.0, sMusicBase * sMusicSpeed, 1, 1, true, loop};
+	sMusic.avail = avail;
 	sMusic.ch = c.channels == 2 ? 2 : 1;
+	SDL_UnlockMutex(sLock);
+}
+
+void musicAvail(const s16* pcm, u32 frames, u32 total) {
+	SDL_LockMutex(sLock);
+	if (sMusic.pcm == pcm) {
+		sMusic.samples = total;
+		sMusic.avail = frames >= total ? 0 : frames;
+	}
 	SDL_UnlockMutex(sLock);
 }
 
