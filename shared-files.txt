@@ -3,6 +3,7 @@ source/audio.cpp
 source/audio.h
 source/audio_port.h
 source/autotest.inc
+source/lab.inc
 source/blade.cpp
 source/blade.h
 source/common.h

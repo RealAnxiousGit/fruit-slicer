@@ -12,6 +12,13 @@ option(AUTOTEST "Build the self-playing test bot" OFF)
 set(TESTDEFS "" CACHE STRING "Extra defines for test builds")
 # Developer tools, such as coins on demand in Options. Never on for release builds.
 option(DEV_TOOLS "Build the developer tools into Options" OFF)
+# The Lab build: the bot runs a quick check of every feature and writes lab.txt (source/lab.inc). Developer only.
+option(LAB "Build the Lab: a quick self-check of every feature" OFF)
+if(LAB)
+  set(AUTOTEST ON)
+  set(DEV_TOOLS ON)
+  set(TESTDEFS "${TESTDEFS};LAB")
+endif()
 
 # SDL3 is built in, so players never need to install anything.
 include(FetchContent)

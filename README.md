@@ -144,6 +144,8 @@ cd android
 
 `-DAUTOTEST=ON` builds a version that plays every mode by itself and logs the results.
 
+`-DLAB=ON` builds the Lab, a developer-only check of the whole game. Run it and keep your hands off: in about two and a half minutes it walks every menu, buys and uses Shop items, plays the lessons and every mode (cut short, half in 2D), checks bombs, music and the hold-to-quit, then closes. Each check is written as PASS or FAIL to `lab.txt` in its own data folder (`RealAnxiousGit/FruitSlicerLab`), so your save is never touched. New features add their check to [`source/lab.inc`](source/lab.inc).
+
 ## How it works
 
 - **Shared game:** `source/` holds the rules, menus, scoring and cutting, and is kept byte-for-byte the same as in the 3DS repo. `port/` holds what is specific to this version. `shared-files.txt` lists the shared files, and `scripts/sync-shared.py` copies changes across and flags any drift.

@@ -152,9 +152,21 @@ int main(int, char**) {
 	// The full look by default, except on a phone with little memory: it starts on the light settings.
 	gIsNew3ds = !gfx::lowMemory();
 	gHas3dScreen = false;
+#ifdef LAB
+	// The Lab keeps its own folder and starts fresh each run, so it never touches a player's save.
+	char* pref = SDL_GetPrefPath("RealAnxiousGit", "FruitSlicerLab");
+#else
 	char* pref = SDL_GetPrefPath("RealAnxiousGit", "FruitSlicer");
+#endif
 	snprintf(port::sDataDir, sizeof port::sDataDir, "%s", pref ? pref : "");
 	SDL_free(pref);
+#ifdef LAB
+	{
+		char save[460];
+		port::dataPath(save, sizeof save, "save.bin");
+		remove(save);
+	}
+#endif
 	if (!app::init()) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fruit Slicer", "The game's files could not be loaded. Keep the romfs folder beside the game.", nullptr);
 		SDL_Quit();
