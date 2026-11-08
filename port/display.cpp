@@ -203,6 +203,12 @@ void displayStart() {
 	else {
 		int w, h;
 		defaultWindowSize(&w, &h);
+#ifdef TEST_RECORD
+		if (SDL_getenv("FRUIT_SLICER_RECORD")) {
+			w = 1920;
+			h = 1080;
+		}
+#endif
 		if (w != 1280) SDL_SetWindowSize(gfx::window(), w, h);
 		sNow = fromSave();
 		applyVsync();

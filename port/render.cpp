@@ -7,6 +7,9 @@
 
 #include "gfx_sdl.h"
 #include "sheet_rects.h"
+#ifdef TEST_RECORD
+#include "audio_port.h"
+#endif
 
 #if defined(_WIN32)
 const char* const kRendererNames[] = {"DirectX", "OpenGL", "Vulkan", "Software"};
@@ -33,6 +36,9 @@ static float sClipX0, sClipY0, sClipX1 = 1280, sClipY1 = 720;  // where drawing 
 static float sBaseX, sBaseY, sShakeX, sShakeY;
 static bool sShaking;
 static char sShotPath[300];
+#ifdef TEST_RECORD
+static FILE* sRecord;  // trailer capture: ffmpeg, taking every frame
+#endif
 
 struct Sheet {
 	SDL_Texture* tex;
@@ -217,6 +223,10 @@ void sync() {
 }
 
 void shutdown() {
+#ifdef TEST_RECORD
+	if (sRecord) pclose(sRecord);
+	sRecord = nullptr;
+#endif
 	for (auto& s : sSheets)
 		if (s.tex) SDL_DestroyTexture(s.tex);
 	SDL_free(sBatch);
@@ -228,6 +238,8 @@ void shutdown() {
 void forceStereo(bool) {}
 void setDepth(float) {}
 float stereoPerZ() { return 0; }
+void keepStickers(bool) {}  // the fruit sheet is always loaded here
+bool stickersLoaded() { return sSheets[SHEET_FRUIT].tex != nullptr; }
 bool onTop() { return false; }
 void setShake(float dx, float dy) {
 	sShakeX = dx;
@@ -247,6 +259,28 @@ static SDL_Texture* sTarget;
 static int sTargetW, sTargetH;
 static float sRenderScale = 1;
 float renderScaleNow() { return sRenderScale; }
+
+#ifdef TEST_RECORD
+// Trailer capture: every finished frame, raw, into ffmpeg, with the matching slice of sound. Test builds only.
+static void recordFrame() {
+	const char* dir = SDL_getenv("FRUIT_SLICER_RECORD");
+	if (!dir) return;
+	SDL_Surface* s = SDL_RenderReadPixels(sRenderer, nullptr);
+	if (!s) return;
+	SDL_Surface* rgb = SDL_ConvertSurface(s, SDL_PIXELFORMAT_RGB24);
+	SDL_DestroySurface(s);
+	if (!rgb) return;
+	if (!sRecord) {
+		char cmd[700];
+		snprintf(cmd, sizeof cmd, "ffmpeg -loglevel error -y -f rawvideo -pix_fmt rgb24 -s %dx%d -r 60 -i - -c:v libx264 -preset veryfast -crf 8 -pix_fmt yuv444p '%s/video.mkv'", rgb->w, rgb->h, dir);
+		sRecord = popen(cmd, "w");
+	}
+	if (sRecord)
+		for (int y = 0; y < rgb->h; y++) fwrite((const Uint8*)rgb->pixels + y * rgb->pitch, 3, rgb->w, sRecord);
+	SDL_DestroySurface(rgb);
+	audioport::recordStep();
+}
+#endif
 
 void beginFrame() {
 	int w = 1280, h = 720;
@@ -291,6 +325,9 @@ void endFrame() {
 		SDL_RenderTexture(sRenderer, sTarget, nullptr, nullptr);
 	}
 	port::drawOverlay();
+#ifdef TEST_RECORD
+	recordFrame();
+#endif
 	if (sShotPath[0]) {
 		SDL_Surface* s = SDL_RenderReadPixels(sRenderer, nullptr);
 		if (s) {

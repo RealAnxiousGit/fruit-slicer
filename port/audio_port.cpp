@@ -167,6 +167,11 @@ bool init() {
 	}
 	SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, kRate};
 	sLock = SDL_CreateMutex();
+#ifdef TEST_RECORD
+	// Trailer capture: the game runs as fast as it can draw, so sound is mixed a frame at a time into a file
+	// instead of going to a device, which keeps it in step with the pictures.
+	if (SDL_getenv("FRUIT_SLICER_RECORD")) return true;
+#endif
 	sStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, feed, nullptr);
 	if (!sStream) {
 		fprintf(stderr, "[audio] %s\n", SDL_GetError());
@@ -178,6 +183,30 @@ bool init() {
 #endif
 	return true;
 }
+
+#ifdef TEST_RECORD
+void recordStep() {
+	static FILE* out = nullptr;
+	const char* dir = SDL_getenv("FRUIT_SLICER_RECORD");
+	if (!dir) return;
+	if (!out) {
+		char path[400];
+		snprintf(path, sizeof path, "%s/audio.raw", dir);
+		out = fopen(path, "wb");
+		if (!out) return;
+	}
+	const int frames = kRate / 60;
+	SDL_memset(sMix, 0, sizeof(float) * frames * 2);
+	SDL_LockMutex(sLock);
+	mixVoice(sMusic, sMusicVolume, sMusicVolume, frames);
+	mixVoice(sFuse, sFuse.left, sFuse.right, frames);
+	for (auto& v : sVoices) mixVoice(v, v.left, v.right, frames);
+	SDL_UnlockMutex(sLock);
+	limit(sMix, frames);
+	for (int i = 0; i < frames * 2; i++) sOut[i] = (s16)(clampf(sMix[i], -1, 1) * 32000);
+	fwrite(sOut, 4, frames, out);
+}
+#endif
 
 void shutdown() {
 	if (sStream) SDL_DestroyAudioStream(sStream);
