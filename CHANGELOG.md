@@ -41,6 +41,10 @@ The first full release. Saves from 0.4 carry over: your scores and settings are 
 - A sliced menu fruit no longer stays whole on the title screen while its halves fly apart.
 - Swipe and combo popups that land together are stacked instead of overlapping.
 
+### Fixed
+
+- **Daily Fruit's calendar** counts your own days: Day 1 is the first day you play, and today's box moves along the row each day instead of always sitting on the seventh. Day 8 starts the next row.
+
 ## 0.4.0-alpha
 
 First release of the universal build, for Windows, Linux and Android. It shares its game code with [Fruit Slicer 3DS](https://github.com/RealAnxiousGit/fruit-slicer-3ds), which is on the same version.
