@@ -82,13 +82,8 @@ constexpr float kCutReach = 1.2f;    // a fingertip is wider than the point it r
 constexpr float kCutReach = 1.0f;
 #endif
 
-// Display settings, done by port/display.cpp. The shared Options menu shows them in a Display section.
+// Display settings, done by port/display.cpp. The shared Options menu shows them in Visuals and Display.
 #define PORT_HAS_DISPLAY 1
-#if PORT_ANDROID
-#define PORT_DISPLAY_HINT "Renderer"
-#else
-#define PORT_DISPLAY_HINT "Window, resolution, V-Sync"
-#endif
 namespace port {
 extern const char* gResNames[];  // the Resolution row's choices
 extern u8 gResChoice;
@@ -102,7 +97,6 @@ void matchPreset();       // names the preset the graphics settings match, or Cu
 void applyGraphics();     // after a graphics row changes: textures reload if their quality did
 const char* notice();     // something the player should know since starting, or null
 }  // namespace port
-#define PORT_DISPLAY_HINT2 "and graphics quality."
 // How the shared game draws a few things, from the Display section's graphics settings.
 #define PORT_SHADOWS (gSave.shadowQuality)  // 0 off, 1 simple, 2 soft
 #define PORT_BLOOM (gSave.bloom)            // 0 off, 1 low, 2 high
@@ -112,7 +106,6 @@ void vibrate(float strength, int ms);  // the phone's motor or a controller's ru
 }
 #define PORT_VIBRATE(strength, ms) port::vibrate(strength, ms)
 #define PORT_STICK_HINT "Hold: slices while RT is held."
-#define PORT_CONTROLS_HINT "Controller slicing,"
 #if PORT_ANDROID
 #define PORT_VIBRATION_HINT "The phone or controller buzzes"
 #else
