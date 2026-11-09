@@ -466,6 +466,21 @@ void toScreen(float x, float y, float* sx, float* sy) {
 
 float viewScale() { return sScale; }
 
+void setClip(float x, float y, float w, float h) {
+	flush();
+	float sx, sy;
+	toScreen(x, y, &sx, &sy);
+	const SDL_Rect r = {(int)floorf(sx), (int)floorf(sy), (int)ceilf(w * sScale), (int)ceilf(h * sScale)};
+	SDL_SetRenderClipRect(sRenderer, &r);
+}
+
+void clearClip() {
+	flush();
+	SDL_SetRenderClipRect(sRenderer, nullptr);
+}
+
+int fontImageCount() { return (int)(sizeof(kRectsFont) / sizeof(kRectsFont[0])); }
+
 static void quad(SDL_Texture* tex, const SheetRect& r, float tw, float th, const float xs[4], const float ys[4], u32 color) {
 	SDL_FColor c = fcolor(color);
 	float u0 = r.x / tw, v0 = r.y / th, u1 = (r.x + r.w) / tw, v1 = (r.y + r.h) / th;

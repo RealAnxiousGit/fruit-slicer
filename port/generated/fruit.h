@@ -66,5 +66,14 @@
 #define fruit_chili_idx 63
 #define fruit_chili_l_idx 64
 #define fruit_chili_r_idx 65
-#define fruit_bomb_idx 66
-#define fruit_sunburst_idx 67
+#define fruit_bunch_idx 66
+#define fruit_bunch_l_idx 67
+#define fruit_bunch_r_idx 68
+#define fruit_pomegranate_idx 69
+#define fruit_pomegranate_l_idx 70
+#define fruit_pomegranate_r_idx 71
+#define fruit_pinata_idx 72
+#define fruit_pinata_l_idx 73
+#define fruit_pinata_r_idx 74
+#define fruit_bomb_idx 75
+#define fruit_sunburst_idx 76

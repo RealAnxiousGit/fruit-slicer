@@ -18,7 +18,7 @@ using m3d::Vertex;
 
 static const char* const kTexNames[m3d::MESH_COUNT] = {
 	"apple", "orange", "lemon", "pear", "plum", "melon", "kiwi", "berry", "peach", "pineapple", "coconut", "gold", "bomb", "sunburst",
-	"banana", "mango", "cherry", "dragon", "spiky", "grapes", "grape", "honey", "jelly", "chili", "coin",
+	"banana", "mango", "cherry", "dragon", "spiky", "grapes", "grape", "honey", "jelly", "chili", "coin", "bunch", "pomegranate", "pinata",
 };
 static SDL_Texture* sTex[m3d::MESH_COUNT];
 
