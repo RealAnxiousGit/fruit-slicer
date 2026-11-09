@@ -3318,7 +3318,7 @@ static void drawBottomContent(Screen screen) {
 			int f = sFocus[SCREEN_PAUSE];
 			drawBackArrow(f == 0, sPressed == 0);
 			for (int i = 1; i < 4; i++) {
-				const char* label = i == 3 && sGame.mode == MODE_PRACTICE ? "Skip Lessons" : kPauseButtons[i].label;
+				const char* label = i == 3 && sGame.mode == MODE_PRACTICE ? "Skip Lessons" : (i == 3 && sGame.mode == MODE_ZEN ? "Finish Run" : kPauseButtons[i].label);
 				drawSign(kPauseButtons[i], label, f == i, sPressed == i, 0.56f, -1, fruitFor(kPauseButtons[i].label));
 			}
 			break;
@@ -3728,7 +3728,13 @@ static void updateFrame(const Input& in, bool wasTouching) {
 				sFocus[SCREEN_OPTIONS] = 1;
 				goTo(SCREEN_OPTIONS, 1);
 			} else if (t == 3) {
-				fadeThen(sGame.mode == MODE_PRACTICE ? skipPractice : quitRun);
+				if (sGame.mode == MODE_ZEN) {
+					sScreen = SCREEN_GAME;
+					sBlade.reset();
+					sGame.finishRun();
+				} else {
+					fadeThen(sGame.mode == MODE_PRACTICE ? skipPractice : quitRun);
+				}
 			}
 			break;
 		}

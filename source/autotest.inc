@@ -378,6 +378,7 @@ static void autotestInput(Input& in) {
 	bool suicide = sBotModeFrames > kSeekBombsAt && sGame.timeLeft <= 0 && sGame.mode != MODE_PRACTICE;  // lessons want bombs left alone
 #endif
 #endif
+	if (sGame.mode == MODE_ZEN && sBotModeFrames == 900) sGame.finishRun();  // Zen is endless: stop it as the pause menu would
 	if (sBotStroke > 0) {
 		sBotStroke--;
 		sBotX += sBotDX;

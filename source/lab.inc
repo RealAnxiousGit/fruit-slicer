@@ -212,6 +212,7 @@ static void labFinish(Input& in) {
 	static int step = 0, held = 0;
 	if (step == 0) {
 		labCheck(sLabBlastSeen && !sLabBlastMissed, "every bomb hit sets off a blast");
+		sGame.labProbes(sBlade, labCheck);
 		step = 1;
 #if PORT_3DS
 		labSummary();
