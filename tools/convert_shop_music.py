@@ -15,22 +15,27 @@ import sys
 
 import numpy as np
 
-# master file, name in romfs/audio
+# master file, name in romfs/audio, tempo from the song's project
 SONGS = [
-    ("Ahead of the Curve.wav", "music_ahead"),
-    ("SPARE FOR ME.wav", "music_spare"),
-    ("My Own Fright.wav", "music_fright"),
-    ("WORTHLESS ENEMY.wav", "music_worthless"),
-    ("Lies.flac", "music_lies"),
-    ("Lies VIP Remix.wav", "music_liesvip"),  # sold as "Lies (VIP Remix)"
-    ("JUST STAY WITH ME.wav", "music_staywithme"),
+    ("Ahead of the Curve.wav", "music_ahead", 175),
+    ("SPARE FOR ME.wav", "music_spare", 180),
+    ("My Own Fright.wav", "music_fright", 160),
+    ("WORTHLESS ENEMY.wav", "music_worthless", 180),
+    ("Lies.flac", "music_lies", 128),
+    ("Lies VIP Remix.wav", "music_liesvip", 128),  # sold as "Lies (VIP Remix)"
+    ("JUST STAY WITH ME.wav", "music_staywithme", 150),
 ]
 
 RATE = 44100
 OGG_QUALITY = "3"       # about 112 kbit/s: three minutes come to around 2.5 MB
 MEAN_TARGET_DB = -20.5  # what the Shop's other recorded tracks measure
 BEATS_PER_BAR = 4
+LOW_BINS = 8            # up to about 150 Hz: the kick and bass
+KICK_SURE = 0.15        # how clear the low end's beat must be before it decides where the grid sits
+SAME_BEAT = 0.04        # seconds: sound starting this close to a beat is on that beat
+FILE_START = 0.02       # seconds: sound this close to the top of the file counts as starting there
 HOP = 512
+ONSET_LAG = 1425        # samples from the start of an onset frame to the sound it found; check_song_beats.py selftest proves it
 
 
 def load(path):
@@ -39,13 +44,14 @@ def load(path):
     return np.frombuffer(raw, "<f4").reshape(-1, 2).astype(np.float64)
 
 
-def onsets(mono):
+def onsets(mono, top_bins=None):
+    """How much new sound starts in each frame; top_bins keeps only the low end."""
     n = (len(mono) - 2048) // HOP
     window = np.hanning(2048)
     env = np.zeros(n)
     previous = None
     for i in range(n):
-        spec = np.log1p(np.abs(np.fft.rfft(mono[i * HOP:i * HOP + 2048] * window)) * 20)
+        spec = np.log1p(np.abs(np.fft.rfft(mono[i * HOP:i * HOP + 2048] * window)[:top_bins]) * 20)
         if previous is not None:
             env[i] = np.maximum(spec - previous, 0).sum()
         previous = spec
@@ -53,31 +59,11 @@ def onsets(mono):
     return np.maximum(env, 0)
 
 
-def comb_score(ac, frames_per_beat):
-    total = 0.0
-    for multiple, weight in ((1, 1.0), (2, 0.8), (4, 0.9), (8, 0.7), (16, 0.6)):
-        lag = int(round(frames_per_beat * multiple))
-        if lag < len(ac):
-            total += weight * ac[lag]
-    return total
-
-
-def tempo(env):
-    spectrum = np.fft.rfft(env, len(env) * 2)
-    ac = np.fft.irfft(np.abs(spectrum) ** 2)[:len(env)]
-    best, best_score = 120.0, -1.0
-    for bpm in np.arange(80, 200, 0.02):
-        score = comb_score(ac, RATE / HOP * 60 / bpm)
-        if score > best_score:
-            best, best_score = float(bpm), score
-    return round(best) if abs(best - round(best)) <= 0.12 else round(best, 2)
-
-
 def grid_phase(env, frames_per_beat):
     """Where the beat falls, in beats from 0..1, and how sure that is (0 none, 1 perfect)."""
     positions = np.arange(len(env)) / frames_per_beat
     vector = (env * np.exp(2j * np.pi * positions)).sum()
-    phase = (-np.angle(vector) / (2 * np.pi)) % 1.0
+    phase = (np.angle(vector) / (2 * np.pi)) % 1.0
     return phase, abs(vector) / (env.sum() or 1)
 
 
@@ -98,25 +84,29 @@ def steadiness(env, frames_per_beat):
     return float(np.abs(wander).max())
 
 
-def make_loop(x, name):
+def make_loop(x, name, bpm):
     level = np.abs(x).max(axis=1)
     sounding = np.nonzero(level > 10 ** (-45 / 20))[0]
     first, last = int(sounding[0]), int(sounding[-1]) + 1
     mono = x.mean(axis=1)
     env = onsets(mono)
-    bpm = tempo(env)
+    low = onsets(mono, LOW_BINS)
     frames_per_beat = RATE / HOP * 60 / bpm
     phase, sure = grid_phase(env, frames_per_beat)
+    kick_phase, kick_sure = grid_phase(low, frames_per_beat)
+    if kick_sure >= KICK_SURE:  # the kick is the beat people hear; off-beat hats and vocals pull the full mix around
+        phase, sure = kick_phase, kick_sure
     wander = steadiness(env, frames_per_beat)
     samples_per_beat = RATE * 60.0 / bpm
-    steady = wander < 0.12 and sure > 0.08
 
-    start = first
-    if steady:
-        # The window of the onset analysis sits about half of it ahead of the sound.
-        grid0 = (phase * frames_per_beat * HOP + 1024) % samples_per_beat
-        k = round((first - grid0) / samples_per_beat)
-        start = max(0, int(round(grid0 + k * samples_per_beat)))
+    # Beat Slice counts beats from the very start of the file, so the song starts on one.
+    grid0 = (phase * frames_per_beat * HOP + ONSET_LAG) % samples_per_beat
+    k = round((first - grid0) / samples_per_beat)
+    nearest = grid0 + k * samples_per_beat
+    if first <= RATE * FILE_START and abs(nearest - first) <= RATE * SAME_BEAT:
+        start = first  # sound from the top of the file: the export begins on the project's first beat
+    else:
+        start = int(round(nearest if nearest >= 0 else nearest + samples_per_beat))
     samples_per_bar = samples_per_beat * BEATS_PER_BAR
     bars = int((last - start) / samples_per_bar)
     end = start + int(round(bars * samples_per_bar))
@@ -128,6 +118,10 @@ def make_loop(x, name):
         tail = tail[:len(song)]
         fade = np.linspace(1, 0, len(tail)) ** 1.5
         song[:len(tail)] += tail * fade[:, None]
+    # Any sound just before the first beat leads into it, so it goes at the end of the loop.
+    pickup = x[first:start]
+    if len(pickup):
+        song[-len(pickup):] += pickup
 
     gain = 10 ** ((MEAN_TARGET_DB - 20 * np.log10(np.sqrt((song ** 2).mean()) + 1e-9)) / 20)
     song *= gain
@@ -135,10 +129,10 @@ def make_loop(x, name):
     if peak > 0.97:
         song *= 0.97 / peak
     tail_rms = 20 * np.log10(np.sqrt((tail ** 2).mean()) * gain + 1e-9) if len(tail) else -120
-    print(f"{name}: {bpm} bpm, sure {sure:.2f}, wander {wander:.3f} beat, {'steady' if steady else 'NOT steady'}; "
+    print(f"{name}: {bpm} bpm, sure {sure:.2f}, wander {wander:.3f} beat; "
           f"starts {start / RATE:.3f}s (sound at {first / RATE:.3f}s), {bars} bars = {len(song) / RATE:.2f}s, "
           f"tail {len(tail) / RATE:.2f}s at {tail_rms:.1f} dB, gain {20 * np.log10(gain):.1f} dB")
-    return song, bpm if steady else 0
+    return song
 
 
 def encode_ogg(song, out):
@@ -207,10 +201,10 @@ def encode_3ds(song, out):
 def main():
     masters, universal, three_ds = sys.argv[1:4]
     only = sys.argv[4:]
-    for master, name in SONGS:
+    for master, name, bpm in SONGS:
         if only and name not in only:
             continue
-        song, bpm = make_loop(load(os.path.join(masters, master)), name)
+        song = make_loop(load(os.path.join(masters, master)), name, bpm)
         encode_ogg(song, os.path.join(universal, "romfs", "audio", name + ".ogg"))
         encode_3ds(song, os.path.join(three_ds, "romfs", "audio", name + ".pcm"))
         print(f'  SHOP_TRACK("{os.path.splitext(master)[0]}", 300, "Artist. Genre.", "{name}", {bpm})')

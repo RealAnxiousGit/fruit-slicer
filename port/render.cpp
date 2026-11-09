@@ -215,11 +215,12 @@ void reloadTextures() {
 }
 
 void sync() {
-	if (sLoadedBoard == gSave.board) return;
+	const int board = shownBoard();
+	if (sLoadedBoard == board) return;
 	char path[40];
-	snprintf(path, sizeof path, "gfx/board%d.png", gSave.board);
+	snprintf(path, sizeof path, "gfx/board%d.png", board);
 	loadSheet(SHEET_BOARD, path, kRectsBoard);
-	sLoadedBoard = gSave.board;
+	sLoadedBoard = board;
 }
 
 void shutdown() {
