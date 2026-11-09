@@ -95,7 +95,7 @@ void release(void* p) {
 	sUvCache.clear();  // meshes are going away, and the next ones may land at the same addresses
 	free(p);
 }
-void begin(float, float) {}
+void begin(float, float, bool) {}
 void end() {}
 
 struct Lit {
