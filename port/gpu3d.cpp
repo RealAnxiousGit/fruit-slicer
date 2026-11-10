@@ -95,7 +95,14 @@ void release(void* p) {
 	sUvCache.clear();  // meshes are going away, and the next ones may land at the same addresses
 	free(p);
 }
-void begin(float, float, bool) {}
+static m3d::Skin sSkin = {0, 1, 1, 1, 1, 0.32f};
+
+void begin(float, float, bool) { setSkin(nullptr); }
+
+void setSkin(const m3d::Skin* skin) {
+	static const m3d::Skin kPlain = {0, 1, 1, 1, 1, 0.32f};
+	sSkin = skin ? *skin : kPlain;
+}
 void end() {}
 
 struct Lit {
@@ -182,10 +189,11 @@ static inline const Lit& lit(const Vertex* v, u32 i) {
 	float ambient = 0.62f;
 	// Ambient occlusion: less of the room's light reaches the parts of a fruit that face the board.
 	if (gSave.ambientOcc) ambient *= 0.8f + 0.2f * (0.5f - 0.5f * wy);
-	float shade = (ambient + 0.5f * diff) / 255.0f, high = 0.32f * h;
-	l.c.r = clampf(q.r * shade + high, 0, 1);
-	l.c.g = clampf(q.g * shade + high, 0, 1);
-	l.c.b = clampf(q.b * shade + high, 0, 1);
+	float shade = (ambient + 0.5f * diff) / 255.0f, high = sSkin.shine * h;
+	const float grey = (0.3f * q.r + 0.59f * q.g + 0.11f * q.b) * sSkin.mix, keep = 1 - sSkin.mix;
+	l.c.r = clampf((q.r * keep + grey * sSkin.r) * shade + high, 0, 1);
+	l.c.g = clampf((q.g * keep + grey * sSkin.g) * shade + high, 0, 1);
+	l.c.b = clampf((q.b * keep + grey * sSkin.b) * shade + high, 0, 1);
 	l.c.a = 1;
 	return l;
 }
@@ -193,6 +201,7 @@ static inline const Lit& lit(const Vertex* v, u32 i) {
 static inline void emit(SDL_Vertex* o, const Lit& l, float u, float v) {
 	o->position = {l.x, l.y};
 	o->color = l.c;
+	o->color.a = sSkin.alpha;
 	o->tex_coord = {u, v};
 }
 
@@ -230,7 +239,7 @@ static void sortAndDraw(int mesh, const Vertex* v, u32 tris, const u16* idx, con
 		const Lit& la = lit(v, a);
 		const Lit& lb = lit(v, b);
 		const Lit& lc = lit(v, c);
-		if (t * 3 < body && sTex[mesh]) {
+		if (t * 3 < body && sTex[mesh] && sSkin.mix == 0) {  // a skin replaces the printed peel
 			float u0 = uv[a].u, u1 = uv[b].u, u2 = uv[c].u;
 			float lo = SDL_min(u0, SDL_min(u1, u2)), hi = SDL_max(u0, SDL_max(u1, u2));
 			if (hi - lo > 0.5f) {
