@@ -2,7 +2,7 @@
 
 A free, fan-made fruit-slicing arcade game for Windows, Linux and Android. Swipe to cut fruit out of the air, chain combos and stay away from the bombs. A two-screen version for the Nintendo 3DS lives at [fruit-slicer-3ds](https://github.com/RealAnxiousGit/fruit-slicer-3ds), built from the same game code.
 
-**Version 1.0.0.** Tested on Windows 11 on all four renderers, on Linux under WSL, and on a real Android phone as well as the Android emulator. Native Linux desktops and more phones are still untested, so reports are welcome.
+**Version 1.1.0.** Tested on Windows 11 on all four renderers, on Linux under WSL, and on a real Android phone as well as the Android emulator. Native Linux desktops, more phones and real 4K monitors are still untested, so reports are welcome.
 
 All screenshots are from the Linux version.
 
@@ -23,8 +23,7 @@ Get the files from the [Releases](https://github.com/RealAnxiousGit/fruit-slicer
 
 | Platform | File | How to run |
 | --- | --- | --- |
-| Windows 10 or 11 | `FruitSlicer-*-windows-x64.zip` | Unzip it and run `FruitSlicer.exe`. Keep the `romfs` folder beside the game. |
-| Linux | `FruitSlicer-*-x86_64.AppImage` | Mark it as executable and run it. |
+| Windows 10 or 11 | `FruitSlicer-*-windows-x64.zip` | Unzip it and run `FruitSlicer.exe`. Keep the `romfs` folder beside the game. || Linux | `FruitSlicer-*-x86_64.AppImage` | Mark it as executable and run it. |
 | Linux | `FruitSlicer-*-linux-x86_64.tar.gz` | Unpack it and run `FruitSlicer`. |
 | Android 5.0 or newer | `FruitSlicer-*-android.apk` | Open it on your phone and allow the install. |
 
@@ -37,7 +36,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | Windows and Linux | Action |
 | --- | --- |
 | Mouse | Hold the button and swipe to slice. Click anything in a menu. |
-| Mouse wheel | Scroll a settings list |
+| Mouse wheel | Scroll a settings list, the Shop, the Fruit Journal or the track list, or turn Pick a Game's page |
 | Escape | Pause, and go back one menu. Hold it for 3 seconds on the title to quit. |
 | Arrow keys or WASD | Move the selector, change a setting |
 | Enter or Space | Select |
@@ -45,7 +44,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 
 | Android | Action |
 | --- | --- |
-| Finger | Swipe to slice. Swipe across a menu fruit to pick it, and drag a settings list to scroll. |
+| Finger | Swipe to slice. Swipe across a menu fruit to pick it, and drag a list or the Shop to scroll. |
 | Pause sign, top left | Open the pause menu. Resume carries on. |
 | Back | Pause, and go back one menu. On the title screen, leave the game. |
 
@@ -53,6 +52,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | --- | --- |
 | Left stick | Move the blade point. Hold the right trigger to slice, or set Stick Slicing to Flick and slice with fast moves. |
 | D-pad | Move the selector, change a setting |
+| Right trigger, in menus | Hold it and the left stick moves a blade point that slices menu signs like a finger |
 | A (Cross) | Select |
 | B (Circle) | Go back |
 | Start | Pause |
@@ -64,14 +64,20 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | Mode | Rules |
 | --- | --- |
 | Classic | Three missed fruit and you're out. A bomb ends the run. |
-| Arcade | 60 seconds. Bombs cost 10 points, your combo and half the Frenzy meter. Slice power-ups: Frost slows time, X2 doubles points, Fruit Storm throws fruit in from the sides. Ends on the Sunburst Fruit. |
-| Zen | 90 calm seconds with no bombs and no misses. |
+| Arcade | 60 seconds. Bombs cost 10 points, your combo and half the Frenzy meter. Slice power-ups: Frost slows time, X2 doubles points, Fruit Storm throws fruit in from the sides. More trick fruit than any other mode. Ends on the Sunburst Fruit. |
+| Zen | Calm and endless, with no bombs, no misses and no clock. Finish Run in the pause menu ends it and keeps your score. |
 | Frenzy | 30 seconds of nonstop fruit. Bombs take 5 seconds off the clock, and a Fruit Frenzy throws fruit even faster. A bomb in the last 5 seconds brings the Sunburst Fruit straight away. |
 | Sudden Death | One miss or one bomb ends the run. Fruit is worth double. |
 | Minefield | Bombs take over as the run goes on. Missed fruit is free, and one bomb ends the run. |
-| Combo Rush | 45 seconds of big fruit patterns. Swipe bonuses are doubled and bombs cost 10 points, your combo and half the Frenzy meter. Ends on the Sunburst Fruit. |
+| Combo Rush | Only combos score: a fruit on its own is worth nothing, and each one in a long combo is worth more, up to 12. The bigger your combo, the faster fruit comes. Swipe bonuses are doubled. One bomb or an empty combo meter ends the run, and there is no clock. |
 | Daily Fruit | 60 seconds, the same run for everyone that day on every platform, with no server. A calendar keeps your daily scores and streak, and each day's first run pays a coin bonus. |
 | Beat Slice | 60 seconds to music. Fruit is thrown as usual, but only slices on the beat score, and a streak of them scores more. The board's edges glow when a slice will count. Pick any track you own from the track list. |
+
+Pick a Game shows six signs a page. The arrows beside the signs, left and right, or the mouse wheel turn the page.
+
+**Mixer:** rules that change any mode, in any mix: Low Gravity, Giant Fruit, Tiny Fruit, Mirror, Double Bombs (Zen stays bomb-free) and Sides Only. Runs with a rule on keep their own best scores. Daily Fruit and Beat Slice always play without them.
+
+**Pass and Play:** 2 to 4 players take one run each on the same device, in Classic, Arcade, Frenzy, Sudden Death, Minefield or Combo Rush. Each player has a colour and a name you can type, and a results board shows who won. These runs don't change your bests.
 
 **Practice:** the first Play starts a short, skippable lesson run (a slice, a three-fruit swipe, a coconut, a bomb, a coin, the Frenzy meter and a menu fruit). How to Play replays it.
 
@@ -87,13 +93,21 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 
 **Coconuts** take two hits. The first one cracks the shell and knocks it back up.
 
+**Trick fruit** turn up after the first half minute (from early on in Arcade): spiky fruit stun the blade, grapes burst, honey drags, jelly bounces, chili brings a rush of double points, a banana bunch breaks into bananas you can slice again, a pomegranate sprays seeds that add to the combo when caught in the same swipe, and a rare piñata takes several hits, pays candy points and then drops coins. Dragon fruit splits into three pieces.
+
+**Latency Test:** in Audio settings, a metronome ticks and you slice a fruit in time with it. It sets Beat Timing, which moves Beat Slice's beat to match your screen and sound. Beat Timing can also be set by hand.
+
+**Score cards:** the Share sign on the result screen saves a picture of the result sign with the Fruit Slicer logo, in Pictures, in a Fruit Slicer folder. On Android it opens the share sheet instead.
+
 **Difficulty:** Easy, Normal, Hard and Insane change how fast fruit is thrown and how many bombs come with it. Easy throws the fewest bombs. Hard and Insane can throw two bombs in one wave (never in Sudden Death), and in Minefield bombs make up as much as two thirds of the throws on Insane.
 
 ## Coins, Shop, Journal and Stats
 
 **Coins** spin through the air now and then. Slicing one is worth 5 points and 5 coins, and every 100 points of a run pays 1 more. A coin is never a strike, and a missed one costs nothing. The run's coins show under the score; your total shows in the menus and the pause menu.
 
-**Shop:** spend coins on board themes (Night Picnic, Beach Towel, Kitchen Counter, Snowfall, Autumn Leaves), blade trails (Ink, Flame, Rainbow, Ribbon, Sparkle, Comet) and six recorded music tracks. Items are tried on while selected, and bought items are equipped from the Shop or Options.
+**Shop:** spend coins on board themes (Night Picnic, Beach Towel, Kitchen Counter, Snowfall, Autumn Leaves, Pumpkin Patch, Spring Blossom, Bamboo Mat), blade trails (Ink, Flame, Rainbow, Ribbon, Sparkle, Comet, Sunset, Candy Cane, Aurora), splat colours, fruit skins (Solid Gold and Clear Glass) and thirteen recorded songs. Each tab shows six items; scroll for the rest. Items are tried on while selected, and bought items are equipped from the Shop or Options.
+
+**Seasonal boards:** late October, December and spring bring pumpkins, snow or blossom in place of a free board, never one you bought. Seasonal Boards in Advanced Graphics turns them off.
 
 **Fruit Journal:** a sticker book with a page for every fruit and how many you've sliced. Milestones of 10, 50, 250 and 1000 pay coins.
 
@@ -103,19 +117,21 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 
 ## Options
 
+Each sign shows the main settings. Fine tuning and resets are on the Advanced page at the bottom of it.
+
 | Section | Settings |
 | --- | --- |
-| Audio | Sound Effects, Music and Menu Sounds sliders. Menu Music and Game Music each choose Auto or a track. |
-| Visuals | Art Style (3D Models or 2D Stickers), Board, Blade, Trail, Effects, 3D Detail, Slice Style and Transitions. |
-| Display | Display Mode (windowed, borderless or fullscreen), Resolution with a revert countdown, V-Sync, Renderer, and Graphics: Performance, Quality or Beautiful, or your own mix of Textures, Shadows, Ambient Occlusion, Bloom, Effects, 3D Detail and Render Scale. Android has V-Sync, Renderer and Graphics. |
-| Gameplay | Difficulty (Easy, Normal, Hard, Insane), Fruit Speed, Bomb Amount, Slice Forgiveness, Frenzy Drain and Misses Allowed. Android adds Touch Sensitivity. |
-| Accessibility | UI Scale, Larger Text, High Contrast, Colour-blind Mode, Calm Effects, Screen Shake, Slice Assist, Game Speed, Sound Captions and, with a mouse, Slice Without Holding. |
-| Controls | Stick Slicing (Hold or Flick), Point Speed, Snap Assist and Vibration. |
+| Audio | Sound Effects, Music and Menu Sounds sliders. Menu Music and Game Music each choose Auto or a track. Latency Test and Beat Timing. |
+| Visuals and Display | Art Style (3D Models or 2D Stickers), Board, Blade, Trail, Display Mode (windowed, borderless or fullscreen) and Graphics: Performance, Quality or Beautiful. **Advanced Graphics:** Resolution with a revert countdown, V-Sync, Renderer, Textures (up to Ultra on Windows and Linux), Shadows, Ambient Occlusion, Bloom, Render Scale, Effects, 3D Detail, Slice Style, Transitions and Seasonal Boards. Android has no Display Mode or Resolution. |
+| Gameplay and Controls | Difficulty (Easy, Normal, Hard, Insane), Misses Allowed, Stick Slicing (Hold or Flick), Point Speed and Vibration. **Advanced Gameplay:** Fruit Speed, Bomb Amount, Slice Forgiveness, Frenzy Drain and Snap Assist. Android adds Touch Sensitivity. |
+| Accessibility | UI Scale, Larger Text, High Contrast, Colour-blind Mode, Slice Assist, Sound Captions and, with a mouse, Slice Without Holding. **Advanced Accessibility:** Calm Effects, Screen Shake and Game Speed. |
 | Scores and Data | Check for Updates, Check Now, and reset scores or everything. |
+
+**Ultra textures** (Windows and Linux): signs, text, the logo, the boards and the 3D fruit skins drawn again for 4K screens, about 46 MB of the download. Only Ultra loads them; Low, Medium and High use the regular art.
 
 **Renderers and graphics:** Windows offers DirectX, OpenGL, Vulkan and Software. Linux and Android offer OpenGL, Vulkan and Software. A fresh install starts on DirectX on Windows and OpenGL elsewhere, and a quick hardware check on the first start picks a Graphics preset. Software always uses the 2D stickers. If a renderer can't start on your machine, the game picks one that can.
 
-Scores and settings are saved in `%APPDATA%\RealAnxiousGit\FruitSlicer` on Windows and `~/.local/share/RealAnxiousGit/FruitSlicer` on Linux. Android keeps them in the app's private storage. Saves from 0.4 carry over to 1.0: scores and settings are kept, and coins start at 0.
+Scores and settings are saved in `%APPDATA%\RealAnxiousGit\FruitSlicer` on Windows and `~/.local/share/RealAnxiousGit/FruitSlicer` on Linux. Android keeps them in the app's private storage. Saves from 0.4 carry over to 1.0: scores and settings are kept, and coins start at 0. Saves from 1.0 carry over to 1.1 whole, except that Zen and Combo Rush bests start fresh because those modes have new rules.
 
 ## Build from source
 
@@ -157,7 +173,7 @@ cd android
 
 ## Assets
 
-Everything is generated from code in [`tools/`](tools) with Pillow and numpy: sprites, boards, 3D models, HD textures, logo, font, sound effects and the rest of the music. The six Shop music tracks are recorded music by another artist (see Credits). Apart from those, the project uses no third-party art, fonts, samples or game files. The generated files are committed, so building only needs a compiler. [`tools/gen_steam_art.py`](tools/gen_steam_art.py) draws the cover, banners, logo and icon in [`docs/steam`](docs/steam).
+Everything is generated from code in [`tools/`](tools) with Pillow and numpy: sprites, boards, 3D models, HD textures, logo, font, sound effects and the rest of the music. `gen_sheets.py ultra` and `gen_hd_textures.py ultra` draw the Ultra art in `romfs/gfx4k` and `romfs/tex4k`. The thirteen Shop songs are recorded music (see Credits), converted by [`tools/convert_shop_music.py`](tools/convert_shop_music.py). Apart from those, the project uses no third-party art, fonts, samples or game files. The generated files are committed, so building only needs a compiler. [`tools/gen_steam_art.py`](tools/gen_steam_art.py) draws the cover, banners, logo and icon in [`docs/steam`](docs/steam).
 
 **AI disclosure:** this game was made with an LLM. Claude wrote the code and the generator scripts that produce the art, sound and most of the music, directed and playtested by the project owner.
 
@@ -168,6 +184,20 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed, and [docs/qa](docs/qa) for ho
 Programming by NickBin, with the Claude Code toolkit.
 
 **Music:** the six Shop tracks (Summer House, 8-Bit Hero Quest, Friendly Trap, Unruly Beat, Vengeance Electro and Eternal Explorer) are by [Of Far Different Nature](https://fardifferent.carrd.co/), from "Loop Box #1" and "Loop Box #4" on [OpenGameArt.org](https://opengameart.org), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They were converted (to Ogg Vorbis) and turned down to match the game's loudness.
+
+The seven songs added in 1.1 are by NickBin and friends:
+
+| Song | Artists | Genre |
+| --- | --- | --- |
+| Ahead of the Curve | NickBin, King Bakuyo Pro | Drum & Bass |
+| SPARE FOR ME | NickBin ft. Mq_ | Hyperpop |
+| My Own Fright | NickBin ft. Cabex Music | Pop |
+| WORTHLESS ENEMY | NickBin ft. Aneolent | Metal |
+| Lies | NickBin | EDM |
+| Lies (VIP Remix) | NickBin | EDM |
+| JUST STAY WITH ME | NickBin | Dariacore |
+
+They were cut to whole bars so they loop cleanly, and matched to the game's loudness.
 
 **Libraries and build tools:**
 
@@ -188,6 +218,6 @@ Programming by NickBin, with the Claude Code toolkit.
 
 ## License
 
-Code and assets are licensed under [CC BY-NC 4.0](LICENSE): free to share and adapt with credit, not for commercial use. The Shop music tracks keep their own CC BY 4.0 license from their author. SDL is used under the zlib license, and its Android Java files are included in `android/app/src/main/java/org/libsdl`.
+Code and assets are licensed under [CC BY-NC 4.0](LICENSE): free to share and adapt with credit, not for commercial use. The six Of Far Different Nature tracks keep their own CC BY 4.0 license from their author. SDL is used under the zlib license, and its Android Java files are included in `android/app/src/main/java/org/libsdl`.
 
 This is an independent fan project, not affiliated with or endorsed by any game publisher.

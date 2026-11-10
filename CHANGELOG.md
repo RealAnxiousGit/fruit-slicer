@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0
+
+Saves from 1.0 carry over: scores, coins, unlocks and settings are kept. Zen and Combo Rush play by new rules, so their old best scores are cleared once, the first time 1.1 opens your save, and start fresh.
+
+### New
+
+- **Mixer:** a sign on Pick a Game with rules that combine on any mode: Low Gravity, Giant Fruit, Tiny Fruit, Mirror, Double Bombs and Sides Only. Runs with any rule on keep their own best scores. Daily Fruit and Beat Slice always play without them.
+- **Pass and Play:** 2 to 4 players take one run each on the same device, in Classic, Arcade, Frenzy, Sudden Death, Minefield or Combo Rush. Each player has a colour and a name you can type, and a results board shows who won. These runs don't change your bests.
+- **New trick fruit:** a banana bunch that breaks into bananas you can slice again, a pomegranate whose seeds add to the combo when caught in the same swipe, and a rare piñata that takes several hits, pays candy points and then drops coins. Dragon fruit now splits into three pieces. Each has a Fruit Journal page.
+- **3D coins** that flip as they fly, in the 3D art style.
+- **Latency Test** in Audio settings: a metronome ticks and you slice a fruit in time with it. It sets **Beat Timing**, which moves Beat Slice's beat to match your screen and sound. Beat Timing can also be set by hand.
+- **Score cards:** a Share sign on the result screen saves a picture of the result sign with the Fruit Slicer logo. Windows and Linux save it in Pictures, in a Fruit Slicer folder. Android opens the share sheet.
+- **Ultra textures** (Windows and Linux): signs, text, the logo, the boards and the 3D fruit skins are drawn again for 4K screens. Set Textures in Advanced Graphics to Ultra. It adds about 46 MB to the download.
+- **Controller point in menus:** hold the right trigger and the left stick moves a glowing blade point that slices menu signs like a finger. Let go and the stick moves the selector again.
+- **Seasonal boards:** late October, December and spring bring pumpkins, snow or blossom in place of a free board, never one you bought. Seasonal Boards in Advanced Graphics turns them off.
+- **Shop:** three boards (Pumpkin Patch, Spring Blossom, Bamboo Mat), three trails (Sunset, Candy Cane, Aurora), a Splats tab with six juice colours, a Skins tab with Solid Gold and Clear Glass fruit, and seven songs by NickBin and friends. Each song's description names its artists and genre, and every song plays in Beat Slice.
+
+### Changed
+
+- **Zen is endless:** no timer and no game over. Finish Run in the pause menu ends it and saves your score.
+- **Combo Rush is reworked:** only combos score, and a bigger combo is worth more per fruit. Fruit comes faster as your combo grows. One bomb or an empty combo meter ends the run, and there is no clock.
+- **Arcade** throws more trick fruit and power-ups, starting earlier in the run.
+- **Pick a Game** is split into pages of six signs, with arrows on each side. Left and right turn the page too, and the last page wraps back to the first.
+- **Options** has five signs: Audio, Visuals and Display, Gameplay and Controls, Accessibility, and Scores and Data. Fine tuning and resets moved to an Advanced page at the bottom of each one.
+- **Scrolling:** the Shop, the Fruit Journal, the update notes and the Beat Slice track list all scroll with the mouse wheel or by dragging. A drag never counts as picking something.
+- The Shop shows six items at a time, and only the items scroll.
+
 ## 1.0.0
 
 The first full release. Saves from 0.4 carry over: your scores and settings are kept, and coins start at 0. 0.4 can't update itself, so download 1.0 by hand; from 1.0 on the game can update itself.
