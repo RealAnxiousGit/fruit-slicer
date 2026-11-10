@@ -35,7 +35,7 @@ SOXR = "aresample=resampler=soxr:precision=28"
 OGG_QUALITY = "6"      # about 190 kbit/s: dense, loud masters keep their top end and transients
 TARGET_LUFS = -19.0    # integrated loudness of the game's other music
 MAX_TRUE_PEAK = -1.0   # dBTP
-SEAM = 0.05            # seconds of the ring-out past the last bar faded over the top of the loop
+LOOP_FADE = 0.012      # seconds: the end of the last bar fades out, so the jump back to the start can't click
 BEATS_PER_BAR = 4
 LOW_BINS = 8            # up to about 150 Hz: the kick and bass
 KICK_SURE = 0.15        # how clear the low end's beat must be before it decides where the grid sits
@@ -143,12 +143,12 @@ def make_loop(x, name, bpm, out=None):
     song = padded[start_out + lead:end_out + lead].copy()
     tail = padded[end_out + lead:last_out + lead]
 
-    # The loop goes from the end of the last whole bar straight back to its start. Only the first moment of the
-    # ring-out past that bar is faded over the top of the loop, which keeps the join smooth without smearing
-    # the song's opening.
-    seam = min(len(tail), int(rate_out * SEAM), len(song))
-    if seam:
-        song[:seam] += tail[:seam] * (np.cos(np.linspace(0, np.pi / 2, seam)) ** 2)[:, None]
+    # The loop goes from the end of the last whole bar straight back to its start. The file starts exactly as the
+    # song does, since a first play and every Shop preview begin there: laying the ring-out past the last bar over
+    # the opening put a burst of the song's ending on top of a quiet intro. The ring-out is let go instead, with a
+    # short fade at the bar line; the downbeat that follows covers it.
+    fade = min(int(rate_out * LOOP_FADE), len(song))
+    song[len(song) - fade:] *= (np.cos(np.linspace(0, np.pi / 2, fade)) ** 2)[:, None]
 
     lufs, peak = loudness(song, rate_out)
     gain_db = TARGET_LUFS - lufs
@@ -158,7 +158,7 @@ def make_loop(x, name, bpm, out=None):
     tail_db = 20 * np.log10(np.sqrt((tail ** 2).mean()) + 1e-9) + gain_db if len(tail) else -120
     print(f"{name}: {bpm} bpm, sure {sure:.2f}, wander {wander:.3f} beat; "
           f"starts {seconds:.3f}s (sound at {first / RATE:.3f}s), {bars} bars = {len(song) / rate_out:.2f}s, "
-          f"ring-out {len(tail) / rate_out:.2f}s at {tail_db:.1f} dB ({seam / rate_out * 1000:.0f} ms kept), "
+          f"ring-out {len(tail) / rate_out:.2f}s at {tail_db:.1f} dB (let go), "
           f"{lufs:.1f} LUFS, gain {gain_db:.1f} dB")
     return song
 

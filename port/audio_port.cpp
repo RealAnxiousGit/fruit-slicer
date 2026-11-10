@@ -154,12 +154,24 @@ static void latencyTest() {
 }
 #endif
 
+// The device's buffer. Windows keeps up with about 5 ms, which keeps a press and its sound close together.
+// Phones and Linux sound servers (PipeWire, PulseAudio, and WSLg, which sends sound on over a remote link)
+// miss refills of a buffer that small and the sound breaks up, so they get about 21 ms.
+#ifdef _WIN32
+static constexpr int kDeviceFrames = 256;
+#else
+static constexpr int kDeviceFrames = 1024;
+#endif
+static int sDeviceFrames = kDeviceFrames;  // what the device really took
+
 bool init() {
+	char frames[16];
+	SDL_snprintf(frames, sizeof frames, "%d", kDeviceFrames);
 #ifdef TEST_LATENCY
 	const char* tryFrames = SDL_getenv("FS_LAT_FRAMES");
-	SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, tryFrames ? tryFrames : "256");
+	SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, tryFrames ? tryFrames : frames);
 #else
-	SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");  // about 5 ms: keeps a press and its sound close together
+	SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, frames);
 #endif
 	if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
 		fprintf(stderr, "[audio] %s\n", SDL_GetError());
@@ -178,6 +190,12 @@ bool init() {
 		return false;
 	}
 	SDL_ResumeAudioStreamDevice(sStream);
+	{
+		SDL_AudioSpec dev = {};
+		int got = 0;
+		if (SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(sStream), &dev, &got) && got > 0) sDeviceFrames = got;
+		fprintf(stderr, "[audio] %s, %d Hz, %d frames a buffer\n", SDL_GetCurrentAudioDriver(), dev.freq, sDeviceFrames);
+	}
 #ifdef TEST_LATENCY
 	latencyTest();
 #endif
@@ -273,8 +291,10 @@ void musicRate(float factor) {
 
 float musicTime() {
 	SDL_LockMutex(sLock);
-	// The mixer runs a chunk ahead of the speakers; what the player hears is about half a chunk behind.
-	float t = sMusic.on && sMusicBase > 0 ? (float)(sMusic.pos / (sMusicBase * kRate)) - 0.5f * kChunk / kRate : -1.0f;
+	// The mixer runs a chunk ahead of the speakers; what the player hears is about half a chunk behind, and
+	// further behind again by however much bigger the device's buffer is than Windows' 256 frames.
+	const float behind = (0.5f * kChunk + (sDeviceFrames > 256 ? sDeviceFrames - 256 : 0)) / kRate;
+	float t = sMusic.on && sMusicBase > 0 ? (float)(sMusic.pos / (sMusicBase * kRate)) - behind : -1.0f;
 	if (sMusic.on && t < 0 && sMusic.samples) t += (float)(sMusic.samples / (sMusicBase * kRate));
 	SDL_UnlockMutex(sLock);
 	return t;

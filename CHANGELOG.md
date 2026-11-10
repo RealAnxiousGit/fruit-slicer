@@ -29,6 +29,10 @@ Saves from 1.0 carry over: scores, coins, unlocks and settings are kept. Zen and
 - The Shop shows six items at a time, and only the items scroll.
 - **Shop songs:** Use makes a song both your Menu Music and your Game Music. A song you are trying on plays for 8 seconds, fades out, and the music you chose comes back.
 - **Music sounds better:** the Shop's songs are encoded again at higher quality and at the game's own sample rate, play from their real first beat, and all sit at the same loudness. Music is a little louder overall, with the sound effects still clear on top.
+- **Credits** are a list you scroll with the mouse wheel, Up and Down, or by dragging, in sections: Programming, Music, Shop Music, Art and Sound, Built With, Toolkits and License. There's room to add more.
+- **Shop songs start cleanly:** the end of each song no longer sounds over its first beat, which was the noise at the start of a preview.
+- **Smoother sound on Android and Linux:** the game hands the sound system bigger pieces of audio, and reads music at a steady pace while it plays, so sound no longer stutters on phones or under PulseAudio and PipeWire. Windows keeps its quicker setting.
+- **Roomier text:** long Shop names wrap onto two lines, long menu fruit labels go on two rings, and mode names, settings labels and the Shop's info sign have more space around them.
 - **Quit Game** hits harder: more blasts, a shock ring and booms that roll across the window, and the screen shakes as much as the Screen Shake setting says (less with Calm Effects).
 
 ## 1.0.0
