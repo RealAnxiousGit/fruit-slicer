@@ -13,6 +13,7 @@
 #define PORT_ULTRA (!PORT_ANDROID)  // Textures: Ultra, the 4K art in romfs/gfx4k and romfs/tex4k
 #define PORT_HAS_VORBIS 1  // recorded Shop music ships as Ogg Vorbis here
 #define PORT_CUSTOM_MUSIC 1  // the player's own songs for Beat Slice, from a Custom Music folder
+#define PORT_QUIT_BOMB 1     // the Quit Game bomb on the title
 #define PORT_TWO_SCREENS 0
 #define PORT_HAS_SENSITIVITY PORT_ANDROID
 #define PORT_PAUSE_BUTTON PORT_ANDROID
@@ -71,9 +72,14 @@ extern const int kRendererCount;
 #define PORT_UPGRADE_V4(data, size) if ((size) > 60) gSave.renderer = (data)[60]; gSave.hwChecked = 1; gSave.preset = 3;
 #define PORT_CHECK_SETTINGS 	if (gSave.renderer >= kRendererCount) gSave.renderer = 0; 	if (gSave.windowMode > 2) gSave.windowMode = 0; 	gSave.vsync &= 1; gSave.ambientOcc &= 1; gSave.hwChecked &= 1; 	if (gSave.preset > 3) gSave.preset = 1; 	if (gSave.texQuality > (PORT_ULTRA ? 3 : 2)) gSave.texQuality = 2; 	if (gSave.shadowQuality > 2) gSave.shadowQuality = 2; 	if (gSave.bloom > 2) gSave.bloom = 1; 	if (gSave.renderScale > 2) gSave.renderScale = 1;
 
-// The field fruit flies over, in game units: 16:9, the same height as the 3DS field.
-constexpr int kFieldW = 427;
-constexpr int kFieldH = 240;
+// The field fruit flies over, in game units. On a 16:9 screen it's 427 x 240, the same height as the 3DS
+// field. Its shape follows the window (render.cpp, updateField): a squarer window makes it taller, and an
+// upright one (a phone held upright, a tall window) narrower and taller still, so the game fills
+// any screen. Throws and gravity scale with its height (kFieldK), so fruit spends the same time in the air.
+extern float gFieldW, gFieldH;
+#define kFieldW gFieldW
+#define kFieldH gFieldH
+#define kFieldK (gFieldH / 240.0f)
 constexpr float kFieldTop = 34;      // the score sign covers this much
 constexpr float kFillX = -500;       // full-field washes also cover any bars beside the field
 constexpr float kFillW = 1427;

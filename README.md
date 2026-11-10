@@ -23,9 +23,12 @@ Get the files from the [Releases](https://github.com/RealAnxiousGit/fruit-slicer
 
 | Platform | File | How to run |
 | --- | --- | --- |
-| Windows 10 or 11 | `FruitSlicer-*-windows-x64.zip` | Unzip it and run `FruitSlicer.exe`. Keep the `romfs` folder beside the game. || Linux | `FruitSlicer-*-x86_64.AppImage` | Mark it as executable and run it. |
+| Windows 10 or 11 | `FruitSlicer-*-windows-x64.zip` | Unzip it and run `FruitSlicer.exe`. Keep the `romfs` folder beside the game. |
+| Linux | `FruitSlicer-*-x86_64.AppImage` | Mark it as executable and run it. |
 | Linux | `FruitSlicer-*-linux-x86_64.tar.gz` | Unpack it and run `FruitSlicer`. |
 | Android 5.0 or newer | `FruitSlicer-*-android.apk` | Open it on your phone and allow the install. |
+
+**Any screen shape:** the field takes your window's shape. A wide window gets the usual field, and a tall one, like a phone held upright, gets a tall, narrow field that fills it.
 
 The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or something similar.
 

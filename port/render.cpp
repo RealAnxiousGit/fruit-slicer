@@ -184,14 +184,14 @@ bool init() {
 	if (strcmp(driver, "software") != 0) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #if PORT_ANDROID
 	flags |= SDL_WINDOW_FULLSCREEN;
-	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait");  // the field follows any shape
 #endif
 	sWindow = SDL_CreateWindow("Fruit Slicer", 1280, 720, flags);
 	if (!sWindow) {
 		fprintf(stderr, "[gfx] no window: %s\n", SDL_GetError());
 		return false;
 	}
-	SDL_SetWindowMinimumSize(sWindow, 640, 360);
+	SDL_SetWindowMinimumSize(sWindow, 360, 360);  // any shape: an upright window gets a tall field (updateField)
 	sRenderer = SDL_CreateRenderer(sWindow, driver);
 	if (!sRenderer) {
 		// Not every machine has every API, so a bad choice must never stop the game from starting.
@@ -497,7 +497,32 @@ void beginCorner() {
 	sShaking = sMenuShake;
 }
 
+}  // namespace gfx
+
+float gFieldW = 427, gFieldH = 240;
+
+namespace gfx {
+// The field takes the window's shape. 16:9 and wider: 427 x 240, with bars at the sides. Squarer: as wide,
+// and taller. Upright: it narrows from 427 (square) to 240 (9:16) and keeps growing taller from there, so
+// a fruit is about as big on an upright phone as on the same phone turned sideways.
+void fieldFor(float a, float* w, float* h) {
+	if (a >= 16.0f / 9) {
+		*w = 427;
+		*h = 240;
+	} else if (a >= 1) {
+		*w = 427;
+		*h = 427 / a;
+	} else {
+		const float t = SDL_clamp((a - 9.0f / 16) / (1 - 9.0f / 16), 0.0f, 1.0f);
+		*w = 240 + (427 - 240) * t;
+		*h = *w / a;
+	}
+}
+
+static void updateField() { fieldFor(sWinH > 0 ? sWinW / sWinH : 16.0f / 9, &gFieldW, &gFieldH); }
+
 static inline float fieldUnit() {
+	updateField();
 	float a = sWinW / kFieldW, b = sWinH / kFieldH;
 	return a < b ? a : b;
 }
