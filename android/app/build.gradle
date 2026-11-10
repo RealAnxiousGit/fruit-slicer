@@ -54,8 +54,11 @@ android {
 }
 
 // The game looks for romfs/ inside the APK, the same folder the desktop builds keep beside the game.
+// The Ultra art (gfx4k, tex4k) stays out: a phone screen is already sharp with the normal art.
 tasks.register('copyGameAssets', Copy) {
-    from('../../romfs')
+    from('../../romfs') {
+        exclude 'gfx4k/**', 'tex4k/**'
+    }
     into(layout.buildDirectory.dir("gameAssets/romfs"))
 }
 preBuild.dependsOn copyGameAssets

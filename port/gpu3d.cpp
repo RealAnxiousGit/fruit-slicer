@@ -42,8 +42,15 @@ static constexpr float kWhiteV = 0.995f;
 
 static SDL_Texture* loadDetail(const char* name) {
 	char path[64];
-	snprintf(path, sizeof path, "tex/%s.png", name);
-	SDL_Surface* src = gfx::halveForQuality(gfx::loadPng(path), 2);
+	SDL_Surface* src = nullptr;
+	if (gfx::ultraArt()) {  // Textures: Ultra, with the normal map if a 4K one is missing
+		snprintf(path, sizeof path, "tex4k/%s.png", name);
+		src = gfx::loadPng(path);
+	}
+	if (!src) {
+		snprintf(path, sizeof path, "tex/%s.png", name);
+		src = gfx::halveForQuality(gfx::loadPng(path), 2);
+	}
 	if (!src) return nullptr;
 	SDL_Surface* rgb = SDL_ConvertSurface(src, SDL_PIXELFORMAT_RGBA32);
 	SDL_DestroySurface(src);

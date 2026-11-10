@@ -12,6 +12,7 @@ from PIL import Image
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 W, H = 512, 256
+S = 1  # 2 for Textures: Ultra (romfs/tex4k): the same fruit skin, twice the pixels each way
 
 
 def band(rng, lo, hi, sx=1.0, sy=1.0):
@@ -31,7 +32,7 @@ def spots(rng, count, radius):
     grid[rng.integers(0, H, count), rng.integers(0, W, count)] = 1
     fy = np.fft.fftfreq(H)[:, None]
     fx = np.fft.rfftfreq(W)[None, :]
-    k = np.exp(-2 * (np.pi * radius) ** 2 * (fx * fx + fy * fy))
+    k = np.exp(-2 * (np.pi * radius * S) ** 2 * (fx * fx + fy * fy))
     out = np.fft.irfft2(np.fft.rfft2(grid) * k, s=(H, W))
     return np.clip(out / out.max() * 1.6, 0, 1)
 
@@ -92,8 +93,8 @@ def make(kind, seed):
     return 0.96 + 0.07 * band(r, 5, 30, sx=0.15) + 0.03 * grain  # sunburst
 
 
-def main():
-    out = os.path.join(ROOT, "romfs", "tex")
+def main(folder="tex"):
+    out = os.path.join(ROOT, "romfs", folder)
     os.makedirs(out, exist_ok=True)
     names = ["apple", "orange", "lemon", "pear", "plum", "melon", "kiwi", "berry", "peach", "pineapple", "coconut", "gold", "bomb", "sunburst",
              "banana", "mango", "cherry", "dragon", "spiky", "grapes", "grape", "honey", "jelly", "chili", "coin", "bunch", "pomegranate", "pinata"]
@@ -104,4 +105,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "ultra":
+        S = 2
+        W, H = W * S, H * S
+        main("tex4k")
+    else:
+        main()

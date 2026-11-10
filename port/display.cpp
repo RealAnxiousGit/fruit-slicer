@@ -209,6 +209,9 @@ void displayStart() {
 			h = 1080;
 		}
 #endif
+#ifdef AUTOTEST
+		if (const char* size = SDL_getenv("FRUIT_SLICER_WINDOW")) sscanf(size, "%dx%d", &w, &h);  // test photos at 4K
+#endif
 		if (w != 1280) SDL_SetWindowSize(gfx::window(), w, h);
 		sNow = fromSave();
 		applyVsync();

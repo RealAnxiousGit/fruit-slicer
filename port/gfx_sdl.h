@@ -8,6 +8,8 @@ SDL_Window* window();
 bool softwareRenderer();
 bool lowMemory();  // a phone with under 3 GB: pictures load at half size
 SDL_Surface* halveForQuality(SDL_Surface* s, int keepFrom);  // half size below this Texture Quality (or on a phone short on memory)
+bool ultraArt();     // Textures is on Ultra and this machine can use it: load the 4K art
+bool ultraLoaded();  // the 4K sheets are what's loaded now
 void pushTris(SDL_Texture* tex, const SDL_Vertex* v, int count);
 SDL_Vertex* reserveTris(SDL_Texture* tex, int count);  // room for this many vertices, to fill before the next draw
 void toScreen(float x, float y, float* sx, float* sy);

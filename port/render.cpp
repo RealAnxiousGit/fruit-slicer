@@ -7,6 +7,12 @@
 
 #include "gfx_sdl.h"
 #include "sheet_rects.h"
+#if PORT_ULTRA
+#include "sheet_rects_ultra.h"
+#define ULTRA_RECTS(t) t
+#else
+#define ULTRA_RECTS(t) nullptr
+#endif
 #ifdef TEST_RECORD
 #include "audio_port.h"
 #endif
@@ -143,6 +149,31 @@ static bool loadSheet(SheetId id, const char* path, const SheetRect* rects) {
 	return t != nullptr;
 }
 
+// Textures: Ultra loads the 4K art from romfs/gfx4k. A sheet whose 4K file is missing, or too big for the
+// graphics card, falls back to the normal one, so Ultra can never leave the game without art.
+static bool sUltraLoaded;
+bool ultraArt() { return PORT_ULTRA && gSave.texQuality == 3 && !lowMemory() && !sSoftware; }
+bool ultraLoaded() { return sUltraLoaded; }
+
+static bool loadArt(SheetId id, const char* name, const SheetRect* rects, const SheetRect* ultraRects) {
+	char path[48];
+	if (ultraRects && ultraArt()) {
+		snprintf(path, sizeof path, "gfx4k/%s.png", name);
+		if (loadSheet(id, path, ultraRects)) {
+			if (id == SHEET_SPRITES) sUltraLoaded = true;
+			return true;
+		}
+	}
+	if (id == SHEET_SPRITES) sUltraLoaded = false;
+	snprintf(path, sizeof path, "gfx/%s.png", name);
+	return loadSheet(id, path, rects);
+}
+
+static bool loadAllSheets() {
+	return loadArt(SHEET_FONT, "font", kRectsFont, ULTRA_RECTS(kRectsFontUltra)) & loadArt(SHEET_SPRITES, "sprites", kRectsSprites, ULTRA_RECTS(kRectsSpritesUltra)) &
+	       loadArt(SHEET_LOGO, "logo", kRectsLogo, ULTRA_RECTS(kRectsLogoUltra)) & loadArt(SHEET_FRUIT, "fruit", kRectsFruit, ULTRA_RECTS(kRectsFruitUltra));
+}
+
 bool init() {
 	int choice = gSave.renderer < kRendererCount ? gSave.renderer : 0;
 	const char* forced = SDL_getenv("FRUIT_SLICER_RENDERER");
@@ -199,8 +230,7 @@ bool init() {
 	SDL_SetRenderDrawBlendMode(sRenderer, SDL_BLENDMODE_BLEND);
 	sBatch = (SDL_Vertex*)SDL_malloc(kBatchMax * sizeof(SDL_Vertex));
 	if (!sBatch) return false;
-	bool ok = loadSheet(SHEET_FONT, "gfx/font.png", kRectsFont) && loadSheet(SHEET_SPRITES, "gfx/sprites.png", kRectsSprites) &&
-	          loadSheet(SHEET_LOGO, "gfx/logo.png", kRectsLogo) && loadSheet(SHEET_FRUIT, "gfx/fruit.png", kRectsFruit);
+	bool ok = loadAllSheets();
 	sync();
 	return ok && sSheets[SHEET_BOARD].tex;
 }
@@ -208,20 +238,26 @@ bool init() {
 int loadStepCount() { return 1; }
 void loadStep(int) { sync(); }
 
+// The font and logo only change size for Ultra, so they reload only when Ultra comes or goes.
 void reloadTextures() {
-	loadSheet(SHEET_SPRITES, "gfx/sprites.png", kRectsSprites);
-	loadSheet(SHEET_FRUIT, "gfx/fruit.png", kRectsFruit);
+	if (ultraArt() != sUltraLoaded) {
+		loadAllSheets();
+	} else {
+		loadArt(SHEET_SPRITES, "sprites", kRectsSprites, ULTRA_RECTS(kRectsSpritesUltra));
+		loadArt(SHEET_FRUIT, "fruit", kRectsFruit, ULTRA_RECTS(kRectsFruitUltra));
+	}
 	sLoadedBoard = -1;
 	sync();
 	m3dport::reloadTextures();
 }
 
+// Only the board on show is kept, which matters most for Ultra: a 4K board is about 33 MB.
 void sync() {
 	const int board = shownBoard();
 	if (sLoadedBoard == board) return;
-	char path[40];
-	snprintf(path, sizeof path, "gfx/board%d.png", board);
-	loadSheet(SHEET_BOARD, path, kRectsBoard);
+	char name[16];
+	snprintf(name, sizeof name, "board%d", board);
+	loadArt(SHEET_BOARD, name, kRectsBoard, ULTRA_RECTS(kRectsBoardUltra));
 	sLoadedBoard = board;
 }
 
