@@ -36,6 +36,8 @@ static float sClipX0, sClipY0, sClipX1 = 1280, sClipY1 = 720;  // where drawing 
 static float sBaseX, sBaseY, sShakeX, sShakeY;
 static bool sShaking;
 static char sShotPath[300];
+static float sShotArea[4];  // part of the frame to keep, as fractions of it; no width keeps all of it
+static int sShotResult;     // 1 saved, -1 failed, 0 nothing yet
 #ifdef TEST_RECORD
 static FILE* sRecord;  // trailer capture: ffmpeg, taking every frame
 #endif
@@ -330,12 +332,23 @@ void endFrame() {
 	recordFrame();
 #endif
 	if (sShotPath[0]) {
-		SDL_Surface* s = SDL_RenderReadPixels(sRenderer, nullptr);
-		if (s) {
-			SDL_SavePNG(s, sShotPath);
+		bool ok = false;
+		if (SDL_Surface* s = SDL_RenderReadPixels(sRenderer, nullptr)) {
+			if (sShotArea[2] > 0) {
+				// The window may be bigger than what Render Scale drew, so the area is kept as fractions.
+				SDL_Rect r = {(int)(sShotArea[0] * s->w), (int)(sShotArea[1] * s->h), (int)(sShotArea[2] * s->w), (int)(sShotArea[3] * s->h)};
+				SDL_Surface* part = r.w > 0 && r.h > 0 ? SDL_CreateSurface(r.w, r.h, s->format) : nullptr;
+				SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);  // a straight copy
+				if (part && SDL_BlitSurface(s, &r, part, nullptr)) ok = SDL_SavePNG(part, sShotPath);
+				if (part) SDL_DestroySurface(part);
+			} else {
+				ok = SDL_SavePNG(s, sShotPath);
+			}
 			SDL_DestroySurface(s);
 		}
+		sShotResult = ok ? 1 : -1;
 		sShotPath[0] = 0;
+		sShotArea[2] = 0;
 	}
 	Uint64 from = SDL_GetTicksNS();
 	SDL_RenderPresent(sRenderer);
@@ -395,6 +408,22 @@ bool beginTop(int eye) {
 	sShaking = false;
 	clipTo(m.picX, m.picY, 400 * m.picScale, 240 * m.picScale);
 	return true;
+}
+
+void requestShotArea(const char* path, float x, float y, float w, float h) {
+	MenuLayout m = menuLayout();
+	sShotArea[0] = (m.picX + x * m.picScale) / sWinW;
+	sShotArea[1] = (m.picY + y * m.picScale) / sWinH;
+	sShotArea[2] = w * m.picScale / sWinW;
+	sShotArea[3] = h * m.picScale / sWinH;
+	sShotResult = 0;
+	requestShot(path);
+}
+
+int shotResult() {
+	const int r = sShotResult;
+	sShotResult = 0;
+	return r;
 }
 
 void beginBottom() {

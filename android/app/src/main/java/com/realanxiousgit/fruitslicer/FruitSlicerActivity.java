@@ -2,8 +2,10 @@ package com.realanxiousgit.fruitslicer;
 
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
+import android.net.Uri;
 import android.os.Build;
 
 import java.io.File;
@@ -64,6 +66,27 @@ public class FruitSlicerActivity extends SDLActivity {
                 session.commit(PendingIntent.getActivity(ctx, id, status, flags).getIntentSender());
             }
             apk.delete();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Score cards (port/port_main.cpp): offers the picture to any app that takes one. CardProvider lends
+    // the file only to the app the player picks, so no storage permission is needed.
+    public static boolean shareCard(String path) {
+        try {
+            Activity ctx = SDL.getContext();
+            File file = new File(path);
+            Uri uri = Uri.parse("content://" + CardProvider.AUTHORITY + "/" + Uri.encode(file.getName()));
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("image/png");
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.setClipData(ClipData.newRawUri("", uri));
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, "Share your score");
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            ctx.startActivity(chooser);
             return true;
         } catch (Exception e) {
             return false;

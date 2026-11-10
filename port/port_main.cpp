@@ -3,6 +3,10 @@
 #include <SDL3/SDL_main.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+#ifdef __ANDROID__
+#include <jni.h>
+#endif
 
 #include "app.h"
 #include "common.h"
@@ -427,6 +431,85 @@ int main(int, char**) {
 // Vibration: the phone's own motor. Controllers rumble through SDL's gamepad API instead.
 namespace port {
 void openLink(const char* url) { SDL_OpenURL(url); }
+
+// Score cards. A phone keeps only the newest one, in the game's own files, and lends it to the app the
+// player picks through CardProvider (android/.../CardProvider.java). A computer keeps every one.
+static char sCardPath[400];
+static bool sCardWaiting;
+
+void shareCard(float x, float y, float w, float h) {
+	char name[64];
+	const time_t now = time(nullptr);
+	strftime(name, sizeof name, "Fruit Slicer %Y-%m-%d %H-%M-%S.png", localtime(&now));
+	char folder[300];
+#if PORT_ANDROID
+	const char* base = SDL_GetAndroidInternalStoragePath();
+	snprintf(folder, sizeof folder, "%s/cards/", base ? base : ".");
+	SDL_CreateDirectory(folder);
+	SDL_EnumerateDirectory(folder, [](void* dir, const char*, const char* file) {
+		char old[400];
+		snprintf(old, sizeof old, "%s%s", (const char*)dir, file);
+		SDL_RemovePath(old);
+		return SDL_ENUM_CONTINUE;
+	}, folder);
+#else
+	const char* pics = SDL_GetUserFolder(SDL_FOLDER_PICTURES);
+	if (pics) {
+		snprintf(folder, sizeof folder, "%sFruit Slicer/", pics);
+	} else {
+		dataPath(folder, sizeof folder, "Score Cards/");
+	}
+	SDL_CreateDirectory(folder);
+#endif
+	snprintf(sCardPath, sizeof sCardPath, "%s%s", folder, name);
+	gfx::requestShotArea(sCardPath, x, y, w, h);
+	sCardWaiting = true;
+}
+
+#if PORT_ANDROID
+static bool androidShare(const char* path) {
+	JNIEnv* env = (JNIEnv*)SDL_GetAndroidJNIEnv();
+	jobject act = (jobject)SDL_GetAndroidActivity();
+	if (!env || !act) return false;
+	jclass c = env->GetObjectClass(act);
+	env->DeleteLocalRef(act);
+	jmethodID m = env->GetStaticMethodID(c, "shareCard", "(Ljava/lang/String;)Z");
+	bool ok = false;
+	if (m) {
+		jstring jp = env->NewStringUTF(path);
+		ok = env->CallStaticBooleanMethod(c, m, jp);
+		env->DeleteLocalRef(jp);
+	}
+	if (env->ExceptionCheck()) {
+		env->ExceptionClear();
+		ok = false;
+	}
+	env->DeleteLocalRef(c);
+	return ok;
+}
+#endif
+
+int shareCardPoll(const char** note) {
+	*note = nullptr;
+	if (!sCardWaiting) return 0;
+	const int r = gfx::shotResult();
+	if (r == 0) return 0;
+	sCardWaiting = false;
+	if (r < 0) {
+		*note = "The picture couldn't be saved.";
+		return -1;
+	}
+#if PORT_ANDROID
+	if (!androidShare(sCardPath)) {
+		*note = "Sharing isn't working right now.";
+		return -1;
+	}
+	*note = "Pick where to send it.";
+#else
+	*note = SDL_GetUserFolder(SDL_FOLDER_PICTURES) ? "Saved in Pictures, in Fruit Slicer." : "Saved in the game's Score Cards folder.";
+#endif
+	return 1;
+}
 
 void vibrate(float strength, int ms) {
 	if (!gSave.vibration) return;

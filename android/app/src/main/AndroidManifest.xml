@@ -33,5 +33,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Score cards: lends the picture to the app the player shares it with, and nothing else. -->
+        <provider
+            android:name=".CardProvider"
+            android:authorities="com.realanxiousgit.fruitslicer.cards"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

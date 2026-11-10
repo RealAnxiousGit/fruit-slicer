@@ -15,6 +15,8 @@ float viewScale();
 void windowToGame(float wx, float wy, bool field, int* tx, int* ty);
 SDL_Surface* loadPng(const char* path);  // from the game's assets
 void requestShot(const char* path);      // saves the next finished frame
+void requestShotArea(const char* path, float x, float y, float w, float h);  // only this part of the top screen (top-screen units)
+int shotResult();                        // after a shot: 1 saved, -1 failed, 0 none since last asked
 float presentMs();                       // test builds: how long showing the last frame took
 unsigned trisDrawn();                    // test builds: triangles in the last frame
 }  // namespace gfx
