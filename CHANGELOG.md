@@ -6,7 +6,7 @@ Saves from 1.0 carry over: scores, coins, unlocks and settings are kept. Zen and
 
 ### New
 
-- **Mixer:** a sign on Pick a Game with rules that combine on any mode: Low Gravity, Giant Fruit, Tiny Fruit, Mirror, Double Bombs and Sides Only. Runs with any rule on keep their own best scores. Daily Fruit and Beat Slice always play without them.
+- **Mixer:** rules that combine on any mode: Low Gravity, Giant Fruit, Tiny Fruit, Mirror, Double Bombs and Sides Only. On Pick a Game it's a coconut of its own under the mode's info sign, showing how many rules are on, and Select (Back or View on a controller) opens it from any page. Runs with any rule on keep their own best scores. Daily Fruit and Beat Slice always play without them.
 - **Pass and Play:** 2 to 4 players take one run each on the same device, in Classic, Arcade, Frenzy, Sudden Death, Minefield or Combo Rush. Each player has a colour and a name you can type, and a results board shows who won. These runs don't change your bests.
 - **New trick fruit:** a banana bunch that breaks into bananas you can slice again, a pomegranate whose seeds add to the combo when caught in the same swipe, and a rare piñata that takes several hits, pays candy points and then drops coins. Dragon fruit now splits into three pieces. Each has a Fruit Journal page.
 - **3D coins** that flip as they fly, in the 3D art style.

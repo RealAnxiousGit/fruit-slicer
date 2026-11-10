@@ -75,7 +75,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 
 Pick a Game shows six signs a page. The arrows beside the signs, left and right, or the mouse wheel turn the page.
 
-**Mixer:** rules that change any mode, in any mix: Low Gravity, Giant Fruit, Tiny Fruit, Mirror, Double Bombs (Zen stays bomb-free) and Sides Only. Runs with a rule on keep their own best scores. Daily Fruit and Beat Slice always play without them.
+**Mixer:** rules that change any mode, in any mix: Low Gravity, Giant Fruit, Tiny Fruit, Mirror, Double Bombs (Zen stays bomb-free) and Sides Only. Runs with a rule on keep their own best scores. Daily Fruit and Beat Slice always play without them. Slice the coconut under Pick a Game's info sign to open it, or press Back or View on a controller.
 
 **Pass and Play:** 2 to 4 players take one run each on the same device, in Classic, Arcade, Frenzy, Sudden Death, Minefield or Combo Rush. Each player has a colour and a name you can type, and a results board shows who won. These runs don't change your bests.
 

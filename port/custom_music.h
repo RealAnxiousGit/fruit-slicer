@@ -18,7 +18,7 @@ bool openFolder();         // shows it in the system's file manager, where there
 // into the folder. False if no picker could be shown.
 bool importSongs();
 // Once the picker has closed: how many songs were copied (0 if none, or it was cancelled), and the file
-// name of the first, for the list to pick it. -1 while nothing has come back.
+// name of the first, for the list to pick it. -1 while nothing has come back, -2 if no picker could open.
 int importDone(char* first, int size);
 bool importOpen();         // the picker is on screen
 int importFiles(const char* const* files);  // what the picker does with the files picked (null-ended); the Lab calls it directly

@@ -217,8 +217,18 @@ static bool copyIn(const char* from, const char* name, char* saved, size_t saved
 	return ok;
 }
 
+static bool sImportFailed;
+
 static void SDLCALL picked(void*, const char* const* files, int) {
-	if (!files) fprintf(stderr, "[music] the file picker failed: %s\n", SDL_GetError());
+	if (!files) {
+		// No picker could open (on Linux it needs a desktop portal or zenity): the game shows the folder instead.
+		fprintf(stderr, "[music] the file picker failed: %s\n", SDL_GetError());
+		SDL_LockMutex(sImportLock);
+		sImportFailed = true;
+		sImportOpen = false;
+		SDL_UnlockMutex(sImportLock);
+		return;
+	}
 	importFiles(files);
 }
 
@@ -260,6 +270,11 @@ bool importSongs() {
 int importDone(char* first, int size) {
 	if (!sImportLock) return -1;
 	SDL_LockMutex(sImportLock);
+	if (sImportFailed) {
+		sImportFailed = false;
+		SDL_UnlockMutex(sImportLock);
+		return -2;
+	}
 	const int n = sImportReady ? sImported : -1;
 	if (sImportReady) {
 		snprintf(first, size, "%s", sImportFirst);

@@ -481,6 +481,12 @@ void windowArea(float* x, float* y, float* w, float* h) {
 	*h = sWinH / m.signScale;
 }
 
+void topToCorner(float x, float y, float* cx, float* cy) {
+	MenuLayout m = menuLayout();
+	*cx = (m.picX + x * m.picScale - m.signX) / m.signScale;
+	*cy = (m.picY + y * m.picScale - m.signY) / m.signScale;
+}
+
 void beginCorner() {
 	MenuLayout m = menuLayout();
 	flush();
