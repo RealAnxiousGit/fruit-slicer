@@ -49,6 +49,42 @@ bool running() {
 	if (SDL_HasEvent(SDL_EVENT_QUIT)) sRunning = false;
 	return sRunning;
 }
+
+static char sTyped[32];
+static int sTypeMax, sTypeResult;
+static bool sTyping;
+void textStart(const char* current, int maxLen) {
+	snprintf(sTyped, sizeof sTyped, "%s", current);
+	sTypeMax = maxLen < (int)sizeof sTyped - 1 ? maxLen : (int)sizeof sTyped - 1;
+	sTypeResult = 0;
+	sTyping = true;
+	SDL_StartTextInput(gfx::window());  // on a phone, this brings up the on-screen keyboard
+}
+int textPoll(char* out, size_t size) {
+	snprintf(out, size, "%s", sTyped);
+	return sTypeResult;
+}
+void textStop() {
+	if (sTyping) SDL_StopTextInput(gfx::window());
+	sTyping = false;
+}
+static void textArrived(const char* s) {
+	if (!sTyping || sTypeResult) return;
+	for (int n = (int)strlen(sTyped); *s && n < sTypeMax; s++) {
+		if ((unsigned char)*s >= 128) continue;
+		sTyped[n++] = *s;
+		sTyped[n] = 0;
+	}
+}
+// While a name is being typed every key belongs to it, so a letter can't also move through the menus.
+static bool textKey(SDL_Keycode key) {
+	if (!sTyping || sTypeResult) return false;
+	const size_t n = strlen(sTyped);
+	if (key == SDLK_BACKSPACE && n) sTyped[n - 1] = 0;
+	else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) sTypeResult = 1;
+	else if (key == SDLK_ESCAPE || key == SDLK_AC_BACK) sTypeResult = -1;
+	return true;
+}
 }  // namespace port
 
 // ---------------------------------------------------------------- controllers
@@ -229,7 +265,11 @@ int main(int, char**) {
 				case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
 					port::applyVsync();  // moved to a screen with another refresh rate
 					break;
+				case SDL_EVENT_TEXT_INPUT:
+					port::textArrived(e.text.text);
+					break;
 				case SDL_EVENT_KEY_DOWN: {
+					if (port::textKey(e.key.key)) break;
 					if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT))) {
 						if (!e.key.repeat) port::toggleFullscreen();
 						break;
