@@ -10,7 +10,8 @@ Saves from 1.0 carry over: scores, coins, unlocks and settings are kept. Zen and
 - **Pass and Play:** 2 to 4 players take one run each on the same device, in Classic, Arcade, Frenzy, Sudden Death, Minefield or Combo Rush. Each player has a colour and a name you can type, and a results board shows who won. These runs don't change your bests.
 - **New trick fruit:** a banana bunch that breaks into bananas you can slice again, a pomegranate whose seeds add to the combo when caught in the same swipe, and a rare piñata that takes several hits, pays candy points and then drops coins. Dragon fruit now splits into three pieces. Each has a Fruit Journal page.
 - **3D coins** that flip as they fly, in the 3D art style.
-- **Latency Test** in Audio settings: a metronome ticks and you slice a fruit in time with it. It sets **Beat Timing**, which moves Beat Slice's beat to match your screen and sound. Beat Timing can also be set by hand.
+- **Latency Test** in Audio settings: a metronome ticks and you slice a fruit in time with it. Keep your finger or mouse button down and swipe back and forth: every pass across the fruit counts. It sets **Beat Timing**, which moves Beat Slice's beat to match your screen and sound. Beat Timing can also be set by hand.
+- **Add Songs** in Beat Slice opens your system's file picker. Pick any number of MP3, Ogg, FLAC or WAV songs and they are copied into Custom Music, show up in the track list straight away, and the first one is picked so its beat is found.
 - **Score cards:** a Share sign on the result screen saves a picture of the result sign with the Fruit Slicer logo. Windows and Linux save it in Pictures, in a Fruit Slicer folder. Android opens the share sheet.
 - **Ultra textures** (Windows and Linux): signs, text, the logo, the boards and the 3D fruit skins are drawn again for 4K screens. Set Textures in Advanced Graphics to Ultra. It adds about 46 MB to the download.
 - **Controller point in menus:** hold the right trigger and the left stick moves a glowing blade point that slices menu signs like a finger. Let go and the stick moves the selector again.
@@ -26,6 +27,9 @@ Saves from 1.0 carry over: scores, coins, unlocks and settings are kept. Zen and
 - **Options** has five signs: Audio, Visuals and Display, Gameplay and Controls, Accessibility, and Scores and Data. Fine tuning and resets moved to an Advanced page at the bottom of each one.
 - **Scrolling:** the Shop, the Fruit Journal, the update notes and the Beat Slice track list all scroll with the mouse wheel or by dragging. A drag never counts as picking something.
 - The Shop shows six items at a time, and only the items scroll.
+- **Shop songs:** Use makes a song both your Menu Music and your Game Music. A song you are trying on plays for 8 seconds, fades out, and the music you chose comes back.
+- **Music sounds better:** the Shop's songs are encoded again at higher quality and at the game's own sample rate, play from their real first beat, and all sit at the same loudness. Music is a little louder overall, with the sound effects still clear on top.
+- **Quit Game** hits harder: more blasts, a shock ring and booms that roll across the window, and the screen shakes as much as the Screen Shake setting says (less with Calm Effects).
 
 ## 1.0.0
 

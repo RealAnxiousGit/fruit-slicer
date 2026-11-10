@@ -14,6 +14,15 @@ bool isWav(int i);
 const char* folder();      // the folder itself
 bool openFolder();         // shows it in the system's file manager, where there is one
 
+// Add Songs: the system's file picker, where any number of songs can be picked at once. Each is copied
+// into the folder. False if no picker could be shown.
+bool importSongs();
+// Once the picker has closed: how many songs were copied (0 if none, or it was cancelled), and the file
+// name of the first, for the list to pick it. -1 while nothing has come back.
+int importDone(char* first, int size);
+bool importOpen();         // the picker is on screen
+int importFiles(const char* const* files);  // what the picker does with the files picked (null-ended); the Lab calls it directly
+
 // The beat: tempo, and where the first beat of a bar falls. False until it has been found.
 bool beat(int i, float* bpm, float* first);
 void setBeat(int i, float bpm, float first);  // kept in "beats.txt" in the folder

@@ -81,7 +81,7 @@ Pick a Game shows six signs a page. The arrows beside the signs, left and right,
 
 **Practice:** the first Play starts a short, skippable lesson run (a slice, a three-fruit swipe, a coconut, a bomb, a coin, the Frenzy meter and a menu fruit). How to Play replays it.
 
-**Custom Music** (Windows, Linux and Android): put your own `.mp3`, `.ogg`, `.flac` or 16-bit `.wav` songs in the `Custom Music` folder next to your save (Android: `Android/data/com.realanxiousgit.fruitslicer/files/Custom Music`). They appear in Beat Slice's track list, and the game listens for the beat when you pick one. If it's off, Beat Tool lets you fix it by ear: slower, faster, half, double, earlier, later, a click track and the bar start.
+**Custom Music** (Windows, Linux and Android): press Add Songs in Beat Slice and pick any number of `.mp3`, `.ogg`, `.flac` or 16-bit `.wav` songs in your system's file picker, and they are copied in. You can also put songs in the `Custom Music` folder next to your save yourself (Android: `Android/data/com.realanxiousgit.fruitslicer/files/Custom Music`). They appear in Beat Slice's track list, and the game listens for the beat when you pick one. If it's off, Beat Tool lets you fix it by ear: slower, faster, half, double, earlier, later, a click track and the bar start.
 
 **Scoring:** 1 point per fruit, 3 for a coconut and 5 for a rare golden star fruit. The COMBO count on the sign rises with every fruit, and each 15 adds a 5-point bonus. A bomb or an empty Frenzy meter resets it. A missed fruit does not.
 
@@ -95,7 +95,7 @@ Pick a Game shows six signs a page. The arrows beside the signs, left and right,
 
 **Trick fruit** turn up after the first half minute (from early on in Arcade): spiky fruit stun the blade, grapes burst, honey drags, jelly bounces, chili brings a rush of double points, a banana bunch breaks into bananas you can slice again, a pomegranate sprays seeds that add to the combo when caught in the same swipe, and a rare piñata takes several hits, pays candy points and then drops coins. Dragon fruit splits into three pieces.
 
-**Latency Test:** in Audio settings, a metronome ticks and you slice a fruit in time with it. It sets Beat Timing, which moves Beat Slice's beat to match your screen and sound. Beat Timing can also be set by hand.
+**Latency Test:** in Audio settings, a metronome ticks and you slice a fruit in time with it. You can keep swiping back and forth without letting go. It sets Beat Timing, which moves Beat Slice's beat to match your screen and sound. Beat Timing can also be set by hand.
 
 **Score cards:** the Share sign on the result screen saves a picture of the result sign with the Fruit Slicer logo, in Pictures, in a Fruit Slicer folder. On Android it opens the share sheet instead.
 
@@ -105,7 +105,7 @@ Pick a Game shows six signs a page. The arrows beside the signs, left and right,
 
 **Coins** spin through the air now and then. Slicing one is worth 5 points and 5 coins, and every 100 points of a run pays 1 more. A coin is never a strike, and a missed one costs nothing. The run's coins show under the score; your total shows in the menus and the pause menu.
 
-**Shop:** spend coins on board themes (Night Picnic, Beach Towel, Kitchen Counter, Snowfall, Autumn Leaves, Pumpkin Patch, Spring Blossom, Bamboo Mat), blade trails (Ink, Flame, Rainbow, Ribbon, Sparkle, Comet, Sunset, Candy Cane, Aurora), splat colours, fruit skins (Solid Gold and Clear Glass) and thirteen recorded songs. Each tab shows six items; scroll for the rest. Items are tried on while selected, and bought items are equipped from the Shop or Options.
+**Shop:** spend coins on board themes (Night Picnic, Beach Towel, Kitchen Counter, Snowfall, Autumn Leaves, Pumpkin Patch, Spring Blossom, Bamboo Mat), blade trails (Ink, Flame, Rainbow, Ribbon, Sparkle, Comet, Sunset, Candy Cane, Aurora), splat colours, fruit skins (Solid Gold and Clear Glass) and thirteen recorded songs. Each tab shows six items; scroll for the rest. Items are tried on while selected, and bought items are equipped from the Shop or Options. A song plays for 8 seconds, then your own music comes back; Use puts it on as both the Menu and the Game Music.
 
 **Seasonal boards:** late October, December and spring bring pumpkins, snow or blossom in place of a free board, never one you bought. Seasonal Boards in Advanced Graphics turns them off.
 

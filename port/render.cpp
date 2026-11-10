@@ -41,6 +41,7 @@ static float sWinW = 1280, sWinH = 720;
 static float sClipX0, sClipY0, sClipX1 = 1280, sClipY1 = 720;  // where drawing lands right now
 static float sBaseX, sBaseY, sShakeX, sShakeY;
 static bool sShaking;
+static bool sMenuShake;  // the menus shake too, for the Quit Game blast
 static char sShotPath[300];
 static float sShotArea[4];  // part of the frame to keep, as fractions of it; no width keeps all of it
 static int sShotResult;     // 1 saved, -1 failed, 0 nothing yet
@@ -284,6 +285,7 @@ void setShake(float dx, float dy) {
 	sShakeX = dx;
 	sShakeY = dy;
 }
+void shakeMenus(bool on) { sMenuShake = on; }
 void setBase(float dx, float dy) {
 	sBaseX = dx;
 	sBaseY = dy;
@@ -441,7 +443,7 @@ bool beginTop(int eye) {
 	sScale = m.picScale;
 	sOx = m.picX;
 	sOy = m.picY;
-	sShaking = false;
+	sShaking = sMenuShake;
 	clipTo(m.picX, m.picY, 400 * m.picScale, 240 * m.picScale);
 	return true;
 }
@@ -467,7 +469,7 @@ void beginBottom() {
 	sScale = m.signScale;
 	sOx = m.signX;
 	sOy = m.signY;
-	sShaking = false;
+	sShaking = sMenuShake;
 	clipTo(m.signX, m.signY, 320 * m.signScale, 240 * m.signScale);
 }
 
@@ -486,7 +488,7 @@ void beginCorner() {
 	sScale = m.signScale;
 	sOx = m.signX;
 	sOy = m.signY;
-	sShaking = false;
+	sShaking = sMenuShake;
 }
 
 static inline float fieldUnit() {

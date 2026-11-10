@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "custom_music.h"
+#include "gfx_sdl.h"
 #include "port.h"
 #include "port_api.h"
 #include "song_decoder.h"
@@ -139,6 +140,136 @@ bool openFolder() {
 	return SDL_OpenURL(url);
 #endif
 }
+
+// ---------------------------------------------------------------- Add Songs
+// The picker answers on its own thread on some systems, so what it copied waits here for the game.
+static SDL_Mutex* sImportLock;
+static bool sImportOpen, sImportReady;
+static int sImported;
+static char sImportFirst[128];
+
+static bool songFile(const char* f) {
+	return endsWith(f, ".wav") || endsWith(f, ".ogg") || endsWith(f, ".mp3") || endsWith(f, ".flac");
+}
+
+// The file's own name from what the picker gave: a path, or on Android a content:// address whose
+// last part is often "primary:Music/song.mp3" with %-escapes.
+static void pickedName(const char* from, char* out, size_t size) {
+	const char* last = from;
+	for (const char* p = from; *p; p++)
+		if (*p == '/' || *p == '\\') last = p + 1;
+	char plain[256];
+	size_t o = 0;
+	for (const char* p = last; *p && o < sizeof plain - 1; p++) {
+		if (p[0] == '%' && SDL_isxdigit((unsigned char)p[1]) && SDL_isxdigit((unsigned char)p[2])) {
+			const char hex[3] = {p[1], p[2], 0};
+			plain[o++] = (char)strtol(hex, nullptr, 16);
+			p += 2;
+		} else {
+			plain[o++] = *p;
+		}
+	}
+	plain[o] = 0;
+	const char* name = plain;
+	for (const char* p = plain; *p; p++)
+		if (*p == '/' || *p == '\\' || *p == ':') name = p + 1;
+	o = 0;
+	for (const char* p = name; *p && o < size - 1; p++) {
+		const char c = *p;
+		out[o++] = c == '<' || c == '>' || c == '"' || c == '|' || c == '?' || c == '*' ? '-' : c;  // safe on every file system
+	}
+	out[o] = 0;
+}
+
+// Copies one picked song into the folder. A file of that name already there with the same size is the same
+// song, added before; a different one gets a number added to its name. The size comes from the open file,
+// since an Android content:// address has no path to ask about.
+static bool copyIn(const char* from, const char* name, char* saved, size_t savedSize) {
+	SDL_IOStream* in = SDL_IOFromFile(from, "rb");
+	if (!in) return false;
+	char to[600];
+	snprintf(to, sizeof to, "%s%s", sFolder, name);
+	SDL_PathInfo there;
+	if (SDL_GetPathInfo(to, &there)) {
+		if ((Sint64)there.size == SDL_GetIOSize(in)) {
+			SDL_CloseIO(in);
+			return false;
+		}
+		const char* dot = strrchr(name, '.');
+		const int stem = (int)(dot - name);
+		for (int k = 2; k < 100; k++) {
+			snprintf(to, sizeof to, "%s%.*s (%d)%s", sFolder, stem, name, k, dot);
+			if (!SDL_GetPathInfo(to, nullptr)) break;
+		}
+	}
+	SDL_IOStream* out = SDL_IOFromFile(to, "wb");
+	bool ok = out != nullptr;
+	static char buf[1 << 16];
+	while (ok) {
+		const size_t got = SDL_ReadIO(in, buf, sizeof buf);
+		if (got == 0) break;
+		ok = SDL_WriteIO(out, buf, got) == got;
+	}
+	SDL_CloseIO(in);
+	if (out && !SDL_CloseIO(out)) ok = false;
+	if (!ok) SDL_RemovePath(to);
+	snprintf(saved, savedSize, "%s", to + strlen(sFolder));
+	return ok;
+}
+
+static void SDLCALL picked(void*, const char* const* files, int) {
+	if (!files) fprintf(stderr, "[music] the file picker failed: %s\n", SDL_GetError());
+	importFiles(files);
+}
+
+int importFiles(const char* const* files) {
+	makeFolder();
+	if (!sImportLock) sImportLock = SDL_CreateMutex();
+	int copied = 0;
+	char first[128] = "";
+	for (int i = 0; files && files[i]; i++) {
+		char name[128];
+		pickedName(files[i], name, sizeof name);
+		if (!name[0] || !songFile(name)) continue;
+		char saved[128];
+		if (copyIn(files[i], name, saved, sizeof saved)) {
+			if (!copied) snprintf(first, sizeof first, "%s", saved);
+			copied++;
+		}
+	}
+	SDL_LockMutex(sImportLock);
+	sImported = copied;
+	snprintf(sImportFirst, sizeof sImportFirst, "%s", first);
+	sImportReady = true;
+	sImportOpen = false;
+	SDL_UnlockMutex(sImportLock);
+	return copied;
+}
+
+bool importSongs() {
+	makeFolder();
+	if (!sImportLock) sImportLock = SDL_CreateMutex();
+	if (!sImportLock || sImportOpen) return false;
+	static const SDL_DialogFileFilter kFilters[] = {{"Songs (MP3, Ogg, FLAC, WAV)", "mp3;ogg;flac;wav"}};
+	sImportOpen = true;
+	sImportReady = false;
+	SDL_ShowOpenFileDialog(picked, nullptr, gfx::window(), kFilters, 1, nullptr, true);
+	return true;
+}
+
+int importDone(char* first, int size) {
+	if (!sImportLock) return -1;
+	SDL_LockMutex(sImportLock);
+	const int n = sImportReady ? sImported : -1;
+	if (sImportReady) {
+		snprintf(first, size, "%s", sImportFirst);
+		sImportReady = false;
+	}
+	SDL_UnlockMutex(sImportLock);
+	return n;
+}
+
+bool importOpen() { return sImportOpen; }
 
 bool beat(int i, float* bpm, float* first) {
 	if (i < 0 || i >= sCount || !sSongs[i].hasBeat) return false;

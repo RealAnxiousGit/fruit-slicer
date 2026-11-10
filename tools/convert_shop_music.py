@@ -5,10 +5,13 @@ usage: convert_shop_music.py <folder with the masters> <universal repo> <3DS rep
 To add a song: put a line in SONGS, run this, then add the SHOP_TRACK line it prints to
 source/shop_items.inc. Everything else (the tile, the price, scrolling, saving) follows from that line.
 
-Windows, Linux and Android get stereo Ogg Vorbis. The 3DS has no Ogg decoder and holds the whole track
-in memory, so it gets mono at 16 kHz, packed 4:1 with IMA ADPCM.
+Windows, Linux and Android get stereo Ogg Vorbis at 48 kHz, the mixer's own rate, so the game never
+resamples them. The 3DS has no Ogg decoder and holds the whole track in memory, so it gets mono at
+16 kHz, packed 4:1 with IMA ADPCM. ffmpeg does every decode and resample (soxr) and measures loudness
+(EBU R128), so every song plays at the same loudness as the rest of the game's music.
 """
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -26,22 +29,36 @@ SONGS = [
     ("JUST STAY WITH ME.wav", "music_staywithme", 150),
 ]
 
-RATE = 44100
-OGG_QUALITY = "3"       # about 112 kbit/s: three minutes come to around 2.5 MB
-MEAN_TARGET_DB = -20.5  # what the Shop's other recorded tracks measure
+RATE = 44100           # the beat analysis runs at this rate; ONSET_LAG below is in its samples
+OUT_RATE = 48000       # what the songs are stored at: the mixer's rate
+SOXR = "aresample=resampler=soxr:precision=28"
+OGG_QUALITY = "6"      # about 190 kbit/s: dense, loud masters keep their top end and transients
+TARGET_LUFS = -19.0    # integrated loudness of the game's other music
+MAX_TRUE_PEAK = -1.0   # dBTP
+SEAM = 0.05            # seconds of the ring-out past the last bar faded over the top of the loop
 BEATS_PER_BAR = 4
 LOW_BINS = 8            # up to about 150 Hz: the kick and bass
 KICK_SURE = 0.15        # how clear the low end's beat must be before it decides where the grid sits
 SAME_BEAT = 0.04        # seconds: sound starting this close to a beat is on that beat
-FILE_START = 0.02       # seconds: sound this close to the top of the file counts as starting there
 HOP = 512
 ONSET_LAG = 1425        # samples from the start of an onset frame to the sound it found; check_song_beats.py selftest proves it
 
 
-def load(path):
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-f", "f32le", "-ac", "2", "-ar", str(RATE), "-"],
+def load(path, rate=RATE):
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-af", SOXR, "-f", "f32le", "-ac", "2", "-ar", str(rate), "-"],
                          check=True, stdout=subprocess.PIPE).stdout
     return np.frombuffer(raw, "<f4").reshape(-1, 2).astype(np.float64)
+
+
+def loudness(song, rate=OUT_RATE):
+    """Integrated loudness (LUFS) and true peak (dBTP), measured by ffmpeg's EBU R128 meter."""
+    out = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-f", "f32le", "-ar", str(rate), "-ac", "2", "-i", "-",
+                          "-af", "ebur128=peak=true", "-f", "null", "-"],
+                         input=song.astype("<f4").tobytes(), check=True, stderr=subprocess.PIPE).stderr.decode()
+    summary = out[out.rfind("Summary:"):]
+    lufs = float(re.search(r"I:\s+(-?[\d.]+) LUFS", summary).group(1))
+    peak = float(re.search(r"Peak:\s+(-?[\d.]+|-inf) dBFS", summary).group(1))
+    return lufs, peak
 
 
 def onsets(mono, top_bins=None):
@@ -84,7 +101,10 @@ def steadiness(env, frames_per_beat):
     return float(np.abs(wander).max())
 
 
-def make_loop(x, name, bpm):
+def make_loop(x, name, bpm, out=None):
+    """x is the master at RATE, for listening; out is the same master at OUT_RATE, which the loop is cut from."""
+    if out is None:
+        out = x
     level = np.abs(x).max(axis=1)
     sounding = np.nonzero(level > 10 ** (-45 / 20))[0]
     first, last = int(sounding[0]), int(sounding[-1]) + 1
@@ -99,51 +119,63 @@ def make_loop(x, name, bpm):
     wander = steadiness(env, frames_per_beat)
     samples_per_beat = RATE * 60.0 / bpm
 
-    # Beat Slice counts beats from the very start of the file, so the song starts on one.
+    # Beat Slice counts beats from the very start of the file, so the file starts on a beat. The song itself
+    # is never cut or rearranged: it plays from its first sound, as recorded.
     grid0 = (phase * frames_per_beat * HOP + ONSET_LAG) % samples_per_beat
     k = round((first - grid0) / samples_per_beat)
     nearest = grid0 + k * samples_per_beat
-    if first <= RATE * FILE_START and abs(nearest - first) <= RATE * SAME_BEAT:
-        start = first  # sound from the top of the file: the export begins on the project's first beat
+    if abs(nearest - first) <= RATE * SAME_BEAT:
+        start = min(first, nearest)  # the first sound is on the beat: keep all of its attack
+    elif nearest < first:
+        start = nearest              # a moment of quiet, then the song on its beat
     else:
-        start = int(round(nearest if nearest >= 0 else nearest + samples_per_beat))
-    samples_per_bar = samples_per_beat * BEATS_PER_BAR
-    bars = int((last - start) / samples_per_bar)
-    end = start + int(round(bars * samples_per_bar))
-    tail = x[end:last].copy()
-    song = x[start:end].copy()
+        start = nearest - samples_per_beat  # a lead-in before the first beat stays where it is, a beat early
+    seconds = start / RATE           # may be below 0: the file then begins with that much silence
 
-    # Whatever rings on past the last whole bar is laid over the first bars, so the loop point is seamless.
-    if len(tail):
-        tail = tail[:len(song)]
-        fade = np.linspace(1, 0, len(tail)) ** 1.5
-        song[:len(tail)] += tail * fade[:, None]
-    # Any sound just before the first beat leads into it, so it goes at the end of the loop.
-    pickup = x[first:start]
-    if len(pickup):
-        song[-len(pickup):] += pickup
+    rate_out = OUT_RATE if out is not x else RATE
+    start_out = int(round(seconds * rate_out))
+    last_out = int(round(last / RATE * rate_out))
+    samples_per_bar = rate_out * 60.0 / bpm * BEATS_PER_BAR
+    bars = int((last_out - start_out) / samples_per_bar)
+    end_out = start_out + int(round(bars * samples_per_bar))
+    lead = max(0, -start_out)
+    padded = np.concatenate((np.zeros((lead, 2)), out)) if lead else out
+    song = padded[start_out + lead:end_out + lead].copy()
+    tail = padded[end_out + lead:last_out + lead]
 
-    gain = 10 ** ((MEAN_TARGET_DB - 20 * np.log10(np.sqrt((song ** 2).mean()) + 1e-9)) / 20)
-    song *= gain
-    peak = float(np.abs(song).max())
-    if peak > 0.97:
-        song *= 0.97 / peak
-    tail_rms = 20 * np.log10(np.sqrt((tail ** 2).mean()) * gain + 1e-9) if len(tail) else -120
+    # The loop goes from the end of the last whole bar straight back to its start. Only the first moment of the
+    # ring-out past that bar is faded over the top of the loop, which keeps the join smooth without smearing
+    # the song's opening.
+    seam = min(len(tail), int(rate_out * SEAM), len(song))
+    if seam:
+        song[:seam] += tail[:seam] * (np.cos(np.linspace(0, np.pi / 2, seam)) ** 2)[:, None]
+
+    lufs, peak = loudness(song, rate_out)
+    gain_db = TARGET_LUFS - lufs
+    if peak + gain_db > MAX_TRUE_PEAK:
+        gain_db = MAX_TRUE_PEAK - peak
+    song *= 10 ** (gain_db / 20)
+    tail_db = 20 * np.log10(np.sqrt((tail ** 2).mean()) + 1e-9) + gain_db if len(tail) else -120
     print(f"{name}: {bpm} bpm, sure {sure:.2f}, wander {wander:.3f} beat; "
-          f"starts {start / RATE:.3f}s (sound at {first / RATE:.3f}s), {bars} bars = {len(song) / RATE:.2f}s, "
-          f"tail {len(tail) / RATE:.2f}s at {tail_rms:.1f} dB, gain {20 * np.log10(gain):.1f} dB")
+          f"starts {seconds:.3f}s (sound at {first / RATE:.3f}s), {bars} bars = {len(song) / rate_out:.2f}s, "
+          f"ring-out {len(tail) / rate_out:.2f}s at {tail_db:.1f} dB ({seam / rate_out * 1000:.0f} ms kept), "
+          f"{lufs:.1f} LUFS, gain {gain_db:.1f} dB")
     return song
 
 
 def encode_ogg(song, out):
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "f32le", "-ar", str(RATE), "-ac", "2", "-i", "-", "-c:a", "libvorbis",
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "f32le", "-ar", str(OUT_RATE), "-ac", "2", "-i", "-", "-c:a", "libvorbis",
                     "-q:a", OGG_QUALITY, out], input=song.astype("<f4").tobytes(), check=True)
-    decoded = load(out)
+    decoded = load(out, OUT_RATE)
     if len(decoded) != len(song):
         print(f"  decoded length {len(decoded)} against {len(song)}")
     join = np.abs(decoded[0] - decoded[-1]).max()
     typical = np.median(np.abs(np.diff(decoded, axis=0)).max(axis=1))
-    print(f"  ogg {os.path.getsize(out) / 1048576:.2f} MB, step at the loop {join:.4f} (typical step {typical:.4f})")
+    m = min(len(decoded), len(song))
+    match = 10 * np.log10((song[:m] ** 2).mean() / (((decoded[:m] - song[:m]) ** 2).mean() + 1e-12))
+    lufs, peak = loudness(decoded)
+    print(f"  ogg {os.path.getsize(out) / 1048576:.2f} MB, {lufs:.1f} LUFS, true peak {peak:.1f} dBTP, "
+          f"matches the loop to {match:.1f} dB, step at the loop {join:.4f} (typical step {typical:.4f})")
 
 
 IMA_STEPS = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118,
@@ -177,10 +209,10 @@ def ima_step(sample, predicted, index):
 
 
 def encode_3ds(song, out):
-    wanted = int(round(len(song) * 16000 / RATE))
+    wanted = int(round(len(song) * 16000 / OUT_RATE))
     # Three copies resampled together, keeping the middle one, so the filter sees the music on both sides of the loop.
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(RATE), "-ac", "2", "-i", "-", "-af",
-                          "pan=mono|c0=0.5*c0+0.5*c1,aresample=16000", "-f", "s16le", "-"],
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-f", "f32le", "-ar", str(OUT_RATE), "-ac", "2", "-i", "-", "-af",
+                          "pan=mono|c0=0.5*c0+0.5*c1,aresample=16000:resampler=soxr:precision=28", "-f", "s16le", "-"],
                          input=np.concatenate((song, song, song)).astype("<f4").tobytes(), check=True, stdout=subprocess.PIPE).stdout
     all_pcm = np.frombuffer(raw, "<i2")
     pcm = all_pcm[wanted:wanted * 2].tolist()
@@ -204,7 +236,8 @@ def main():
     for master, name, bpm in SONGS:
         if only and name not in only:
             continue
-        song = make_loop(load(os.path.join(masters, master)), name, bpm)
+        path = os.path.join(masters, master)
+        song = make_loop(load(path), name, bpm, load(path, OUT_RATE))
         encode_ogg(song, os.path.join(universal, "romfs", "audio", name + ".ogg"))
         encode_3ds(song, os.path.join(three_ds, "romfs", "audio", name + ".pcm"))
         print(f'  SHOP_TRACK("{os.path.splitext(master)[0]}", 300, "Artist. Genre.", "{name}", {bpm})')
