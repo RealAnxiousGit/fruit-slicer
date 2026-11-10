@@ -2922,8 +2922,8 @@ static void drawUpdateSign() {
 		case update::READY:
 			head = "Update Ready";
 #if PORT_3DS
-			l1 = "Installed. The game closes to the";
-			l2 = "HOME Menu; open it again to play.";
+			l1 = envIsHomebrew() ? "Downloaded. The game closes to the" : "Installed. The game closes to the";
+			l2 = envIsHomebrew() ? "Homebrew Launcher; open it again to play." : "HOME Menu; open it again to play.";
 #elif PORT_ANDROID
 			l1 = "Android will ask to install it.";
 			l2 = "Allow it, then open the game again.";
@@ -4289,7 +4289,11 @@ void app::showLoading() {
 
 bool app::init() {
 	saveLoad();
+#ifdef UPDATE_TEST
+	update::boot("0.9.0");  // a test build that believes it's old, so the real updater has a release to fetch
+#else
 	update::boot(VERSION_STRING);
+#endif
 	applyAccessibility();
 #ifdef TEST_ART
 	gSave.artStyle = TEST_ART;
