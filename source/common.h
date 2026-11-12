@@ -171,7 +171,8 @@ struct Settings {
 	u16 orchardRuns, orchardWins;
 	u8 bossMusic;           // 1 plays the boss tracks in a boss fight
 	u8 howToSeen;           // bit n: the how-to of new mode n (MODE_ORCHARD + n) has been shown
-	u8 reserved12[34];      // later 1.2.x fields take bytes from here
+	u8 bossTrackLast[4];    // per boss, the track (+1) heard in its last fight, so the next one differs
+	u8 reserved12[30];      // later 1.2.x fields take bytes from here
 };
 static_assert(MODE_COUNT + 1 <= kMaxModes, "more modes than the save holds");
 static_assert(MODE_JUGGLE - MODE_ORCHARD < 8, "howToSeen has a bit for each new mode");

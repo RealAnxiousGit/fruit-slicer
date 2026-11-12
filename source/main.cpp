@@ -1195,6 +1195,7 @@ static const Row kAudioRows[] = {
 	{ROW_SLIDER, "Menu Sounds", &gSave.menuSfx, 0, 100, nullptr, 0, 100, ACT_NONE, "The tap when you press a sign.", ""},
 	{ROW_CHOICE, "Menu Music", &gSave.menuTrack, 0, kTrackCount, kTrackRowNames, 0, 0, ACT_NONE, "What plays in the menus. Auto", "shuffles every track you own."},
 	{ROW_CHOICE, "Game Music", &gSave.gameTrack, 0, kTrackCount, kTrackRowNames, 0, 0, ACT_NONE, "What plays during a game. Auto", "shuffles them; Zen keeps it calm."},
+	{ROW_CHOICE, "Boss Music", &gSave.bossMusic, 0, 1, kOffOn, 0, 0, ACT_NONE, "Boss fights get their own music.", "Off keeps your music playing."},
 	{ROW_ACTION, "Latency Test", nullptr, 0, 0, nullptr, 0, 0, ACT_LATENCY, "Slice in time with a metronome", "to set Beat Timing for you."},
 	{ROW_SLIDER, "Beat Timing", &gSave.beatLatency, 0, 200, nullptr, 0, 0, ACT_NONE, "Moves the Beat Slice beat. Raise it", "if your slices land late."},
 	{ROW_ACTION, "Reset Audio", nullptr, 0, 0, nullptr, 0, 0, ACT_RESET_AUDIO, "Puts these back to their defaults.", ""},
@@ -1762,7 +1763,7 @@ static bool sPreviewOver;     // the song on show had its turn, and the music in
 static void shopTryOn() {
 	const u8 track = gSave.menuTrack;
 	shopPutBack();
-	*shopSlot(sShopTab) = (u8)shopValue(sShopTab, sShopItem);
+	if (!shopLocked(sShopTab, sShopItem)) *shopSlot(sShopTab) = (u8)shopValue(sShopTab, sShopItem);
 	if (gSave.menuTrack != track) {
 		audio::previewFade(1);
 		audio::preview(MUSIC_MENU);
@@ -1849,7 +1850,21 @@ static void shopEquipNow() {
 	}
 }
 
+static const char* bossName(int boss) { return boss == 0 ? "The Big Melon" : "The Bomb King"; }
+
+// "Beat The Big Melon to unlock", for a locked boss track.
+static const char* shopUnlockLine(int item) {
+	static char line[48];
+	snprintf(line, sizeof line, "Beat %s to unlock", bossName(trackBoss(kBaseTracks + item)));
+	return line;
+}
+
 static void shopAct() {
+	if (shopLocked(sShopTab, sShopItem)) {
+		audio::click(0.4f);
+		shopNote(shopUnlockLine(sShopItem));
+		return;
+	}
 	if (shopOwned(sShopTab, sShopItem)) {
 		shopEquipNow();
 		audio::play(SFX_GOLD, 0.6f);
@@ -1883,6 +1898,10 @@ static void shopSetTab(int tab) {
 	sShopArmT = 0;
 	rowReset(sShopList);
 	shopTryOn();
+	if (tab == SHOP_MUSIC && shopHasNew()) {
+		shopSeenNew();
+		shopSave();
+	}
 }
 
 static void updateShop(const Input& in, bool wasTouching) {
@@ -1985,6 +2004,16 @@ static void updateShop(const Input& in, bool wasTouching) {
 	}
 }
 
+// A padlock: a shackle over a body with a keyhole. s scales it from tile size.
+static void drawPadlock(float cx, float cy, float s) {
+	const u32 metal = rgba(200, 196, 180), body = rgba(214, 170, 70), hole = rgba(60, 40, 20);
+	gfx::rect(cx - 7 * s, cy - 13 * s, 2.5f * s, 9 * s, metal);
+	gfx::rect(cx + 4.5f * s, cy - 13 * s, 2.5f * s, 9 * s, metal);
+	gfx::rect(cx - 7 * s, cy - 15 * s, 14 * s, 2.5f * s, metal);
+	gfx::rect(cx - 10 * s, cy - 5 * s, 20 * s, 15 * s, body);
+	gfx::rect(cx - 1.5f * s, cy - 1 * s, 3 * s, 6 * s, hole);
+}
+
 static void drawShopIcon(int tab, int item, float cx, float cy) {
 	if (tab == SHOP_THEMES) {
 		int b = kBaseBoards + item;
@@ -2043,6 +2072,7 @@ static void drawShop() {
 		Button b = shopButton(kShopTab0 + i);
 		drawPlank(b.x, b.y, b.w, b.h, f == kShopTab0 + i, sPressed == kShopTab0 + i);
 		gfx::text(b.label, b.x + b.w / 2, b.y + 6, 0.38f, i == sShopTab ? COL_ACCENT : COL_DIM, ALIGN_CENTER);
+		if (i == SHOP_MUSIC && shopHasNew()) gfx::text("NEW", b.x + b.w - 3, b.y - 5, 0.26f + sinf(sTime * 6) * 0.015f, rgba(255, 230, 120), ALIGN_RIGHT);
 	}
 	const int n = shopCount(sShopTab);
 	gfx::setClip(0, kShopWindowTop, 320, kShopWindowH);
@@ -2055,18 +2085,22 @@ static void drawShop() {
 		drawPlank(b.x, b.y, b.w, b.h, sel, pressed);
 		if (!sel && f == kShopTile0 + k) gfx::sign(sprites_plank_focus_idx, b.x - 2, b.y - 2 + (pressed ? 2 : 0), b.w + 4, b.h + 4, withAlpha(COL_CREAM, 0.5f));
 		const ShopItem& it = shopItem(sShopTab, k);
+		const bool locked = shopLocked(sShopTab, k);
 		// A name too long for one line goes on two, so it stays as big as its neighbours. The icon moves up for it.
 		char top[32], bottom[32];
-		const bool two = splitLine(it.name, 0.3f, b.w - 10, top, bottom, sizeof top);
-		drawShopIcon(sShopTab, k, b.x + b.w / 2, b.y + (two ? 12 : 15));
+		const bool two = splitLine(locked ? "Boss Track" : it.name, 0.3f, b.w - 10, top, bottom, sizeof top);
+		if (locked) drawPadlock(b.x + b.w / 2, b.y + (two ? 14 : 17), 0.8f);
+		else drawShopIcon(sShopTab, k, b.x + b.w / 2, b.y + (two ? 12 : 15));
 		if (two) {
 			fitText(top, b.x + b.w / 2, b.y + 20, 0.28f, b.w - 8, COL_CREAM);
 			fitText(bottom, b.x + b.w / 2, b.y + 30, 0.28f, b.w - 8, COL_CREAM);
 		} else {
-			fitText(it.name, b.x + b.w / 2, b.y + 26, 0.3f, b.w - 10, COL_CREAM);
+			fitText(locked ? "Boss Track" : it.name, b.x + b.w / 2, b.y + 26, 0.3f, b.w - 10, COL_CREAM);
 		}
 		const float priceY = b.y + 41;
-		if (shopInUse(sShopTab, k)) {
+		if (locked) {
+			gfx::text("LOCKED", b.x + b.w / 2, priceY, 0.27f, COL_DIM, ALIGN_CENTER);
+		} else if (shopInUse(sShopTab, k)) {
 			gfx::text("IN USE", b.x + b.w / 2, priceY, 0.27f, COL_ACCENT, ALIGN_CENTER);
 		} else if (shopOwned(sShopTab, k)) {
 			gfx::text("OWNED", b.x + b.w / 2, priceY, 0.27f, COL_DIM, ALIGN_CENTER);
@@ -2084,18 +2118,29 @@ static void drawShop() {
 	const ShopItem& it = shopItem(sShopTab, sShopItem);
 	bool owned = shopOwned(sShopTab, sShopItem);
 	const bool inUse = shopInUse(sShopTab, sShopItem);
-	if (owned) snprintf(buf, sizeof buf, "%s", inUse ? (shopCanTakeOff(sShopTab) ? "Take Off" : "In Use") : "Use");
+	const bool locked = shopLocked(sShopTab, sShopItem);
+	if (locked) snprintf(buf, sizeof buf, "Locked");
+	else 	if (owned) snprintf(buf, sizeof buf, "%s", inUse ? (shopCanTakeOff(sShopTab) ? "Take Off" : "In Use") : "Use");
 	else if (sShopArmT > 0) snprintf(buf, sizeof buf, "Sure? %u", (unsigned)it.price);
 	else snprintf(buf, sizeof buf, "Buy %u", (unsigned)it.price);
 	Button a = shopButton(kShopAct);
 	drawPlank(a.x, a.y, a.w, a.h, f == kShopAct, sPressed == kShopAct);
-	gfx::text(buf, a.x + a.w / 2, a.y + 8, 0.44f, owned || gSave.coins >= it.price ? COL_CREAM : COL_DIM, ALIGN_CENTER);
+	gfx::text(buf, a.x + a.w / 2, a.y + 8, 0.44f, (!locked && (owned || gSave.coins >= it.price)) ? COL_CREAM : COL_DIM, ALIGN_CENTER);
 }
 
 // What the focused item is, with its live preview: the top screen on the 3DS, beside the menu elsewhere.
 static void drawShopPreview() {
 	const ShopItem& it = shopItem(sShopTab, sShopItem);
 	gfx::setDepth(0.7f);
+	if (shopLocked(sShopTab, sShopItem)) {
+		gfx::text("Locked Boss Track", 200, 22, 0.6f, COL_ACCENT, ALIGN_CENTER);
+		gfx::text(shopUnlockLine(sShopItem), 200, 52, 0.38f, COL_CREAM, ALIGN_CENTER);
+		gfx::setDepth(0.5f);
+		drawPadlock(200, 118, 2.2f);
+		fitText("Its music stays a surprise until then.", 200, 160, 0.36f, 290, COL_DIM);
+		if (sShopNoteT > 0) gfx::text(sShopNote, 200, 205, 0.42f, withAlpha(COL_CREAM, clampf(sShopNoteT * 2, 0, 1)), ALIGN_CENTER);
+		return;
+	}
 	gfx::text(it.name, 200, 22, 0.6f, COL_ACCENT, ALIGN_CENTER);
 	gfx::text(it.line, 200, 52, 0.38f, COL_CREAM, ALIGN_CENTER);
 	if (sShopTab == SHOP_THEMES) {
@@ -4097,9 +4142,13 @@ static void drawTopContent(Screen screen) {
 				const Orchard& o = sGame.orc;
 				if (o.won) snprintf(buf, sizeof buf, "ORCHARD CLEARED!");
 				else snprintf(buf, sizeof buf, "REACHED ROOM %d OF %d", o.room, kOrchardRooms);
-				gfx::text(buf, 200, 142, 0.44f, o.won ? rgba(255, 230, 140) : COL_CREAM, ALIGN_CENTER);
+				gfx::text(buf, 200, o.newTracks > 0 ? 136 : 142, 0.44f, o.won ? rgba(255, 230, 140) : COL_CREAM, ALIGN_CENTER);
 				snprintf(buf, sizeof buf, "LEVEL %d   BOSSES %d   SLICED %d", o.level, o.bossesBeaten, sGame.sliced);
-				gfx::text(buf, 200, 160, 0.36f, COL_DIM, ALIGN_CENTER);
+				gfx::text(buf, 200, o.newTracks > 0 ? 152 : 160, 0.36f, COL_DIM, ALIGN_CENTER);
+				if (o.newTracks > 0) {
+					snprintf(buf, sizeof buf, "NEW IN THE SHOP: %d BOSS TRACK%s", o.newTracks, o.newTracks == 1 ? "" : "S");
+					gfx::text(buf, 200, 166, 0.34f, COL_ACCENT, ALIGN_CENTER);
+				}
 			} else {
 				if (sGame.mode == MODE_BEAT) snprintf(buf, sizeof buf, "SLICED %d   ON THE BEAT %d", sGame.sliced, sGame.beatHits);
 				else snprintf(buf, sizeof buf, "SLICED %d   BEST COMBO %d", sGame.sliced, sGame.bestCombo);

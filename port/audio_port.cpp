@@ -300,6 +300,12 @@ float musicTime() {
 	return t;
 }
 
+void musicSeek(u32 frame) {
+	SDL_LockMutex(sLock);
+	if (frame < sMusic.samples) sMusic.pos = (double)frame;
+	SDL_UnlockMutex(sLock);
+}
+
 void musicStop() {
 	SDL_LockMutex(sLock);
 	sMusic.on = false;

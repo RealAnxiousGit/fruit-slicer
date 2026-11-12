@@ -550,6 +550,403 @@ def pop():
     return norm(reverb_tail(out, 0.4, 0.15), 0.62)
 
 
+
+
+# ---------------------------------------------------------------- boss music
+# Brighter and busier than the calm tracks, so a higher rate: hats and the chip lead need the top end.
+BOSS_RATE = 22050
+BOSS_LUFS = -19.0  # the same integrated loudness as every other song in the game
+
+
+def _t(n, rate=BOSS_RATE):
+    return np.arange(n) / rate
+
+
+def _harm(freq, n, amps, rate=BOSS_RATE, detune=1.0):
+    """Sums harmonics h (amplitude amps(h, t)) that stay under 10 kHz, so nothing folds back."""
+    t = _t(n, rate)
+    out = np.zeros(n)
+    h = 1
+    while h * freq < 10000 and h <= 24:
+        a = amps(h, t)
+        if np.isscalar(a) and a == 0:
+            h += 1
+            continue
+        out += a * np.sin(2 * np.pi * freq * detune * h * t)
+        h += 1
+    return out
+
+
+def _gate(n, release, rate=BOSS_RATE):
+    g = np.ones(n)
+    r = min(n, int(release * rate))
+    if r > 0:
+        g[-r:] = np.linspace(1, 0, r) ** 1.5
+    return g
+
+
+def bk_kick(punch=1.0):
+    n = int(0.34 * BOSS_RATE)
+    t = _t(n)
+    f = 46 + 120 * punch * np.exp(-t / 0.032)
+    body = np.sin(2 * np.pi * np.cumsum(f) / BOSS_RATE) * np.exp(-t / 0.13)
+    click = band(np.random.default_rng(501).normal(0, 1, n), 1500, 6000, BOSS_RATE) * np.exp(-t / 0.003) * 0.35
+    return np.tanh((body + click) * 1.7)
+
+
+def bk_snare(seed=502, bright=1.0):
+    n = int(0.24 * BOSS_RATE)
+    t = _t(n)
+    noise = band(np.random.default_rng(seed).normal(0, 1, n), 1300, 7500 * bright, BOSS_RATE) * np.exp(-t / 0.075)
+    tone = (np.sin(2 * np.pi * 182 * t) + 0.5 * np.sin(2 * np.pi * 330 * t)) * np.exp(-t / 0.045)
+    return noise * 1.1 + tone * 0.7
+
+
+def bk_clap(seed=503):
+    n = int(0.2 * BOSS_RATE)
+    t = _t(n)
+    src = band(np.random.default_rng(seed).normal(0, 1, n), 900, 5200, BOSS_RATE)
+    env = np.exp(-t / 0.07) * 0.6
+    for at in (0.0, 0.011, 0.022):
+        env += np.where(t >= at, np.exp(-(t - at) / 0.007), 0)
+    return src * env
+
+
+def bk_hat(open_=False, seed=504):
+    n = int((0.16 if open_ else 0.05) * BOSS_RATE)
+    t = _t(n)
+    return band(np.random.default_rng(seed).normal(0, 1, n), 6500, 10500, BOSS_RATE) * np.exp(-t / (0.07 if open_ else 0.016))
+
+
+def bk_crash(seed=505):
+    n = int(1.6 * BOSS_RATE)
+    t = _t(n)
+    return band(np.random.default_rng(seed).normal(0, 1, n), 3000, 10500, BOSS_RATE) * np.exp(-t / 0.5) * np.minimum(1, t / 0.002)
+
+
+def bk_timpani(freq):
+    """A royal drum: a low, slightly falling boom with a soft skin hit."""
+    n = int(0.9 * BOSS_RATE)
+    t = _t(n)
+    f = freq * (1 + 0.08 * np.exp(-t / 0.05))
+    body = np.sin(2 * np.pi * np.cumsum(f) / BOSS_RATE) + 0.35 * np.sin(2 * np.pi * np.cumsum(f * 1.5) / BOSS_RATE) * np.exp(-t / 0.15)
+    skin = band(np.random.default_rng(int(freq)).normal(0, 1, n), 200, 2000, BOSS_RATE) * np.exp(-t / 0.02) * 0.4
+    return (body * np.exp(-t / 0.35) + skin) * np.minimum(1, t / 0.002)
+
+
+def bk_tom(freq):
+    n = int(0.3 * BOSS_RATE)
+    t = _t(n)
+    f = freq * (1 + 0.5 * np.exp(-t / 0.03))
+    return np.sin(2 * np.pi * np.cumsum(f) / BOSS_RATE) * np.exp(-t / 0.11)
+
+
+def bk_bass(freq, dur):
+    """A round synth bass: bright at the pluck, then mostly the low harmonics, with a sine under it."""
+    n = int(dur * BOSS_RATE)
+    s = _harm(freq, n, lambda h, t: (1.0 / h) * np.exp(-t * (3 + h * 2.2)))
+    s += 0.9 * np.sin(2 * np.pi * freq * _t(n))
+    return s * np.minimum(1, _t(n) / 0.003) * _gate(n, 0.025)
+
+
+def bk_chip(freq, dur):
+    """A square-ish lead with a late vibrato: the cheeky voice of the melon tracks."""
+    n = int(dur * BOSS_RATE)
+    t = _t(n)
+    vib = 1 + 0.004 * np.minimum(1, np.maximum(0, t - 0.12) / 0.2) * np.sin(2 * np.pi * 5.5 * t)
+    ph = 2 * np.pi * freq * np.cumsum(vib) / BOSS_RATE
+    s = np.zeros(n)
+    h = 1
+    while h * freq < 9000:
+        s += np.sin(h * ph) / h
+        h += 2
+    env = np.minimum(1, t / 0.006) * (0.62 + 0.38 * np.exp(-t / 0.08))
+    return s * env * _gate(n, 0.03)
+
+
+def bk_brass(freq, dur):
+    """A brass section: detuned saws that brighten as the note swells."""
+    n = int(dur * BOSS_RATE)
+    t = _t(n)
+    bright = np.minimum(1, t / 0.06)
+    s = sum(_harm(freq, n, lambda h, tt: (1.0 / h) * (bright if h > 2 else 1.0) * np.exp(-h * 0.12), detune=d) for d in (0.996, 1.0, 1.004)) / 3
+    env = np.minimum(1, t / 0.025) * (0.8 + 0.2 * np.exp(-t / 0.2))
+    return s * env * _gate(n, 0.05)
+
+
+def bk_bell(freq, dur):
+    return bell(freq, dur, BOSS_RATE)
+
+
+def bk_pluck(freq, dur):
+    return pluck_note(freq, dur, BOSS_RATE)
+
+
+def bk_pad(freq, dur):
+    return pad_note(freq, dur, BOSS_RATE)
+
+
+VOICES = {"chip": bk_chip, "brass": bk_brass, "pluck": bk_pluck, "bell": bk_bell}
+
+
+def chord_tone(chord, i):
+    """Chord tones counted up from the root: 0 root, 1 third, 2 fifth, 3 the octave, and on."""
+    root, quality = chord
+    iv = (0, 3, 7) if quality == "m" else (0, 4, 7)
+    return root + iv[i % 3] + 12 * (i // 3)
+
+
+def parse_drums(text):
+    """One bar of 16 steps per drum, written like 'k...k...' with '.' for a rest."""
+    return {line.strip()[0]: line.strip()[2:] for line in text.strip().splitlines() if line.strip()}
+
+
+def compose_boss(bpm, sections, seed):
+    """A boss track built from sections of 8 bars. Everything wraps, so the loop has no seam.
+    Each section: chords (one per bar, (root midi, 'M' or 'm')), drums (16-step lines), bass (16 steps:
+    'x' root, 'o' octave up, 'f' fifth, '.' rest), leads ((voice, octave shift, gain, motif bars)), and
+    flags for stabs, pads, timpani, a riser and a closing fill."""
+    rate = BOSS_RATE
+    beat = 60.0 / bpm
+    step = beat / 4
+    bars = sum(len(s["chords"]) for s in sections)
+    n = int(round(bars * 4 * beat * rate))
+    music = np.zeros(n)
+    drums = np.zeros(n)
+    rng = np.random.default_rng(seed)
+
+    def put(buf, sig, when, gain):
+        p = int(round(when * rate)) % n
+        idx = (np.arange(len(sig)) + p) % n
+        np.add.at(buf, idx, sig * gain)
+
+    kick, snare, clap = bk_kick(), bk_snare(), bk_clap()
+    hat, ohat, crash = bk_hat(), bk_hat(True), bk_crash()
+    bar0 = 0
+    for sec in sections:
+        pat = parse_drums(sec.get("drums", ""))
+        for b, chord in enumerate(sec["chords"]):
+            t0 = (bar0 + b) * 4 * beat
+            last = b == len(sec["chords"]) - 1
+            if b == 0 and sec.get("crash", True):
+                put(drums, crash, t0, 0.45)
+            for s in range(16):
+                when = t0 + s * step
+                swing = sec.get("swing", 0) * step if s % 2 else 0
+                fill = last and sec.get("fill") and s >= 12
+                if pat.get("k", "")[s:s + 1] == "x":
+                    put(drums, kick, when, 0.8)
+                if fill:
+                    put(drums, snare, when, 0.45 + 0.12 * (s - 12))
+                    put(drums, snare, when + step / 2, 0.35 + 0.1 * (s - 12))
+                    continue
+                c = pat.get("s", "")[s:s + 1]
+                if c in ("x", "g"):
+                    put(drums, snare, when + swing, 0.85 if c == "x" else 0.3)
+                if pat.get("c", "")[s:s + 1] == "x":
+                    put(drums, clap, when + swing, 0.7)
+                h = pat.get("h", "")[s:s + 1]
+                if h == "x":
+                    put(drums, hat, when + swing, 0.32 * (1.0 if s % 4 == 2 else 0.7) * rng.uniform(0.85, 1.0))
+                elif h == "o":
+                    put(drums, ohat, when + swing, 0.3)
+                tm = pat.get("t", "")[s:s + 1]
+                if tm in ("x", "y"):
+                    put(drums, bk_timpani(mtof(36 + (chord[0] + (7 if tm == "y" else 0)) % 12)), when, 0.9)
+                if pat.get("m", "")[s:s + 1] in ("1", "2", "3"):
+                    put(drums, bk_tom(150 / int(pat["m"][s])), when, 0.55)
+            # Bass.
+            bp = sec.get("bass", "")
+            for s in range(16):
+                c = bp[s:s + 1]
+                if c in ("x", "o", "f"):
+                    ln = 1
+                    while s + ln < 16 and bp[s + ln] == "-":
+                        ln += 1
+                    m = chord[0] - 12 + (12 if c == "o" else 7 if c == "f" else 0)
+                    while m > 47:
+                        m -= 12
+                    while m < 33:
+                        m += 12
+                    put(music, bk_bass(mtof(m), ln * step * 0.92), t0 + s * step + (sec.get("swing", 0) * step if s % 2 else 0), 0.4)
+            # Pads hold the chord under the whole bar.
+            if sec.get("pad", 0) > 0:
+                for i in range(3):
+                    put(music, bk_pad(mtof(chord_tone(chord, i) + 12), 4 * beat * 1.05), t0, sec["pad"] / 3)
+            # Brass stabs: short chords on the steps given.
+            st = sec.get("stabs", "")
+            for s in range(16):
+                if st[s:s + 1] == "x":
+                    for i in range(3):
+                        put(music, bk_brass(mtof(chord_tone(chord, i) + 12), step * 1.6), t0 + s * step, 0.16)
+            # Leads: a motif of one or more bars, with notes as (step, length in steps, chord tone).
+            for voice, octave, gain, motif in sec.get("leads", ()):
+                for st0, ln, tone in motif[b % len(motif)]:
+                    f = mtof(chord_tone(chord, tone) + 12 * octave)
+                    put(music, VOICES[voice](f, ln * step * 0.95), t0 + st0 * step, gain * 1.5)
+            if last and sec.get("riser"):
+                r = riser(4 * beat, 300, 6000, seed + bar0)
+                r = np.interp(np.arange(int(len(r) * rate / SFX_RATE)) * SFX_RATE / rate, np.arange(len(r)), r)
+                put(music, r / (np.max(np.abs(r)) or 1), t0, 0.22)
+        bar0 += len(sec["chords"])
+
+    # A short room on the music only, wrapping like everything else.
+    ir = np.random.default_rng(seed + 1).normal(0, 1, n) * np.exp(-np.arange(n) / (0.5 * rate))
+    wet = np.fft.irfft(np.fft.rfft(music) * np.fft.rfft(ir), n)
+    wet = wet / (np.max(np.abs(wet)) or 1) * (np.max(np.abs(music)) or 1)
+    out = music + wet * 0.18 + drums * 0.8
+    # Soften the very top, so it sits with the rest of the game's music.
+    X = np.fft.rfft(out)
+    f = np.fft.rfftfreq(n, 1 / rate)
+    out = np.fft.irfft(X / np.sqrt(1 + (f / 7500.0) ** 4), n)
+    out = out / (np.max(np.abs(out)) or 1)
+    return np.tanh(out * 1.4) / np.tanh(1.4)
+
+
+def level_boss(x, rate=BOSS_RATE):
+    """Brings a track to BOSS_LUFS with ffmpeg's EBU R128 meter, the way the Shop's songs were levelled.
+    Peaks over 0.97 are softly limited."""
+    import subprocess
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        name = tmp.name
+    with wave.open(name, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes((np.clip(x, -1, 1) * 32000).astype("<i2").tobytes())
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", name, "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True)
+    os.remove(name)
+    import re
+    lufs = float(re.findall(r"I:\s+(-?[\d.]+) LUFS", r.stderr)[-1])
+    y = x * 10 ** ((BOSS_LUFS - lufs) / 20)
+    peak = np.max(np.abs(y))
+    if peak > 0.97:
+        over = np.abs(y) > 0.8
+        y[over] = np.sign(y[over]) * (0.8 + 0.17 * np.tanh((np.abs(y[over]) - 0.8) / 0.17))
+    return y, lufs
+
+
+M = "M"
+m = "m"
+
+# The Big Melon: bouncy and playful, with a push.
+MELON_DRUMS = """k x...x...x...x...
+c ....x.......x...
+h ..x...x...x...x."""
+MELON_DRUMS_BUSY = """k x...x...x...x...
+c ....x.......x...
+h xxoxxxoxxxoxxxox"""
+MELON_DRUMS_LIGHT = """c ....x.......x...
+h ..x...x...x...x."""
+
+
+def track_seed_spitter():
+    """Seed Spitter (The Big Melon, 144 BPM, F major): a hopping chip tune over four-on-the-floor."""
+    prog = [(53, M), (48, M), (50, m), (46, M)] * 2
+    hop = [[(0, 2, 3), (3, 1, 4), (4, 2, 5), (6, 2, 4), (8, 3, 3), (12, 2, 2), (14, 2, 3)],
+           [(0, 3, 4), (4, 2, 3), (6, 2, 2), (8, 6, 3), (14, 1, 2), (15, 1, 1)]]
+    answer = [[(0, 1, 5), (2, 1, 5), (4, 2, 6), (8, 1, 5), (10, 1, 4), (12, 4, 3)],
+              [(0, 2, 2), (2, 2, 3), (4, 2, 4), (6, 2, 5), (8, 8, 6)]]
+    arp = [[(s, 1, (0, 1, 2, 3)[(s // 2) % 4]) for s in range(0, 16, 2)]]
+    bass = "x--ox-o-x--ox-o-"
+    return 144, [
+        dict(chords=prog, drums=MELON_DRUMS, bass=bass, leads=[("pluck", 1, 0.22, arp)], fill=True),
+        dict(chords=prog, drums=MELON_DRUMS, bass=bass, leads=[("chip", 1, 0.2, hop), ("pluck", 1, 0.14, arp)], fill=True),
+        dict(chords=[(50, m), (46, M), (53, M), (48, M)] * 2, drums=MELON_DRUMS_LIGHT, bass="x-------x-------", pad=0.3,
+             leads=[("bell", 2, 0.18, answer)], riser=True, fill=True),
+        dict(chords=prog, drums=MELON_DRUMS_BUSY, bass=bass, leads=[("chip", 1, 0.2, hop), ("chip", 2, 0.08, answer), ("pluck", 1, 0.12, arp)], fill=True),
+    ]
+
+
+def track_rind_and_run():
+    """Rind and Run (The Big Melon, 132 BPM, D mixolydian): a swung, cheeky chase."""
+    prog = [(50, M), (48, M), (43, M), (50, M), (50, M), (48, M), (43, M), (45, M)]
+    run = [[(0, 1, 3), (2, 1, 3), (3, 1, 4), (4, 2, 5), (7, 1, 4), (8, 2, 3), (11, 1, 2), (12, 4, 3)],
+           [(0, 1, 5), (2, 1, 4), (4, 1, 3), (6, 1, 2), (8, 2, 1), (10, 2, 2), (12, 4, 3)]]
+    tease = [[(0, 2, 6), (4, 2, 5), (8, 1, 6), (10, 1, 5), (12, 4, 4)], [(0, 8, 3), (12, 2, 4), (14, 2, 5)]]
+    drums = """k x.....x.x.....x.
+s ....x.......x..g
+h x.x.x.x.x.x.x.x."""
+    drums_b = """k x.....x.x.....x.
+s ....x..g....x.gg
+h xxxxxxxxxxxxxxxx"""
+    bass = "x-.x.-o-x-.x.fo."
+    return 132, [
+        dict(chords=prog, drums=drums, bass=bass, swing=0.18, leads=[("chip", 1, 0.19, run)], fill=True),
+        dict(chords=prog, drums=drums_b, bass=bass, swing=0.18, stabs="..x...x...x...x.", leads=[("chip", 1, 0.19, run), ("bell", 2, 0.1, tease)], fill=True),
+        dict(chords=[(43, M), (45, M), (50, M), (50, M)] * 2, drums="""h x.x.x.x.x.x.x.x.
+c ....x.......x...""", bass="x---o---x---o---", swing=0.18, pad=0.26, leads=[("pluck", 2, 0.2, tease)], riser=True, fill=True),
+        dict(chords=prog, drums=drums_b, bass=bass, swing=0.18, stabs="..x...x...x...x.", leads=[("chip", 1, 0.2, run), ("chip", 2, 0.07, tease)], fill=True),
+    ]
+
+
+# The Bomb King: heavier, bigger, with a royal march edge.
+def track_long_live_the_fuse():
+    """Long Live the Fuse (The Bomb King, 116 BPM, C minor): a royal march with timpani and brass."""
+    prog = [(48, m), (44, M), (51, M), (43, M)] * 2
+    fanfare = [[(0, 3, 3), (3, 1, 3), (4, 4, 5), (8, 3, 4), (11, 1, 3), (12, 4, 2)],
+               [(0, 3, 3), (3, 1, 2), (4, 4, 1), (8, 8, 2)]]
+    low = [[(0, 6, 0), (6, 2, 1), (8, 8, 2)]]
+    march = """k x.......x.......
+s ....x..g.g..x.gg
+t x.......y.......
+h x...x...x...x..."""
+    march_b = """k x.....x.x.......
+s g.g.x.gg.gg.x.gg
+t x.....x.y.......
+h x.x.x.x.x.x.x.x."""
+    bass = "x-----x.x-------"
+    return 116, [
+        dict(chords=prog, drums=march, bass=bass, leads=[("brass", 0, 0.22, low)], fill=True),
+        dict(chords=prog, drums=march, bass=bass, leads=[("brass", 1, 0.24, fanfare)], stabs="x.......x.......", fill=True),
+        dict(chords=[(41, m), (48, m), (44, M), (43, M)] * 2, drums="""t x.......x.......
+s ............x...""", bass="x---------------", pad=0.32, leads=[("bell", 2, 0.14, fanfare)], riser=True, fill=True),
+        dict(chords=prog, drums=march_b, bass="x-----x.x---x---", leads=[("brass", 1, 0.25, fanfare), ("brass", 0, 0.14, low)], stabs="x.....x.x.......", fill=True),
+    ]
+
+
+def track_powder_keg_court():
+    """Powder Keg Court (The Bomb King, 128 BPM, D minor): driving drums, toms and brass hits."""
+    prog = [(50, m), (46, M), (48, M), (45, M)] * 2
+    drive = [[(0, 2, 3), (2, 2, 4), (4, 2, 5), (6, 1, 4), (7, 1, 3), (8, 4, 4), (12, 2, 3), (14, 2, 2)],
+             [(0, 2, 3), (2, 2, 2), (4, 4, 1), (8, 2, 2), (10, 2, 3), (12, 4, 2)]]
+    crown = [[(0, 4, 6), (4, 4, 5), (8, 8, 4)], [(0, 4, 5), (4, 4, 4), (8, 8, 3)]]
+    drums = """k x...x...x...x...
+s ....x.......x...
+h ..x...x...x...x.
+m ..............12"""
+    drums_b = """k x...x...x.x.x...
+s ....x.......x.g.
+h xxoxxxoxxxoxxxox
+m ............1123"""
+    bass = "x.x.x.x.x.x.o.x."
+    return 128, [
+        dict(chords=prog, drums=drums, bass=bass, stabs="x.....x.......x.", fill=True),
+        dict(chords=prog, drums=drums_b, bass=bass, stabs="x.....x.......x.", leads=[("chip", 1, 0.16, drive), ("brass", 0, 0.12, crown)], fill=True),
+        dict(chords=[(46, M), (48, M), (50, m), (50, m)] * 2, drums="""t x.......x.......
+h ..x...x...x...x.""", bass="x-------x-------", pad=0.3, leads=[("brass", 1, 0.2, crown)], riser=True, fill=True),
+        dict(chords=prog, drums=drums_b, bass=bass, stabs="x.....x.x.....x.", leads=[("chip", 1, 0.17, drive), ("brass", 1, 0.18, crown)], fill=True),
+    ]
+
+
+BOSS_TRACKS = (
+    ("music_boss_seeds", track_seed_spitter, 601),
+    ("music_boss_rind", track_rind_and_run, 602),
+    ("music_boss_fuse", track_long_live_the_fuse, 603),
+    ("music_boss_keg", track_powder_keg_court, 604),
+)
+
+
+def build_boss_music():
+    for name, make, seed in BOSS_TRACKS:
+        bpm, sections = make()
+        x = compose_boss(bpm, sections, seed)
+        y, lufs = level_boss(x)
+        write_pcm(name, y, BOSS_RATE)
+        print(f"{name}: {bpm} BPM, {len(y) / BOSS_RATE:.1f} s, was {lufs:.1f} LUFS")
+
+
 # ---------------------------------------------------------------- everything
 def build_audio():
     s = SFX_RATE
@@ -655,6 +1052,8 @@ def build_audio():
     write_pcm("music_moss", compose_calm(44, 8, moss, [74, 76, 78, 81, 83, 86], 63, 0.2, 0.26, 0.22, 0.65, 0.0, bowl_note, 0.07), MUSIC_RATE)
     write_pcm("music_bamboo", compose_calm(48, 8, bamboo, [69, 72, 74, 76, 79, 81], 74, 0.26, 0.2, 0.3, 0.55, 0.0, flute_note, 0.0, 0.05), MUSIC_RATE)
     write_pcm("music_clouds", compose_calm(40, 8, clouds, [72, 74, 79, 81, 84, 86], 85, 0.12, 0.3, 0.2, 0.7, 0.0, bowl_note, 0.05, 0.03), MUSIC_RATE)
+    # Boss tracks: busier, at their own rate, levelled to the same loudness.
+    build_boss_music()
 
     # The HOME Menu banner sound: two quick slices, a clean finishing cut, then a bright little jingle.
     # Banner sound can be at most three seconds long.

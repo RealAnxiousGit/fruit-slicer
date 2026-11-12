@@ -1947,6 +1947,7 @@ void Game::update(Blade& blade) {
 			phaseT = 0;
 			commitScore();
 			audio::play(newBest ? SFX_BEST : SFX_OVER);
+			audio::bossMusicEnd();  // a run lost to a boss: its track gives way to the game over sound
 		}
 		return;
 	}

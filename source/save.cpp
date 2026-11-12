@@ -260,6 +260,8 @@ void saveLoad() {
 	if (gSave.updConsent > 2) gSave.updConsent = 0;
 	gSave.practiceDone &= 1;
 	gSave.bossMusic &= 1;
+	for (u8& t : gSave.bossTrackLast)
+		if (t > kTrackCount) t = 0;
 	if (gSave.trail >= kTrailCount) gSave.trail = 0;
 	gSave.updSkipped[sizeof gSave.updSkipped - 1] = 0;
 	gSave.ownedThemes |= 1;  // the first of each is always owned

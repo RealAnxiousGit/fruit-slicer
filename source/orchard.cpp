@@ -8,6 +8,7 @@
 #include "fruitids.h"
 #include "game.h"
 #include "render.h"
+#include "shop.h"
 #include "sprites.h"
 
 // ---------------------------------------------------------------- the cards
@@ -830,6 +831,48 @@ void Game::labOrchard(void (*check)(bool, const char*, const char*)) {
 		for (Sfx s : made) missing += !audio::loaded(s);
 		snprintf(d, sizeof d, "%d missing", missing);
 		check(missing == 0, "Orchard Blast's own sounds load: Deflected!, Open!, roar, intro, victory, pop", d);
+
+		// Boss music: the room's track hands over to a boss track, then comes back.
+		const u8 musicWas = gSave.bossMusic, lastWas = gSave.bossTrackLast[BOSS_MELON];
+		gSave.bossMusic = 1;
+		audio::music(MUSIC_PLAY);
+		for (int i = 0; i < 90; i++) audio::update(kDt);
+		const int room = audio::currentTrack();
+		const int fight = bossTrackPick(BOSS_MELON, 7);
+		audio::bossMusic(fight);
+		for (int i = 0; i < 60; i++) audio::update(kDt);
+		const bool fading = audio::bossMusicOn() && audio::currentTrack() == room;
+		for (int i = 0; i < 60; i++) audio::update(kDt);
+		snprintf(d, sizeof d, "room %d, fight %d, now %d", room, fight, audio::currentTrack());
+		check(fading && fight >= 0 && trackBoss(fight) == BOSS_MELON && audio::currentTrack() == fight,
+		      "A boss fight fades the room's music out, then plays one of that boss's tracks", d);
+		snprintf(d, sizeof d, "%d tracks", bossTrackCount(BOSS_MELON));
+		check(bossTrackPick(BOSS_MELON, 7) != fight, "The next fight against the same boss picks a different track", d);
+		audio::bossMusicEnd();
+		for (int i = 0; i < 90; i++) audio::update(kDt);
+		snprintf(d, sizeof d, "room %d, now %d", room, audio::currentTrack());
+		check(audio::currentTrack() == room, "After the boss, the room's music comes back", d);
+		for (int i = 0; i < 300 && audio::bossMusicOn(); i++) audio::update(kDt);
+		check(!audio::bossMusicOn(), "and it fades back up to full volume", "");
+		gSave.bossMusic = musicWas;
+		gSave.bossTrackLast[BOSS_MELON] = lastWas;
+
+		// The Shop keeps a boss's tracks locked until it is beaten.
+		const u32 beatenNow = gSave.bossesBeaten, seenNow = gSave.bossTracksSeen, ownedNow = gSave.ownedTracks, coinsNow = gSave.coins;
+		const int item = fight - kBaseTracks;
+		gSave.bossesBeaten = gSave.bossTracksSeen = 0;
+		gSave.coins = 5000;
+		check(shopLocked(SHOP_MUSIC, item) && shopBuy(SHOP_MUSIC, item) != BUY_DONE && !shopOwned(SHOP_MUSIC, item) && !shopHasNew(),
+		      "A boss track is locked, and can't be bought, until its boss is beaten", "");
+		gSave.bossesBeaten = 1u << BOSS_MELON;
+		check(!shopLocked(SHOP_MUSIC, item) && shopHasNew() && shopBuy(SHOP_MUSIC, item) == BUY_DONE,
+		      "Beating the boss unlocks its tracks to buy, and the Shop marks them new", "");
+		shopSeenNew();
+		check(!shopHasNew(), "Opening the Music tab clears the new mark", "");
+		gSave.bossesBeaten = beatenNow;
+		gSave.bossTracksSeen = seenNow;
+		gSave.ownedTracks = ownedNow;
+		gSave.coins = coinsNow;
 	}
 
 	// The card table.

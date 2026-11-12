@@ -154,11 +154,18 @@ static void labField() {
 #endif
 }
 
+// The last ordinary song on sale: boss tracks after it stay locked until their boss is beaten.
+static int labShopSong() {
+	int i = shopCount(SHOP_MUSIC) - 1;
+	while (i > 0 && trackBoss(kBaseTracks + i) >= 0) i--;
+	return i;
+}
+
 // A song tried on plays for 8 to 10 seconds, then the music in use comes back; Use makes a song both
 // the Menu and the Game Music. Driven through updateShop, a frame at a time, on the last song on sale.
 static void labShopPreview() {
 	Input in{};
-	const int song = shopCount(SHOP_MUSIC) - 1, value = shopValue(SHOP_MUSIC, song);
+	const int song = labShopSong(), value = shopValue(SHOP_MUSIC, song);
 	const u8 menuWas = sKeep[SHOP_MUSIC], gameWas = gSave.gameTrack;
 	labCheck(!shopInUse(SHOP_MUSIC, song) && gSave.menuTrack == value, "the song tried on is on show, not in use");
 	sPreviewT = 0;
@@ -167,13 +174,13 @@ static void labShopPreview() {
 	while (sPreviewT >= 0 && frames < 900) {
 		updateShop(in, false);
 		frames++;
-		faded = faded || (sPreviewT > kPreviewPlay && audio::currentTrack() == kTrackCount - 1);
+		faded = faded || (sPreviewT > kPreviewPlay && audio::currentTrack() == kBaseTracks + labShopSong());
 	}
 	char d[48];
 	snprintf(d, sizeof d, "%.2f s", frames * kDt);
 	labCheck(frames * kDt >= 8.0f && frames * kDt <= 10.0f, "a Shop preview gives way after 8 to 10 seconds", d);
 	labCheck(faded, "a Shop preview fades out before it gives way");
-	labCheck(gSave.menuTrack == menuWas && audio::currentTrack() != kTrackCount - 1 && sPreviewOver, "the music in use comes back after a Shop preview");
+	labCheck(gSave.menuTrack == menuWas && audio::currentTrack() != kBaseTracks + labShopSong() && sPreviewOver, "the music in use comes back after a Shop preview");
 	for (int i = 0; i < 90; i++) updateShop(in, false);
 	labCheck(sReturnT < 0, "the music in use fades back in within a second and a half");
 	const float longest = gfx::textWidth("Your Menu Music, not your Game Music.", 0.36f);
@@ -184,7 +191,7 @@ static void labShopPreview() {
 	shopBuy(SHOP_MUSIC, song);
 	shopEquipNow();
 	labCheck(gSave.menuTrack == value && gSave.gameTrack == value && shopInUse(SHOP_MUSIC, song), "Using a Shop song makes it the Menu and the Game Music");
-	labCheck(audio::currentTrack() == kTrackCount - 1 && sPreviewT < 0, "a song put in use plays on, with no preview timer");
+	labCheck(audio::currentTrack() == kBaseTracks + labShopSong() && sPreviewT < 0, "a song put in use plays on, with no preview timer");
 	sKeep[SHOP_MUSIC] = menuWas;  // back as it was, so later steps play the usual tracks
 	gSave.gameTrack = gameWas;
 	shopTryOn();
@@ -269,14 +276,14 @@ static void labMenus() {
 		case 15: labCheck(audio::musicTime() >= 0 || audio::musicPending(), "Shop music preview plays"); labCheck(audio::currentTrack() == kBaseTracks, "Shop preview switches to the track on the tile");
 			labShopScroll();
 			// The last song on sale, the longest kind of file the game loads: give it time to arrive.
-			sShopItem = shopCount(SHOP_MUSIC) - 1;
+			sShopItem = labShopSong();
 			shopTryOn();
 			sPreviewT = -1;  // held while it loads: labShopPreview times the preview on its own
 			sBotPhaseFrames = -420;
 			return;
 		case 16: {
-			labCheck(audio::currentTrack() == kTrackCount - 1 && audio::musicTime() >= 0 && !audio::musicPending(), "A full-length Shop song loads and plays");
-			labCheck(strchr(shopItem(SHOP_MUSIC, shopCount(SHOP_MUSIC) - 1).name, '.') == nullptr, "Shop song names carry no file extension");
+			labCheck(audio::currentTrack() == kBaseTracks + labShopSong() && audio::musicTime() >= 0 && !audio::musicPending(), "A full-length Shop song loads and plays");
+			labCheck(strchr(shopItem(SHOP_MUSIC, labShopSong()).name, '.') == nullptr, "Shop song names carry no file extension");
 			labShopPreview();
 			sBotMenuStep = 55;
 			botTap(kBack);

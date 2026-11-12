@@ -11,6 +11,7 @@
 #include "game.h"
 #include "model3d.h"
 #include "render.h"
+#include "shop.h"
 #include "sprites.h"
 
 namespace {
@@ -62,6 +63,7 @@ void Game::bossStart(int id) {
 	setCallout(kBosses[id].name, rgba(255, 200, 120), 0.8f);
 	showCaption("A boss drops in.");
 	audio::play(SFX_BOSSIN, 1.0f);
+	if (gSave.bossMusic) audio::bossMusic(bossTrackPick(id, gRng.next()));
 }
 
 void Game::bossOpen(float seconds) {
@@ -470,11 +472,13 @@ void Game::bossTest(Blade& blade) {
 		b.leaveT = 0;
 		for (auto& s : orc.shots) s.on = false;
 		orc.bossesBeaten++;
+		if (!(gSave.bossesBeaten >> b.id & 1)) orc.newTracks += bossTrackCount(b.id);
 		gSave.bossesBeaten |= 1u << b.id;
 		char buf[40];
 		snprintf(buf, sizeof buf, "%s BEATEN!", b.id == BOSS_MELON ? "BIG MELON" : "BOMB KING");
 		setCallout(buf, rgba(255, 230, 140), 0.8f);
 		audio::play(SFX_VICTORY, 1.0f);
+		audio::bossMusicEnd();
 		orcGainXp(20);
 		award(500 * (b.id + 1));
 		return;
