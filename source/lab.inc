@@ -215,6 +215,7 @@ static void labMenus() {
 			labExpect(SCREEN_JOURNAL, "Journal opens");
 			// The Journal draws 2D pictures whichever art style is chosen; the 3DS used to drop them with 3D art.
 			labCheck(gfx::stickersLoaded(), gSave.artStyle == ART_3D ? "Journal has its fruit pictures with 3D models" : "Journal has its fruit pictures with 2D stickers");
+			labCheck(journalTiles() == progress::journalPages() + BOSS_COUNT && journalIsBoss(journalTiles() - 1) && !journalIsBoss(progress::journalPages() - 1), "the Journal ends with a Bosses page, one sticker per boss");
 			botTap(kBack);
 			return;
 		case 4: labExpect(SCREEN_TITLE, "Journal back arrow cuts its berry and goes back"); botTap(kTitleButtons[3]); return;

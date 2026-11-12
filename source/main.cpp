@@ -2942,13 +2942,16 @@ static Button journalButton(int i) {
 	const int p = i - 1;
 	return {10.0f + (p % kJournalCols) * 60, kJournalTop + (p / kJournalCols) * kJournalStep - sJournalList.pos, 58, 45, nullptr};
 }
-static int journalHiddenRows() { return (progress::journalPages() + kJournalCols - 1) / kJournalCols - kJournalRowsShown; }
+// The Bosses page follows the fruit: a sticker for each boss, dark until it is beaten.
+static int journalTiles() { return progress::journalPages() + BOSS_COUNT; }
+static bool journalIsBoss(int p) { return p >= progress::journalPages(); }
+static int journalHiddenRows() { return (journalTiles() + kJournalCols - 1) / kJournalCols - kJournalRowsShown; }
 static const u32 kUnfound = rgba(40, 28, 20, 225);
 
 static void updateJournal(const Input& in, bool wasTouching) {
-	const int n = progress::journalPages() + 1;
+	const int n = journalTiles() + 1;
 	if (rowScroll(sJournalList, in, wasTouching, kJournalWindowTop, kJournalWindowTop + kJournalWindowH, kJournalStep, journalHiddenRows())) sPressed = -1;
-	Button btns[progress::kNamedFruit + 1];
+	Button btns[progress::kNamedFruit + BOSS_COUNT + 1];
 	for (int i = 0; i < n; i++) btns[i] = journalButton(i);
 	int& f = sFocus[SCREEN_JOURNAL];
 	if (f < 0 || f >= n) f = 1;
@@ -2977,15 +2980,36 @@ static void updateJournal(const Input& in, bool wasTouching) {
 	if (t == 0) cutBack(SCREEN_JOURNAL);
 }
 
+static bool bossBeaten(int boss) { return gSave.bossesBeaten >> boss & 1; }
+static int bossSprite(int boss) { return boss == BOSS_MELON ? fruit_melon_idx : fruit_bomb_idx; }
+
+static void drawJournalBossTile(const Button& b, int boss, bool focused, bool pressed) {
+	drawPlank(b.x, b.y, b.w, b.h, focused, pressed);
+	const float cx = b.x + b.w * 0.5f;
+	const bool beaten = bossBeaten(boss);
+	gfx::sprite(SHEET_FRUIT, bossSprite(boss), cx, b.y + 17, 0.62f, 0.62f, 0, beaten ? WHITE : kUnfound);
+	// A small crown marks it as a boss.
+	const u32 gold = beaten ? rgba(255, 210, 80) : rgba(90, 80, 70, 220);
+	gfx::rect(cx - 7, b.y + 3, 14, 3, gold);
+	gfx::tri(cx - 7, b.y + 3, gold, cx - 5, b.y - 2, gold, cx - 3, b.y + 3, gold);
+	gfx::tri(cx - 2, b.y + 3, gold, cx, b.y - 3, gold, cx + 2, b.y + 3, gold);
+	gfx::tri(cx + 3, b.y + 3, gold, cx + 5, b.y - 2, gold, cx + 7, b.y + 3, gold);
+	gfx::text(beaten ? "BEATEN" : "?", cx, b.y + 32, 0.26f, focused ? COL_ACCENT : COL_CREAM, ALIGN_CENTER);
+}
+
 static void drawJournal() {
 	const int f = sFocus[SCREEN_JOURNAL];
 	drawHeader("Fruit Journal");
 	drawBackArrow(f == 0, sPressed == 0);
 	char buf[12];
 	gfx::setClip(0, kJournalWindowTop, 320, kJournalWindowH);
-	for (int p = 0; p < progress::journalPages(); p++) {
+	for (int p = 0; p < journalTiles(); p++) {
 		const Button b = journalButton(p + 1);
 		if (b.y + b.h + 2 < kJournalWindowTop || b.y - 2 > kJournalWindowTop + kJournalWindowH) continue;
+		if (journalIsBoss(p)) {
+			drawJournalBossTile(b, p - progress::journalPages(), f == p + 1, sPressed == p + 1);
+			continue;
+		}
 		const int fruit = progress::journalFruit(p);
 		const u32 count = gSave.fruitSliced[fruit];
 		const bool focused = f == p + 1;
@@ -3000,6 +3024,28 @@ static void drawJournal() {
 	}
 	gfx::clearClip();
 	drawScrollMark(kJournalTop, kJournalRowsShown * kJournalStep - 2, sJournalList.pos, journalHiddenRows() * kJournalStep);
+}
+
+// A boss's page: who it is, where it waits, and what beating it gave.
+static void drawJournalBossTop(int boss) {
+	char buf[64];
+	const bool beaten = bossBeaten(boss);
+	gfx::setDepth(1.0f);
+	gfx::sprite(SHEET_FRUIT, bossSprite(boss), 200, 60, 1.5f, 1.5f, gSave.calmFx ? 0 : sinf(sTime * 1.3f) * 0.1f, beaten ? WHITE : kUnfound);
+	gfx::setDepth(0.7f);
+	gfx::text(beaten ? kBosses[boss].name : "Not beaten yet", 200, 98, 0.6f, COL_ACCENT, ALIGN_CENTER);
+	snprintf(buf, sizeof buf, "ORCHARD BLAST, ROOM %d", boss == BOSS_MELON ? 5 : 10);
+	gfx::text(buf, 200, 126, 0.4f, COL_CREAM, ALIGN_CENTER);
+	snprintf(buf, sizeof buf, "%d SLICES TO BEAT", kBosses[boss].slices);
+	gfx::text(buf, 200, 144, 0.4f, COL_CREAM, ALIGN_CENTER);
+	if (beaten) fitText(boss == BOSS_MELON ? "Spits seeds and flops. Slice it when its guard drops." : "Fires cannonballs and lights its fuse. Snuff the fuse in three swipes.", 200, 168, 0.34f, 320, COL_DIM);
+	else fitText("Reach it in Orchard Blast and beat it to fill this page.", 200, 168, 0.34f, 320, COL_DIM);
+	const int tracks = bossTrackCount(boss);
+	if (tracks > 0) {
+		if (beaten) snprintf(buf, sizeof buf, "Its %d tracks are in the Shop", tracks);
+		else snprintf(buf, sizeof buf, "Unlocks %d tracks in the Shop", tracks);
+		gfx::text(buf, 200, 198, 0.38f, beaten ? COL_ACCENT : COL_CREAM, ALIGN_CENTER);
+	}
 }
 
 static void drawJournalTop() {
@@ -3019,8 +3065,16 @@ static void drawJournalTop() {
 		gfx::text(buf, 200, 92, 0.44f, COL_CREAM, ALIGN_CENTER);
 		snprintf(buf, sizeof buf, "MILESTONES %d OF %d", levels, progress::journalPages() * progress::kJournalLevels);
 		gfx::text(buf, 200, 118, 0.44f, COL_CREAM, ALIGN_CENTER);
-		gfx::text("Every milestone pays coins.", 200, 156, 0.38f, COL_DIM, ALIGN_CENTER);
+		int beaten = 0;
+		for (int k = 0; k < BOSS_COUNT; k++) beaten += bossBeaten(k);
+		snprintf(buf, sizeof buf, "BOSSES BEATEN %d OF %d", beaten, (int)BOSS_COUNT);
+		gfx::text(buf, 200, 138, 0.44f, COL_CREAM, ALIGN_CENTER);
+		gfx::text("Every milestone pays coins.", 200, 166, 0.38f, COL_DIM, ALIGN_CENTER);
 		gfx::text("Back to the title", 200, 196, 0.42f, COL_CREAM, ALIGN_CENTER);
+		return;
+	}
+	if (journalIsBoss(f - 1)) {
+		drawJournalBossTop(f - 1 - progress::journalPages());
 		return;
 	}
 	const int fruit = progress::journalFruit(f - 1);
