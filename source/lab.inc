@@ -418,6 +418,25 @@ static void labWatchGame() {
 		return;
 	}
 	if (sBotModeFrames == 120) labCheck(audio::musicTime() >= 0, "game music plays", modeName(sGame.mode));
+	if (sGame.mode == MODE_ORCHARD) {
+		// Orchard Blast: the how-to shows on a first run and holds play; level-up cards are taken with A.
+		static bool sawHowTo, sawCards, cardsChecked;
+		if (sBotModeFrames == 1) {
+			sawHowTo = sawCards = cardsChecked = false;
+			gSave.howToSeen = 0;
+		}
+		if (sOrcHowTo && !sawHowTo && sOrcHowToT > 0.7f) {
+			sawHowTo = true;
+			const float el = sGame.elapsed;
+			labCheck(sOrcHowTo == 1 && el < 3, "Orchard Blast shows its how-to at the start of a first run");
+		}
+		if ((sOrcHowTo && sOrcHowToT > 0.7f) || (sGame.orc.choosing && sBotModeFrames % 40 == 0)) sBotKeys = KEY_A;
+		if (sGame.orc.choosing) sawCards = true;
+		if (sawCards && !cardsChecked && !sGame.orc.choosing && sGame.orc.level > 1 && sawHowTo) {
+			cardsChecked = true;
+			labCheck(gSave.howToSeen & 1, "a level-up card is picked with A, and play goes on", "");
+		}
+	}
 	if (sGame.mode == MODE_PRACTICE && sGame.practiceStep < PS_FRENZY && (sGame.feverMeter > 0 || sGame.chain >= 2)) sLabMeterEarly = true;
 	if (sGame.statBombHits != sLabBombHits) {
 		sLabBombHits = sGame.statBombHits;

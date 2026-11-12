@@ -140,6 +140,16 @@ void Game::orcStart() {
 	orc.slot[0] = orc.slot[1] = CARD_NONE;
 	maxStrikes = 0;  // HP, not misses
 	setCallout("ROOM 1", rgba(255, 230, 140));
+#ifdef TEST_ORCHARD
+	// Screenshots: a level up straight away, a charm in each slot, and the first boss soon after.
+	orc.level = 2;
+	orc.levelsWaiting = 1;
+	orc.slot[0] = CARD_BLENDER;
+	orc.slot[1] = CARD_GOLDAPPLE;
+	orc.room = 4;
+	orc.roomT = 9;
+	orc.upgrade[CARD_ARMOR] = 2;
+#endif
 }
 
 float Game::orcDifficulty() const { return plan(orc.room).d; }
@@ -714,7 +724,9 @@ void Game::drawOrchardHud(float x, float y, float w, float u) const {
 		const int all = kBosses[b.id].slices;
 		for (int i = 0; i < all; i++) {
 			const bool cut = i < all - b.left;
-			gfx::sprite(SHEET_SPRITES, cut ? sprites_pip_on_idx : sprites_pip_off_idx, x - 6 * u - (all - 1 - i) * 13 * u, y + 20 * u, 0.36f * u, 0.36f * u);
+			// One mark per slice it needs: bright while still to do, dim once landed.
+			const float px = x - 10 * u - (all - 1 - i) * 13 * u;
+			gfx::rect(px, y + 17 * u, 9 * u, 7 * u, cut ? rgba(90, 70, 60, 200) : rgba(255, 110, 90));
 		}
 	} else {
 		snprintf(buf, sizeof buf, "ROOM %d/%d", orc.room > kOrchardRooms ? kOrchardRooms : orc.room, kOrchardRooms);

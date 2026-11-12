@@ -7,6 +7,9 @@ static int sOrcInvFocus;      // 0 Back to the run, 1 Swap Slots
 static float sOrcOpenT;       // seconds the cards have been up: a short lock-out stops a swipe picking one
 static bool sOrcSlotTouch;    // this touch began on a charm slot, so it never becomes a slice
 static int sOrcCardDown = -1;
+static int sOrcHowTo;         // a how-to panel is up: 0 none, 1 the run, 2 the first boss
+static float sOrcHowToT;
+static void drawOrchardHowTo();
 
 static u32 rarityColor(int r) {
 	return r == RARE_LEGEND ? rgba(255, 205, 80) : (r == RARE_RARE ? rgba(120, 190, 255) : rgba(220, 210, 190));
@@ -57,7 +60,8 @@ static void drawOrcCard(int card, float x, float y, float w, float h, bool focus
 		cardNextLine(card, o.upgrade[card], buf, sizeof buf);
 		orcFit(buf, x + w * 0.5f, ty, 0.24f, w - 10, rgba(170, 230, 255));
 		ty += 13;
-		snprintf(buf, sizeof buf, "Level %d of %d", o.upgrade[card], info.maxLevel);
+		if (o.upgrade[card]) snprintf(buf, sizeof buf, "You have level %d of %d", o.upgrade[card], info.maxLevel);
+		else snprintf(buf, sizeof buf, "Up to level %d", info.maxLevel);
 		orcFit(buf, x + w * 0.5f, ty, 0.22f, w - 10, COL_DIM);
 	} else if (info.kind == KIND_REUSABLE) {
 		if (info.lasts > 0) snprintf(buf, sizeof buf, "Lasts %d s, ready again %d s", (int)info.lasts, (int)info.cooldown);
@@ -86,6 +90,10 @@ static void orcPlaceRect(int s, float* x, float* y, float* w, float* h) {
 
 static void drawOrchardMenus() {
 	if (sGame.mode != MODE_ORCHARD) return;
+	if (sOrcHowTo) {
+		drawOrchardHowTo();
+		return;
+	}
 	const Orchard& o = sGame.orc;
 	char buf[64];
 	if (o.choosing) {
@@ -178,6 +186,64 @@ static void drawOrchardMenus() {
 	drawSign(swap, swap.label, sOrcInvFocus == 1, false, 0.44f);
 }
 
+// How-to panels, once each: the first run, and the first boss. They hold the run until tapped away.
+static void drawOrchardHowTo() {
+	if (!sOrcHowTo) return;
+	const char* slots = PORT_3DS ? "L and R" : (gStickInUse ? "LB and RB" : "Q and E");
+	const char* inv = PORT_3DS ? "Select" : (gStickInUse ? "Back" : "Tab");
+	char a[64], b[64];
+	const char* lines[6];
+	const char* title;
+	int n = 0;
+	if (sOrcHowTo == 1) {
+		title = "ORCHARD BLAST";
+		lines[n++] = "Ten rooms. A boss waits in rooms 5 and 10.";
+		lines[n++] = "Bombs and bosses cost HP. Dropped fruit never do.";
+		lines[n++] = "Slice fruit for XP. Each level up, pick a card.";
+		snprintf(a, sizeof a, "Charms sit in two slots: tap them, or use %s.", slots);
+		lines[n++] = a;
+		snprintf(b, sizeof b, "%s opens your Inventory.", inv);
+		lines[n++] = b;
+	} else {
+		title = "BOSS FIGHT";
+		lines[n++] = "A blue ring means its guard is up.";
+		lines[n++] = "Slicing it then costs you HP: Deflected!";
+		lines[n++] = "A gold ring means the guard is down. Slice!";
+		lines[n++] = "After a slice it's confused for a moment.";
+		lines[n++] = "Slice its shots before they land.";
+	}
+	gfx::rect(kFillX, kFillX, kFillW, kFillW, rgba(20, 12, 8, 190));
+	const float w = kFieldW - 24 > 380 ? 380 : kFieldW - 24, x = (kFieldW - w) * 0.5f;
+	const float h = 40 + n * 20 + 34, y = kFieldTop + (kFieldH - kFieldTop - h) * 0.5f;
+	gfx::sign(sprites_plank_idx, x, y, w, h, COL_PLANK);
+	orcFit(title, kFieldW * 0.5f, y + 8, 0.56f, w - 16, rgba(255, 230, 140));
+	for (int i = 0; i < n; i++) orcFit(lines[i], kFieldW * 0.5f, y + 40 + i * 20, 0.3f, w - 16, COL_CREAM);
+	if (sOrcHowToT > 0.6f) orcFit(PORT_3DS ? "Tap or press A" : "Tap, click or press A", kFieldW * 0.5f, y + h - 24, 0.28f, w - 16, COL_DIM);
+}
+
+// True while a how-to panel is up.
+static bool orchardHowTo(const Input& in, bool wasTouching) {
+	const Orchard& o = sGame.orc;
+	if (!sOrcHowTo && !o.choosing && !sOrcInv) {
+		if (!(gSave.howToSeen & 1)) sOrcHowTo = 1;
+		else if (o.boss.on && !o.boss.beaten && o.boss.enterT <= 0 && !(gSave.howToSeen & 2)) sOrcHowTo = 2;
+		if (sOrcHowTo) {
+			sOrcHowToT = 0;
+			sBlade.reset();
+			audio::fuse(false);
+		}
+	}
+	if (!sOrcHowTo) return false;
+	sOrcHowToT += kDt;
+	if (sOrcHowToT > 0.6f && ((in.touching && !wasTouching) || (in.down & (KEY_A | KEY_B | KEY_START | KEY_SELECT)))) {
+		audio::click();
+		gSave.howToSeen |= sOrcHowTo == 1 ? 1 : 2;
+		sOrcHowTo = 0;
+		sGame.orcResume();
+	}
+	return true;
+}
+
 static bool tapped(const Input& in, bool wasTouching, float x, float y, float w, float h) {
 	return in.touching && !wasTouching && in.tx >= x && in.tx < x + w && in.ty >= y && in.ty < y + h;
 }
@@ -188,6 +254,7 @@ static bool updateOrchardMenus(const Input& in, bool wasTouching) {
 		sOrcInv = false;
 		return false;
 	}
+	if (orchardHowTo(in, wasTouching)) return true;
 	Orchard& o = sGame.orc;
 	if (o.choosing) {
 		sOrcInv = false;
@@ -287,8 +354,14 @@ static bool updateOrchardMenus(const Input& in, bool wasTouching) {
 		}
 		return true;
 	}
-	// Charm slots: L and R (Q and E on a keyboard), or a tap on the slot.
-	if (sGame.orchardHeld()) return false;
+	// Charm slots: L and R (Q and E on a keyboard), or a tap on the slot. A touch that starts on a slot
+	// waits: let go quickly without moving and the charm fires; move away and it becomes a slice after all.
+	static int slotDown = -1;
+	static float slotT, slotX, slotY;
+	if (sGame.orchardHeld()) {
+		sOrcSlotTouch = false;
+		return false;
+	}
 	if (in.down & KEY_L) sGame.orcUse(0);
 	if (in.down & KEY_R) sGame.orcUse(1);
 	if (in.touching && !wasTouching) {
@@ -296,11 +369,23 @@ static bool updateOrchardMenus(const Input& in, bool wasTouching) {
 			float x, y, w, h;
 			Game::orcSlotRect(s, &x, &y, &w, &h);
 			if (in.tx >= x && in.tx < x + w && in.ty >= y && in.ty < y + h && o.slot[s] != CARD_NONE) {
-				sGame.orcUse(s);
+				slotDown = s;
+				slotT = 0;
+				slotX = (float)in.tx;
+				slotY = (float)in.ty;
 				sOrcSlotTouch = true;
 			}
 		}
 	}
-	if (!in.touching) sOrcSlotTouch = false;
+	if (sOrcSlotTouch) {
+		slotT += kDt;
+		if (in.touching) {
+			if (fabsf(in.tx - slotX) + fabsf(in.ty - slotY) > 14) sOrcSlotTouch = false;  // a swipe after all
+		} else {
+			if (slotT < 0.4f && slotDown >= 0) sGame.orcUse(slotDown);
+			sOrcSlotTouch = false;
+		}
+		if (!sOrcSlotTouch) slotDown = -1;
+	}
 	return false;
 }

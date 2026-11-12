@@ -3035,8 +3035,13 @@ static void drawStatsTop() {
 	topPanel(30, 86, 340, 146);
 	gfx::setDepth(0.7f);
 	gfx::text("BEST SCORES", 200, 92, 0.4f, COL_ACCENT, ALIGN_CENTER);
-	for (int m = 0; m < MODE_COUNT; m++) {
-		const float x = m < 5 ? 46 : 214, y = 114 + (m % 5) * 22;
+	// The modes on Pick a Game, five to a column.
+	int shown = 0;
+	for (int i = 0; i < (int)sizeof kModeOrder; i++) {
+		const int m = kModeOrder[i];
+		if (m >= MODE_COUNT || shown >= 10) continue;
+		const float x = shown < 5 ? 46 : 214, y = 114 + (shown % 5) * 22;
+		shown++;
 		gfx::text(kModes[m].name, x, y, 0.34f, COL_DIM);
 		snprintf(buf, sizeof buf, "%lu", (unsigned long)gSave.best[m]);
 		gfx::text(buf, x + 140, y - 1, 0.38f, COL_CREAM, ALIGN_RIGHT);
@@ -4087,9 +4092,19 @@ static void drawTopContent(Screen screen) {
 				snprintf(buf, sizeof buf, sGame.mixed ? "MIXER BEST %lu" : (sGame.assisted ? "ASSISTED BEST %lu" : "BEST %lu"), (unsigned long)sGame.best);
 				gfx::text(buf, 200, 116, 0.6f, COL_DIM, ALIGN_CENTER);
 			}
-			if (sGame.mode == MODE_BEAT) snprintf(buf, sizeof buf, "SLICED %d   ON THE BEAT %d", sGame.sliced, sGame.beatHits);
-			else snprintf(buf, sizeof buf, "SLICED %d   BEST COMBO %d", sGame.sliced, sGame.bestCombo);
-			gfx::text(buf, 200, 152, 0.42f, COL_CREAM, ALIGN_CENTER);
+			if (sGame.mode == MODE_ORCHARD) {
+				// How far the run got, and what it was built from.
+				const Orchard& o = sGame.orc;
+				if (o.won) snprintf(buf, sizeof buf, "ORCHARD CLEARED!");
+				else snprintf(buf, sizeof buf, "REACHED ROOM %d OF %d", o.room, kOrchardRooms);
+				gfx::text(buf, 200, 142, 0.44f, o.won ? rgba(255, 230, 140) : COL_CREAM, ALIGN_CENTER);
+				snprintf(buf, sizeof buf, "LEVEL %d   BOSSES %d   SLICED %d", o.level, o.bossesBeaten, sGame.sliced);
+				gfx::text(buf, 200, 160, 0.36f, COL_DIM, ALIGN_CENTER);
+			} else {
+				if (sGame.mode == MODE_BEAT) snprintf(buf, sizeof buf, "SLICED %d   ON THE BEAT %d", sGame.sliced, sGame.beatHits);
+				else snprintf(buf, sizeof buf, "SLICED %d   BEST COMBO %d", sGame.sliced, sGame.bestCombo);
+				gfx::text(buf, 200, 152, 0.42f, COL_CREAM, ALIGN_CENTER);
+			}
 			if (sCardFrame) {
 				// The score card: the game's name where the coins go, which are nobody else's business.
 				gfx::setDepth(1.2f);
@@ -5054,8 +5069,8 @@ static void updateFrame(const Input& in, bool wasTouching) {
 #endif
 			{
 				const bool orcTook = updateOrchardMenus(in, wasTouching);
-				if (sOrcInv) {
-					if (in.down & KEY_START) {
+				if (sOrcInv || sOrcHowTo) {
+					if ((in.down & KEY_START) && sOrcInv) {
 						sOrcInv = false;
 						pauseGame();
 					}

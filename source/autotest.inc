@@ -509,6 +509,31 @@ static void autotestInput(Input& in) {
 		return;
 	}
 	if (sBotModeFrames % 2400 == 0) fprintf(stderr, "[bot] t=%lus score=%lu\n", (unsigned long)(sBotModeFrames / 60), (unsigned long)sGame.score);
+	if (sGame.mode == MODE_ORCHARD) {
+		// Opens the Inventory once, a few seconds in, and checks that it holds the run.
+		static bool invDone;
+		static int invCheck;
+		static float invElapsed;
+		if (sBotModeFrames == 1) invDone = false, invCheck = 0;
+		if (!invDone && sBotModeFrames > 300 && !sOrcHowTo && !sGame.orc.choosing && !sGame.orchardHeld() && sGame.phase == PHASE_PLAY) {
+			invDone = true;
+			invElapsed = sGame.elapsed;
+			invCheck = 30;
+			in.down |= KEY_SELECT;
+			return;
+		}
+#ifdef LAB
+		if (invCheck > 0 && --invCheck == 0) labCheck(sOrcInv && sGame.elapsed == invElapsed, "Select opens the Inventory in Orchard Blast, and it holds the run");
+#endif
+		if (sOrcInv && invCheck == 0 && sBotModeFrames % 90 == 0) {
+			in.down |= KEY_A;  // Back to Run
+			return;
+		}
+	}
+	if (sGame.mode == MODE_ORCHARD && (sOrcHowTo || sGame.orc.choosing) && sBotModeFrames % 90 == 0) {
+		in.down |= KEY_A;  // Orchard Blast: past the how-to, and the first card
+		return;
+	}
 
 	if (sGame.phase == PHASE_FINALE) {
 		// Scrub back and forth over the finale fruit, like a player would.
@@ -557,6 +582,7 @@ static void autotestInput(Input& in) {
 	const u32 kSeekBombsAt = 1500;
 #endif
 	bool suicide = sBotModeFrames > kSeekBombsAt && sGame.timeLeft <= 0 && sGame.mode != MODE_PRACTICE;  // lessons want bombs left alone
+	if (sGame.mode == MODE_ORCHARD && sBotModeFrames < kSeekBombsAt + 1200) suicide = false;  // HP takes a while to run out: slice first
 #endif
 #endif
 	if (sGame.mode == MODE_ZEN && sBotModeFrames == 900) sGame.finishRun();  // Zen is endless: stop it as the pause menu would

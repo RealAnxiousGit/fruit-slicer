@@ -119,7 +119,7 @@ void Game::bossNextAttack() {
 	b.volleyT = 0;
 	switch (a) {
 		case MEL_SEEDS:
-			b.volley = 4 + 2 * b.phase;
+			b.volley = 3 + b.phase;
 			addPopup("SEED SPIT", b.x, b.y - b.radius - 14, rgba(255, 200, 160), 0.55f);
 			break;
 		case MEL_FLOP:
@@ -210,7 +210,7 @@ void Game::bossAttack(float dt) {
 			if (t >= 1.8f) {
 				b.squash = 0;
 				shake = 0.8f;
-				orcHurt(bossDamage(4), b.x, b.y, "CHARGE");
+				orcHurt(bossDamage(3), b.x, b.y, "CHARGE");
 				bossOpen(lv.openTime);
 				b.attack = ATK_NONE;
 			}
@@ -268,7 +268,7 @@ void Game::bossAttack(float dt) {
 				flashColor = rgba(255, 210, 150);
 				shake = 1;
 				emitSparks(b.x, b.y - b.radius, rgba(255, 190, 90), juiceAmount(24), 220);
-				orcHurt(bossDamage(6), b.x, b.y, "BLAST");
+				orcHurt(bossDamage(5), b.x, b.y, "BLAST");
 				b.attack = ATK_NONE;
 			}
 			break;
@@ -292,7 +292,7 @@ void Game::shotsUpdate(float dt) {
 			if (s.life <= 0) {
 				s.on = false;
 				b.crownOut = 0;
-				orcHurt(bossDamage(3), b.x, b.y - b.radius, "CROWN");
+				orcHurt(bossDamage(2), b.x, b.y - b.radius, "CROWN");
 			}
 			continue;
 		}
@@ -306,7 +306,7 @@ void Game::shotsUpdate(float dt) {
 		}
 		if (s.y > kFieldH - 4 && s.vy > 0) {
 			s.on = false;
-			const int dmg = s.kind == SHOT_CANNON ? 3 : (s.kind == SHOT_SEED ? 2 : 1);
+			const int dmg = s.kind == SHOT_CANNON ? 2 : 1;
 			emitJuice(s.x, (float)kFieldH - 6, s.kind == SHOT_CANNON ? rgba(90, 90, 100) : rgba(255, 90, 110), juiceAmount(6), 0, -1);
 			orcHurt(bossDamage(dmg), s.x, kFieldH - 20.0f, s.kind == SHOT_CANNON ? "CANNON" : (s.kind == SHOT_SEED ? "SEED" : "SPLASH"));
 		}
@@ -533,7 +533,7 @@ void Game::drawBoss(bool solid) const {
 	const float wob = b.dazeT > 0 ? sinf(b.t * 7) * 0.25f : sinf(b.t * 1.7f) * 0.06f;
 	// The guard: a cool ring while it's up, a warm one while it's open.
 	if (!b.beaten && b.enterT <= 0 && b.dazeT <= 0) {
-		const float ring = b.radius * 2.5f * (1 + grow) / 34;
+		const float ring = b.radius * 1.5f * (1 + grow) / 34;
 		const float pulse = 0.65f + 0.25f * sinf(b.t * 5);
 		if (b.guard) gfx::sprite(SHEET_SPRITES, sprites_ring_idx, b.x, b.y, ring, ring, 0, rgba(140, 200, 255, (int)(200 * pulse * alpha)));
 		else gfx::sprite(SHEET_SPRITES, sprites_ring_idx, b.x, b.y, ring * 1.08f, ring * 1.08f, 0, rgba(255, 220, 110, (int)(230 * pulse * alpha)));
