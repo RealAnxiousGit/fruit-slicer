@@ -4404,7 +4404,7 @@ static void drawRows() {
 
 static void drawBottomContent(Screen screen) {
 	static const int kIcons[MODE_COUNT] = {sprites_pip_on_idx, sprites_ic_clock_idx, sprites_ic_leaf_idx, sprites_ic_fast_idx, sprites_ic_one_idx, sprites_ic_mine_idx, sprites_ic_chain_idx, sprites_coin_idx, sprites_ic_note_idx,
-	                                          sprites_ic_leaf_idx, sprites_crack_idx, sprites_drop_idx, sprites_ring_idx, sprites_arrow_idx};  // 1.2: placeholders until their own icons are drawn
+	                                          sprites_ic_tree_idx, sprites_ic_crown_idx, sprites_ic_cup_idx, sprites_ic_target_idx, sprites_ic_juggle_idx};
 	sDrawing = screen;
 	gfx::clearPanels();
 	switch (screen) {

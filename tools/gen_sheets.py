@@ -45,7 +45,7 @@ def sprite_list():
         ("coin", g.spr_coin()), ("coin_back", g.spr_coin(True)), ("coin_rim", g.spr_coin_rim()),
         ("pw_magnet", g.spr_power("magnet")), ("pw_wide", g.spr_power("wide")), ("pw_shield", g.spr_power("shield")), ("pw_time", g.spr_power("time")),
         ("ic_note", g.spr_icon("note")),
-    ]
+    ] + g.orchard_sprites()
 
 
 def logo_list():
@@ -148,6 +148,25 @@ def ultra(boards=True):
         f.write("\n".join(lines) + "\n")
 
 
+def replace_line(header, prefix, line):
+    with open(header) as f:
+        old = f.read().split("\n")
+    with open(header, "w", newline="\n") as f:
+        f.write("\n".join(line if l.startswith(prefix) else l for l in old))
+
+
+def sprites_only():
+    """Rebuilds just the sprite atlas, normal and Ultra, and their lines in the two tables. The boards are left alone."""
+    lines = []
+    write_atlas("sprites", sprite_list, 2048, lines)
+    replace_line(os.path.join(OUT_H, "sheet_rects.h"), "static const SheetRect kRectsSprites[]", lines[0])
+    os.makedirs(OUT_ULTRA, exist_ok=True)
+    g.SS = ULTRA_SS
+    lines = []
+    write_atlas("sprites", sprite_list, 4096, lines, defines=False, out=OUT_ULTRA, table="kRectsSpritesUltra")
+    replace_line(os.path.join(OUT_H, "sheet_rects_ultra.h"), "static const SheetRect kRectsSpritesUltra[]", lines[0])
+
+
 def font_only():
     """Rebuilds just the font atlas and its line in sheet_rects.h."""
     lines = []
@@ -163,6 +182,8 @@ def font_only():
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "font":
         font_only()
+    elif len(sys.argv) > 1 and sys.argv[1] == "sprites":
+        sprites_only()
     elif len(sys.argv) > 1 and sys.argv[1] == "ultra":
         ultra()
     else:

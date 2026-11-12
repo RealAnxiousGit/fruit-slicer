@@ -24,10 +24,10 @@ static void orcFit(const char* s, float x, float y, float scale, float maxW, u32
 }
 
 static void orcCardRect(int i, int n, float* x, float* y, float* w, float* h) {
-	const float gap = 8, top = kFieldTop + 36;
+	const float gap = 8, top = kFieldTop + 30;
 	float cw = (kFieldW - 24 - gap * (n - 1)) / n;
 	if (cw > 130) cw = 130;
-	float ch = kFieldH - top - 52;
+	float ch = kFieldH - top - 42;
 	if (ch > 170) ch = 170;
 	const float total = cw * n + gap * (n - 1);
 	*x = (kFieldW - total) * 0.5f + i * (cw + gap);
@@ -35,7 +35,7 @@ static void orcCardRect(int i, int n, float* x, float* y, float* w, float* h) {
 	*w = cw;
 	*h = ch;
 }
-static Button orcRerollButton() { return {kFieldW * 0.5f - 60, kFieldH - 42.0f, 120, 32, "Reroll"}; }
+static Button orcRerollButton() { return {kFieldW * 0.5f - 60, kFieldH - 36.0f, 120, 30, "Reroll"}; }
 static Button orcKeepButton() { return {kFieldW * 0.5f - 70, kFieldH - 42.0f, 140, 32, "Keep Mine"}; }
 
 static void drawOrcCard(int card, float x, float y, float w, float h, bool focused) {
@@ -44,22 +44,22 @@ static void drawOrcCard(int card, float x, float y, float w, float h, bool focus
 	const u32 rc = rarityColor(info.rarity);
 	gfx::sign(sprites_plank_idx, x, y, w, h, focused ? COL_ACCENT : COL_PLANK);
 	gfx::rect(x + 4, y + 4, w - 8, 4, rc);
-	float ty = y + 12;
-	orcFit(rarityName(info.rarity), x + w * 0.5f, ty, 0.24f, w - 10, rc);
-	ty += 12;
-	orcFit(cardKindName(info.kind), x + w * 0.5f, ty, 0.24f, w - 10, COL_DIM);
-	ty += 16;
-	orcFit(info.name, x + w * 0.5f, ty, 0.4f, w - 10, COL_CREAM);
-	ty += 24;
-	orcFit(info.line1, x + w * 0.5f, ty, 0.26f, w - 10, COL_CREAM);
-	ty += 13;
-	if (info.line2[0]) orcFit(info.line2, x + w * 0.5f, ty, 0.26f, w - 10, COL_CREAM);
-	ty += 18;
+	gfx::sprite(SHEET_SPRITES, cardIcon(card), x + w * 0.5f, y + 20, 0.7f, 0.7f);
 	char buf[48];
+	snprintf(buf, sizeof buf, "%s %s", rarityName(info.rarity), cardKindName(info.kind));
+	float ty = y + 33;
+	orcFit(buf, x + w * 0.5f, ty, 0.22f, w - 10, rc);
+	ty += 12;
+	orcFit(info.name, x + w * 0.5f, ty, 0.36f, w - 10, COL_CREAM);
+	ty += 20;
+	orcFit(info.line1, x + w * 0.5f, ty, 0.25f, w - 10, COL_CREAM);
+	ty += 12;
+	if (info.line2[0]) orcFit(info.line2, x + w * 0.5f, ty, 0.25f, w - 10, COL_CREAM);
+	ty += 15;
 	if (info.kind == KIND_UPGRADE) {
 		cardNextLine(card, o.upgrade[card], buf, sizeof buf);
-		orcFit(buf, x + w * 0.5f, ty, 0.24f, w - 10, rgba(170, 230, 255));
-		ty += 13;
+		orcFit(buf, x + w * 0.5f, ty, 0.23f, w - 10, rgba(170, 230, 255));
+		ty += 11;
 		if (o.upgrade[card]) snprintf(buf, sizeof buf, "You have level %d of %d", o.upgrade[card], info.maxLevel);
 		else snprintf(buf, sizeof buf, "Up to level %d", info.maxLevel);
 		orcFit(buf, x + w * 0.5f, ty, 0.22f, w - 10, COL_DIM);
@@ -78,7 +78,12 @@ static void drawOrcSlotBox(int s, float x, float y, float w, float h, bool focus
 	char buf[24];
 	snprintf(buf, sizeof buf, "Slot %d", s + 1);
 	gfx::text(buf, x + w * 0.5f, y + 6, 0.26f, COL_DIM, ALIGN_CENTER);
-	orcFit(card == CARD_NONE ? "Empty" : kCards[card].name, x + w * 0.5f, y + h * 0.5f - 6, 0.36f, w - 10, COL_CREAM);
+	if (card == CARD_NONE) {
+		orcFit("Empty", x + w * 0.5f, y + h * 0.5f - 6, 0.36f, w - 10, COL_DIM);
+	} else {
+		gfx::sprite(SHEET_SPRITES, cardIcon(card), x + 20, y + h * 0.5f + 4, 0.7f, 0.7f);
+		orcFit(kCards[card].name, x + 36, y + h * 0.5f - 4, 0.3f, w - 42, COL_CREAM, ALIGN_LEFT);
+	}
 }
 
 static void orcPlaceRect(int s, float* x, float* y, float* w, float* h) {
@@ -145,7 +150,8 @@ static void drawOrchardMenus() {
 		if (kCards[c].kind != KIND_UPGRADE || !o.upgrade[c]) continue;
 		any = true;
 		snprintf(buf, sizeof buf, "%s %d", kCards[c].name, o.upgrade[c]);
-		orcFit(buf, lx + 6, y, 0.28f, colW - 6, COL_CREAM, ALIGN_LEFT);
+		gfx::sprite(SHEET_SPRITES, cardIcon(c), lx + 12, y + 6, 0.36f, 0.36f);
+		orcFit(buf, lx + 22, y, 0.28f, colW - 22, COL_CREAM, ALIGN_LEFT);
 		y += 13;
 		if (y > kFieldH - 60) break;
 	}
@@ -162,7 +168,8 @@ static void drawOrchardMenus() {
 		ry += 13;
 	}
 	for (int i = 0; i < o.passiveCount && ry < kFieldH - 110; i++) {
-		orcFit(kCards[o.passiveOrder[i]].name, rx + 6, ry, 0.28f, colW - 6, COL_CREAM, ALIGN_LEFT);
+		gfx::sprite(SHEET_SPRITES, cardIcon(o.passiveOrder[i]), rx + 12, ry + 6, 0.36f, 0.36f);
+		orcFit(kCards[o.passiveOrder[i]].name, rx + 22, ry, 0.28f, colW - 22, COL_CREAM, ALIGN_LEFT);
 		ry += 13;
 	}
 	ry += 8;

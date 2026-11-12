@@ -33,6 +33,7 @@ struct CardInfo {
 };
 extern const CardInfo kCards[CARD_COUNT];
 const char* cardKindName(CardKind k);
+int cardIcon(int card);  // its badge on SHEET_SPRITES
 // What the next level of a card would do, with real numbers, for the details panel. Empty if nothing changes.
 void cardNextLine(int card, int level, char* out, int size);
 

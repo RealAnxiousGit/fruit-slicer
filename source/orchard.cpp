@@ -60,6 +60,10 @@ const CardInfo kCards[CARD_COUNT] = {
 	{"Juice Flood", "For 5 s, the screen floods", "with fruit, at double XP.", KIND_SINGLE, RARE_RARE, 1, 0, 0},
 };
 
+// Each card's badge on the sprite sheet: drawn in CardId order, so the first one leads.
+int cardIcon(int card) { return card >= 0 && card < CARD_COUNT ? sprites_cd_ring_idx + card : sprites_cd_ring_idx; }
+static_assert(sprites_cd_flood_idx - sprites_cd_ring_idx == CARD_FLOOD, "a card icon for every card, in order");
+
 const char* cardKindName(CardKind k) {
 	switch (k) {
 		case KIND_UPGRADE: return "Upgrade";
@@ -773,15 +777,8 @@ void Game::drawOrchardOverlay() const {
 		gfx::rect(x, y, w, 2, ready ? rgba(150, 230, 255) : rgba(90, 90, 110));
 		if (card != CARD_NONE) {
 			const CardInfo& info = kCards[card];
-			// Until the icons are in: the charm's first word, small.
-			const char* name = info.name;
-			int n = 0;
-			while (name[n] && name[n] != ' ' && n < 9) n++;
-			snprintf(buf, sizeof buf, "%.*s", n, name);
-			float ts = 0.26f;
-			const float tw = gfx::textWidth(buf, ts);
-			if (tw > w - 4) ts *= (w - 4) / tw;
-			gfx::text(buf, x + w * 0.5f, y + h * 0.5f - 6, ts, ready ? COL_CREAM : COL_DIM, ALIGN_CENTER);
+			const float is = (w - 10) / 32;
+			gfx::sprite(SHEET_SPRITES, cardIcon(card), x + w * 0.5f, y + h * 0.5f + 2, is, is, 0, ready ? WHITE : rgba(150, 150, 160, 200));
 			if (orc.slotCool[s] > 0 && info.cooldown > 0) {
 				const float k = clampf(orc.slotCool[s] / info.cooldown, 0, 1);
 				gfx::rect(x, y + h * (1 - k), w, h * k, rgba(0, 0, 0, 120));
