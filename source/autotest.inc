@@ -360,6 +360,15 @@ static void autotestInput(Input& in) {
 				fprintf(stderr, "[bot] all modes finished\n");
 				return;
 			}
+			{
+				// A mode still being built has no sign yet: skip it.
+				bool shown = false;
+				for (int i = 0; i < (int)sizeof kModeOrder; i++) shown |= kModeOrder[i] == sBotMode;
+				if (!shown) {
+					sBotMode++;
+					return;
+				}
+			}
 #ifdef LAB
 			if (labModePages()) return;
 #endif

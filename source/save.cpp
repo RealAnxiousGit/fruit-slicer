@@ -197,6 +197,11 @@ void saveRetireOldBests() {
 			if (gSave.bestMixer11[i] > gSave.bestMixer[i]) gSave.bestMixer[i] = gSave.bestMixer11[i];
 			if (gSave.modePlays11[i] > gSave.modePlays[i]) gSave.modePlays[i] = gSave.modePlays11[i];
 		}
+		// The old tables are retired: cleared, so they can never be copied over again.
+		memset(gSave.best11, 0, sizeof gSave.best11);
+		memset(gSave.bestAssisted11, 0, sizeof gSave.bestAssisted11);
+		memset(gSave.bestMixer11, 0, sizeof gSave.bestMixer11);
+		memset(gSave.modePlays11, 0, sizeof gSave.modePlays11);
 		gSave.bossMusic = 1;
 	}
 	if (gSave.scoreRules < 1) {

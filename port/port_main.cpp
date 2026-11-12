@@ -166,6 +166,9 @@ static u32 keyBits(SDL_Keycode k) {
 		case SDLK_RIGHT: case SDLK_D: return KEY_RIGHT;
 		case SDLK_RETURN: case SDLK_SPACE: return KEY_A;
 		case SDLK_ESCAPE: case SDLK_AC_BACK: return KEY_B | KEY_START;
+		case SDLK_Q: return KEY_L;  // Orchard Blast's charm slots, and the Shop's tabs
+		case SDLK_E: return KEY_R;
+		case SDLK_TAB: case SDLK_I: return KEY_SELECT;  // Orchard Blast's Inventory
 		default: return 0;
 	}
 }

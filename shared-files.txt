@@ -35,3 +35,8 @@ source/update.cpp
 source/update.h
 source/boom.cpp
 source/boom.h
+source/fruitids.h
+source/orchard.h
+source/orchard.cpp
+source/boss.cpp
+source/orchard_ui.inc

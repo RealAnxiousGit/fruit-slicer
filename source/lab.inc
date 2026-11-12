@@ -593,8 +593,22 @@ static void labFinish(Input& in) {
 			gSave.beatLatency = 0;
 			gSave.scoreRules = 1;
 			saveRetireOldBests();
-			labCheck(gSave.beatLatency == 100 && gSave.scoreRules == 2 && gSave.best[MODE_ZEN] == zenBefore, "a save from before the Latency Test starts at 0 ms and keeps its bests");
-			gSave.scoreRules = rulesBefore > 2 ? rulesBefore : 2;
+			labCheck(gSave.beatLatency == 100 && gSave.scoreRules == 3 && gSave.best[MODE_ZEN] == zenBefore, "a save from before the Latency Test starts at 0 ms and keeps its bests");
+			gSave.scoreRules = rulesBefore > 3 ? rulesBefore : 3;
+			// 1.2: the score tables moved to make room for more modes. Old bests come across, and only once.
+			{
+				const u32 classicNow = gSave.best[MODE_CLASSIC];
+				const u8 musicNow = gSave.bossMusic;
+				gSave.scoreRules = 2;
+				gSave.best11[MODE_CLASSIC] = classicNow + 500;
+				gSave.bossMusic = 0;
+				saveRetireOldBests();
+				labCheck(gSave.best[MODE_CLASSIC] == classicNow + 500 && gSave.best11[MODE_CLASSIC] == 0 && gSave.scoreRules == 3 && gSave.bossMusic == 1, "a 1.1 save keeps its bests in the bigger 1.2 tables, with Boss Music on");
+				gSave.best[MODE_CLASSIC] = classicNow;
+				saveRetireOldBests();
+				labCheck(gSave.best[MODE_CLASSIC] == classicNow, "the 1.2 score move happens only once");
+				gSave.bossMusic = musicNow;
+			}
 			sGame.start(MODE_CLASSIC);
 			sGame.beatPerLoop = 0;
 			sGame.beatFirst = 0;

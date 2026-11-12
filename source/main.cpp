@@ -305,12 +305,14 @@ enum { SIGN_MIXER = MODE_COUNT + 1, SIGN_PASS };  // signs on Pick a Game that o
 // The Mixer changes any mode, so where the info side can be touched it is a fruit of its own under the
 // mode's info sign. The 3DS can't touch its top screen, so there it stays a sign among the modes.
 static constexpr bool kMixerFruit = !PORT_3DS;
+// Boss Rush, Recipe, Sharpshooter and Juggle join the list as each one is built.
 #if PORT_3DS
-static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, SIGN_MIXER, SIGN_PASS};
+static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, MODE_ORCHARD, SIGN_MIXER, SIGN_PASS};
 #else
-static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, SIGN_PASS};
+static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, MODE_ORCHARD, SIGN_PASS};
 #endif
-static_assert(sizeof kModeOrder == MODE_COUNT + 2 - (kMixerFruit ? 1 : 0), "a sign for every mode");
+static constexpr int kModesComing = 4;  // the 1.2 modes not built yet; lower it as each one gets its sign
+static_assert(sizeof kModeOrder == MODE_COUNT + 2 - (kMixerFruit ? 1 : 0) - kModesComing, "a sign for every mode");
 static constexpr int kModesPerPage = 6;
 static constexpr int kModePages = ((int)sizeof kModeOrder + kModesPerPage - 1) / kModesPerPage;
 static constexpr float kModeTop = 46, kModeStep = 58, kModeSignW = 124, kModeSignH = 52;
@@ -1180,7 +1182,7 @@ static int passRowPlayer(const Row& r) {
 }
 
 static const Row kMixerRows[] = {
-	{ROW_CHOICE, "Low Gravity", &gSave.mixer[MIX_LOW_GRAVITY], 0, 1, kOffOn, 0, 0, ACT_NONE, "Fruit floats and hangs in the air.", "Not used in Daily Fruit or Beat Slice."},
+	{ROW_CHOICE, "Low Gravity", &gSave.mixer[MIX_LOW_GRAVITY], 0, 1, kOffOn, 0, 0, ACT_NONE, "Fruit floats and hangs in the air.", "Not used in Daily, Beat Slice or Boss Rush."},
 	{ROW_CHOICE, "Giant Fruit", &gSave.mixer[MIX_GIANT], 0, 1, kOffOn, 0, 0, ACT_NONE, "Every fruit is half as big again.", "Turns Tiny Fruit off."},
 	{ROW_CHOICE, "Tiny Fruit", &gSave.mixer[MIX_TINY], 0, 1, kOffOn, 0, 0, ACT_NONE, "Small fruit, harder to hit.", "Turns Giant Fruit off."},
 	{ROW_CHOICE, "Mirror", &gSave.mixer[MIX_MIRROR], 0, 1, kOffOn, 0, 0, ACT_NONE, "Your blade moves left when", "you move right."},
@@ -3878,7 +3880,7 @@ static void drawTopContent(Screen screen) {
 				gfx::text(m.name, 200, yName, 0.6f, COL_ACCENT, ALIGN_CENTER);
 				gfx::text(m.line1, 200, yLine, 0.38f, COL_CREAM, ALIGN_CENTER);
 				gfx::text(m.line2, 200, yLine + 18, 0.38f, COL_CREAM, ALIGN_CENTER);
-				if (mixerRulesOn() && mode < MODE_DAILY) snprintf(buf, sizeof buf, "MIXER BEST %lu", (unsigned long)gSave.bestMixer[mode]);
+				if (mixerRulesOn() && mixerMode(mode)) snprintf(buf, sizeof buf, "MIXER BEST %lu", (unsigned long)gSave.bestMixer[mode]);
 				else if (assistedRun()) snprintf(buf, sizeof buf, "ASSISTED BEST %lu", (unsigned long)gSave.bestAssisted[mode]);
 				else snprintf(buf, sizeof buf, "BEST %lu", (unsigned long)gSave.best[mode]);
 				gfx::text(buf, 200, yBest, 0.6f, COL_CREAM, ALIGN_CENTER);
@@ -4383,8 +4385,11 @@ static void drawRows() {
 	drawScrollMark(kListTop, 240 - kListTop, sScroll, maxScroll());
 }
 
+#include "orchard_ui.inc"
+
 static void drawBottomContent(Screen screen) {
-	static const int kIcons[MODE_COUNT] = {sprites_pip_on_idx, sprites_ic_clock_idx, sprites_ic_leaf_idx, sprites_ic_fast_idx, sprites_ic_one_idx, sprites_ic_mine_idx, sprites_ic_chain_idx, sprites_coin_idx, sprites_ic_note_idx};
+	static const int kIcons[MODE_COUNT] = {sprites_pip_on_idx, sprites_ic_clock_idx, sprites_ic_leaf_idx, sprites_ic_fast_idx, sprites_ic_one_idx, sprites_ic_mine_idx, sprites_ic_chain_idx, sprites_coin_idx, sprites_ic_note_idx,
+	                                          sprites_ic_leaf_idx, sprites_crack_idx, sprites_drop_idx, sprites_ring_idx, sprites_arrow_idx};  // 1.2: placeholders until their own icons are drawn
 	sDrawing = screen;
 	gfx::clearPanels();
 	switch (screen) {
@@ -4520,6 +4525,7 @@ static void drawBottomContent(Screen screen) {
 #if PORT_TWO_SCREENS
 		case SCREEN_GAME:
 			sGame.drawField(sBlade);
+			drawOrchardMenus();
 			break;
 #endif
 		case SCREEN_PAUSE: {
@@ -4720,7 +4726,8 @@ static void updateFrame(const Input& in, bool wasTouching) {
 	readingsTick();
 #endif
 	// On Pick a Game, Select opens the Mixer instead.
-	if ((in.down & KEY_SELECT) && sScreen != SCREEN_MODES) sShowDebug = !sShowDebug;
+	// In Orchard Blast, Select opens the Inventory.
+	if ((in.down & KEY_SELECT) && sScreen != SCREEN_MODES && !((sScreen == SCREEN_GAME || sScreen == SCREEN_PAUSE) && sGame.mode == MODE_ORCHARD)) sShowDebug = !sShowDebug;
 	if (sSuspended) {
 		sSuspended = false;
 		pauseGame();
@@ -5045,7 +5052,19 @@ static void updateFrame(const Input& in, bool wasTouching) {
 				break;
 			}
 #endif
-			sBlade.update(sGame.bladeInput(in));
+			{
+				const bool orcTook = updateOrchardMenus(in, wasTouching);
+				if (sOrcInv) {
+					if (in.down & KEY_START) {
+						sOrcInv = false;
+						pauseGame();
+					}
+					break;  // the Inventory holds the run, like the pause menu
+				}
+				Input bin = in;
+				if (orcTook || sOrcSlotTouch) bin.touching = false;
+				sBlade.update(sGame.bladeInput(bin));
+			}
 			sGame.update(sBlade);
 			sGame.kickParticles();
 			if (in.down & KEY_START) {
@@ -5070,6 +5089,7 @@ static void updateFrame(const Input& in, bool wasTouching) {
 				sOptionsFromPause = false;
 				sScreen = SCREEN_GAME;
 				sBlade.reset();
+				if (sGame.mode == MODE_ORCHARD) sGame.orcResume();
 			} else if (t == 2) {
 				sOptionsFromPause = true;
 				sFocus[SCREEN_OPTIONS] = 1;
@@ -5246,6 +5266,7 @@ static void drawFrame() {
 		gHudPaused = sScreen != SCREEN_GAME;
 		sGame.drawHud();
 		drawStickPoint();
+		if (sScreen == SCREEN_GAME) drawOrchardMenus();
 #if PORT_PAUSE_BUTTON
 		if (sScreen == SCREEN_GAME) {
 			// Half see-through, so fruit passing behind it stays easy to see.
