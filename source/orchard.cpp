@@ -599,7 +599,7 @@ void Game::orcUse(int s) {
 	for (char* c = buf; *c; c++)
 		if (*c >= 'a' && *c <= 'z') *c -= 32;
 	setCallout(buf, rgba(190, 240, 255));
-	audio::play(SFX_POWER, 1.0f);
+	audio::play(info.kind == KIND_SINGLE ? SFX_POP : SFX_POWER, 1.0f);
 	addRing(kFieldW * 0.5f, kFieldH * 0.6f, rgba(190, 240, 255), 3, 0.4f);
 	if (info.kind == KIND_SINGLE) {
 		orc.slot[s] = CARD_NONE;
@@ -822,6 +822,15 @@ void Game::labOrchard(void (*check)(bool, const char*, const char*)) {
 		b.strokeId = stroke;
 		return b;
 	};
+
+	// The six boss and charm sounds made for 1.2.
+	if (audio::available()) {
+		const Sfx made[] = {SFX_CLANG, SFX_OPEN, SFX_ROAR, SFX_BOSSIN, SFX_VICTORY, SFX_POP};
+		int missing = 0;
+		for (Sfx s : made) missing += !audio::loaded(s);
+		snprintf(d, sizeof d, "%d missing", missing);
+		check(missing == 0, "Orchard Blast's own sounds load: Deflected!, Open!, roar, intro, victory, pop", d);
+	}
 
 	// The card table.
 	int bad = 0;

@@ -481,6 +481,75 @@ def compose_calm(bpm, bars, chords, scale, seed, note_chance, pad_level=0.22, me
     return out / (np.max(np.abs(out)) or 1) * 0.62  # no end fade: this has to loop
 
 
+# ---------------------------------------------------------------- Orchard Blast
+def clang():
+    """Deflected!: the blade bounces off a boss's guard. Inharmonic metal partials over a hard tick."""
+    r = np.random.default_rng(90)
+    n = n_of(0.55)
+    t = np.arange(n) / SFX_RATE
+    metal = sum(a * np.sin(2 * np.pi * f * t) * np.exp(-t / d) for f, a, d in
+                ((820, 1.0, 0.16), (1347, 0.7, 0.11), (2210, 0.55, 0.08), (3190, 0.4, 0.05), (4870, 0.25, 0.03)))
+    tick = band(r.normal(0, 1, n), 2500, 11000) * exp_env(n, 0.004)
+    out = metal * np.minimum(1, t / 0.001) + tick * 1.2
+    place(out, knock(), 0, 0.5)
+    return norm(reverb_tail(out, 0.4, 0.15), 0.8)
+
+
+def open_chime():
+    """Open!: the guard drops. A bright rising two-note chime, quick so it reads as a cue."""
+    out = np.zeros(n_of(0.7))
+    place(out, bell(mtof(84), 0.5), 0)
+    place(out, bell(mtof(91), 0.6), 0.075)
+    place(out, bell(mtof(96), 0.5), 0.075, 0.35)
+    return norm(reverb_tail(out, 0.5, 0.2), 0.62)
+
+
+def roar():
+    """A boss gets angry: a growl made of low noise shaped by a wobbling formant, falling in pitch."""
+    r = np.random.default_rng(91)
+    n = n_of(1.0)
+    t = np.arange(n) / SFX_RATE
+    env = np.minimum(1, t / 0.08) * np.exp(-np.maximum(0, t - 0.35) / 0.25)
+    growl = np.sign(np.sin(2 * np.pi * np.cumsum(np.linspace(95, 55, n)) / SFX_RATE)) * 0.5
+    growl = band(growl + r.normal(0, 0.6, n), 70, 1400)
+    growl *= 0.65 + 0.35 * np.sin(2 * np.pi * 23 * t)
+    sub = sine_sweep(110, 45, n) * 0.8
+    out = (growl * 1.4 + sub) * env
+    return norm(np.tanh(out * 1.8), 0.9)
+
+
+def boss_intro():
+    """A boss drops in: a rising whoosh, a heavy landing and a low minor brass stab."""
+    out = np.zeros(n_of(2.0))
+    place(out, riser(0.6, 200, 3000, 92), 0, 0.5)
+    place(out, thump(120, 38, 0.5, 1.6), 0.6)
+    place(out, boom(), 0.6, 0.45)
+    place(out, chord_stab([36, 43, 48, 51], 1.2), 0.62, 0.2)
+    return norm(reverb_tail(out, 1.0, 0.3), 0.95)
+
+
+def victory():
+    """A boss is beaten: a short fanfare that lands on a big major chord."""
+    out = np.zeros(n_of(2.4))
+    place(out, seq([67, 72, 76, 79], 0.09, 0.6), 0, 0.8)
+    place(out, seq([84, 79, 84, 88], 0.12, 0.9), 0.4, 0.8)
+    place(out, chord_stab([60, 64, 67, 72, 76, 84], 1.4), 0.88, 0.16)
+    place(out, thump(150, 55, 0.3, 1.2), 0.88)
+    place(out, cymbal(1.2, 93), 0.88, 0.35)
+    return norm(reverb_tail(out, 1.0, 0.3), 0.92)
+
+
+def pop():
+    """A single-use charm is spent: a round, quick pop with a little sparkle after it."""
+    out = np.zeros(n_of(0.5))
+    n = n_of(0.07)
+    t = np.arange(n) / SFX_RATE
+    place(out, sine_sweep(380, 1500, n) * np.exp(-t / 0.025), 0, 1.0)
+    place(out, band(np.random.default_rng(94).normal(0, 1, n_of(0.01)), 1500, 8000), 0, 0.4)
+    place(out, seq([91, 96], 0.05, 0.3), 0.05, 0.25)
+    return norm(reverb_tail(out, 0.4, 0.15), 0.62)
+
+
 # ---------------------------------------------------------------- everything
 def build_audio():
     s = SFX_RATE
@@ -559,6 +628,13 @@ def build_audio():
     for at, gain, f0 in ((0.0, 1.0, 1760), (0.085, 0.7, 1745), (0.16, 0.55, 1770), (0.25, 0.35, 1752), (0.37, 0.2, 1764)):
         place(door, shop_bell(f0, 1.2), at, gain)
     write_pcm("shopbell", norm(reverb_tail(door, 0.6, 0.2), 0.55), s)
+    # Orchard Blast.
+    write_pcm("clang", clang(), s)
+    write_pcm("open", open_chime(), s)
+    write_pcm("roar", roar(), s)
+    write_pcm("bossin", boss_intro(), s)
+    write_pcm("victory", victory(), s)
+    write_pcm("pop", pop(), s)
 
     # Original tracks: all slow, soft and major-leaning.
     menu = [[60, 64, 67, 71, 74], [57, 60, 64, 67, 71], [65, 69, 72, 76], [55, 59, 62, 67, 69]]

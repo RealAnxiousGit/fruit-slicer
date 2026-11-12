@@ -61,7 +61,7 @@ void Game::bossStart(int id) {
 	orc.fightT = 0;
 	setCallout(kBosses[id].name, rgba(255, 200, 120), 0.8f);
 	showCaption("A boss drops in.");
-	audio::play(SFX_BOOM, 0.7f, 0, 0.6f);
+	audio::play(SFX_BOSSIN, 1.0f);
 }
 
 void Game::bossOpen(float seconds) {
@@ -74,7 +74,7 @@ void Game::bossOpen(float seconds) {
 	b.guard = false;
 	if (wasUp) {
 		addPopup("OPEN!", b.x, b.y - b.radius - 16, rgba(255, 230, 120), 0.75f);
-		audio::play(SFX_SHING, 0.8f, fieldPan(b.x), 1.25f);
+		audio::play(SFX_OPEN, 0.9f, fieldPan(b.x));
 		showCaption("Its guard is down. Slice it!");
 	}
 }
@@ -423,7 +423,7 @@ void Game::bossTest(Blade& blade) {
 		b.squash = 0;
 		b.nextAttack = 2;
 		setCallout("BLOCKED!", rgba(170, 230, 255));
-		audio::play(SFX_KNOCK, 1.0f, fieldPan(b.x), 0.6f);
+		audio::play(SFX_CLANG, 1.0f, fieldPan(b.x), 0.8f);
 		bossOpen(orchardLevel(gSave.difficulty).openTime * 1.3f);
 		return;
 	}
@@ -432,7 +432,7 @@ void Game::bossTest(Blade& blade) {
 		if (blade.strokeId == b.deflectStroke || b.deflectT > 0) return;
 		b.deflectStroke = blade.strokeId;
 		b.deflectT = 0.5f;
-		audio::play(SFX_KNOCK, 1.0f, fieldPan(b.x), 1.2f);
+		audio::play(SFX_CLANG, 1.0f, fieldPan(b.x));
 		emitSparks(blade.x, blade.y, rgba(170, 210, 255), juiceAmount(10), 150);
 		blade.speed *= 0.3f;
 		if (orc.lastStandT > 0 || gRng.unit() < 0.1f * orc.upgrade[CARD_PARRY]) {
@@ -474,7 +474,7 @@ void Game::bossTest(Blade& blade) {
 		char buf[40];
 		snprintf(buf, sizeof buf, "%s BEATEN!", b.id == BOSS_MELON ? "BIG MELON" : "BOMB KING");
 		setCallout(buf, rgba(255, 230, 140), 0.8f);
-		audio::play(SFX_BEST, 1.0f);
+		audio::play(SFX_VICTORY, 1.0f);
 		orcGainXp(20);
 		award(500 * (b.id + 1));
 		return;
@@ -484,7 +484,7 @@ void Game::bossTest(Blade& blade) {
 		b.phase = (u8)phase;
 		b.roarT = 1.2f;
 		setCallout(phase >= 3 ? "IT'S FURIOUS!" : "IT'S ANGRY!", rgba(255, 140, 110));
-		audio::play(SFX_BOOM, 0.5f, fieldPan(b.x), 0.5f);
+		audio::play(SFX_ROAR, 1.0f, fieldPan(b.x));
 	} else {
 		addPopup("SLICED!", b.x, b.y - b.radius - 14, rgba(255, 240, 160), 0.7f);
 	}

@@ -37,6 +37,7 @@ static const char* const kSfxFiles[SFX_COUNT] = {
 	"strike", "click", "power", "freeze", "fever", "go", "over", "best", "gold",
 	"finale_rise", "finale_hit", "finale_burst",
 	"coin", "plink", "shopbell",
+	"clang", "open", "roar", "bossin", "victory", "pop",
 };
 static_assert(sizeof kSfxFiles / sizeof kSfxFiles[0] == SFX_COUNT, "every sound needs a file name");
 // How much of the mix one sound may take. A new sound is turned down if the ones still playing have
@@ -327,6 +328,7 @@ void shutdown() {
 }
 
 bool available() { return sReady; }
+bool loaded(Sfx s) { return s >= 0 && s < SFX_COUNT && sSfx[s].pcm; }
 
 void click(float volume) {
 	u8 saved = gSave.sfx;

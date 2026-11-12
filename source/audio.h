@@ -10,6 +10,7 @@ enum Sfx {
 	SFX_STRIKE, SFX_CLICK, SFX_POWER, SFX_FREEZE, SFX_FEVER, SFX_GO, SFX_OVER, SFX_BEST, SFX_GOLD,
 	SFX_FINALE_RISE, SFX_FINALE_HIT, SFX_FINALE_BURST,
 	SFX_COIN, SFX_PLINK, SFX_SHOPBELL,
+	SFX_CLANG, SFX_OPEN, SFX_ROAR, SFX_BOSSIN, SFX_VICTORY, SFX_POP,
 	SFX_COUNT
 };
 enum Music { MUSIC_NONE = -1, MUSIC_MENU, MUSIC_PLAY, MUSIC_ZEN, MUSIC_COUNT };
@@ -24,6 +25,7 @@ void loadStep(int i);
 void update(float dt);  // once per frame, with the game time that passed: reads music in, and frees a replaced track when it's safe
 void shutdown();
 bool available();
+bool loaded(Sfx s);  // that sound effect's clip is in memory (the Lab checks every one)
 // pan is -1 (left) to +1 (right). pitch multiplies the playback rate, so one clip can vary.
 void play(Sfx s, float volume = 1.0f, float pan = 0.0f, float pitch = 1.0f);
 void click(float volume = 1.0f);  // menu sound, on its own volume slider
