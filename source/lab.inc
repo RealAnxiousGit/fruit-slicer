@@ -400,6 +400,9 @@ static void labMixerPage() {
 
 // Pick a Game's pages, the first time the bot reaches it. Returns true while there are steps left.
 static bool labModePages() {
+#ifdef LAB_QUICK
+	return false;  // the quick Lab skips the menu checks
+#endif
 	static int step = 0;
 	const Button& next = kPageArrows[1];
 	switch (step++) {
@@ -560,6 +563,20 @@ static void labHoldQuit(Input& in, bool first) {
 // (the bomb goes off and the game closes). The 3DS just ends.
 static void labFinish(Input& in) {
 	static int step = 0, held = 0;
+#ifdef LAB_QUICK
+	// The quick Lab: only the checks of the new code, then done. No shop, boards, saves of older versions or quit bomb.
+	(void)in;
+	(void)held;
+	if (step == 0) {
+		step = 1;
+		labInventory();
+		sGame.labOrchard(labCheck);
+		sGame.labModes12(labCheck);
+		labSummary();
+		sBotDone = true;
+	}
+	return;
+#endif
 	if (step == 0) {
 		labCheck(sLabBlastSeen && !sLabBlastMissed, "every bomb hit sets off a blast");
 		labCheck(gfx::fontImageCount() == gfx::fontLetterCount() * 2, "the font table matches the font sheet");

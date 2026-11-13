@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "audio.h"
+#include "audio_port.h"  // the Lab gives the 3DS music reader real time
 #include "fruitids.h"
 #include "game.h"
 #include "render.h"
@@ -858,12 +859,25 @@ void Game::labOrchard(void (*check)(bool, const char*, const char*)) {
 		      "A boss fight fades the room's music out, then plays one of that boss's tracks", d);
 		snprintf(d, sizeof d, "%d tracks", bossTrackCount(BOSS_MELON));
 		check(bossTrackPick(BOSS_MELON, 7) != fight, "The next fight against the same boss picks a different track", d);
+		int bossTracks = 0, filesThere = 0;
+		for (int t = 0; t < kTrackCount; t++)
+			if (trackBoss(t) >= 0) {
+				bossTracks++;
+				filesThere += audio::trackFileThere(t);
+			}
+		snprintf(d, sizeof d, "%d of %d", filesThere, bossTracks);
+		check(bossTracks == 9 && filesThere == bossTracks, "Every boss track's file is in the game, 9 in all", d);
 		audio::bossMusicEnd();
 		for (int i = 0; i < 90; i++) audio::update(kDt);
 		snprintf(d, sizeof d, "room %d, now %d", room, audio::currentTrack());
 		check(audio::currentTrack() == room, "After the boss, the room's music comes back", d);
-		for (int i = 0; i < 300 && audio::bossMusicOn(); i++) audio::update(kDt);
-		check(!audio::bossMusicOn(), "and it fades back up to full volume", "");
+		// Real time passes too: the 3DS reads music on a background thread.
+		for (int i = 0; i < 300 && audio::bossMusicOn(); i++) {
+			audio::update(kDt);
+			audioport::settle();
+		}
+		snprintf(d, sizeof d, "music at %.1f s", audio::musicTime());
+		check(!audio::bossMusicOn() && audio::musicTime() >= 0, "and it fades back up to full volume, playing", d);
 		gSave.bossMusic = musicWas;
 		gSave.bossTrackLast[BOSS_MELON] = lastWas;
 

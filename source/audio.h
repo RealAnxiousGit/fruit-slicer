@@ -27,6 +27,7 @@ void update(float dt);  // once per frame, with the game time that passed: reads
 void shutdown();
 bool available();
 bool loaded(Sfx s);  // that sound effect's clip is in memory (the Lab checks every one)
+bool trackFileThere(int track);  // that track's file is in the game's files, with a good header
 // pan is -1 (left) to +1 (right). pitch multiplies the playback rate, so one clip can vary.
 void play(Sfx s, float volume = 1.0f, float pan = 0.0f, float pitch = 1.0f);
 void click(float volume = 1.0f);  // menu sound, on its own volume slider

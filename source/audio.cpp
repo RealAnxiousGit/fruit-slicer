@@ -331,6 +331,26 @@ void shutdown() {
 bool available() { return sReady; }
 bool loaded(Sfx s) { return s >= 0 && s < SFX_COUNT && sSfx[s].pcm; }
 
+// The track's file is in the game's files with a good header (the Lab checks every boss track this way).
+bool trackFileThere(int track) {
+	if (track < 0 || track >= kTrackCount) return false;
+#if FS_OGG
+	{
+		char path[64];
+		snprintf(path, sizeof path, "audio/%s.ogg", kTrackFiles[track]);
+		if (port::AssetFile* ogg = port::assetOpen(path)) {
+			port::assetClose(ogg);
+			return true;
+		}
+	}
+#endif
+	u32 head[3];
+	port::AssetFile* f = openClip(kTrackFiles[track], head);
+	if (!f) return false;
+	port::assetClose(f);
+	return true;
+}
+
 void click(float volume) {
 	u8 saved = gSave.sfx;
 	gSave.sfx = gSave.menuSfx;
@@ -353,6 +373,7 @@ static bool sResumeAuto;
 static float sResumeAt;     // seconds into the room's track when the fight took over
 static float sBossT;
 static float sBossFade = 1;  // on top of the Music slider while the music changes hands
+static float sBossWait;      // how long the fade back in has waited for the room's track
 static float sSeekSec;       // the next track starts this far in, once that much of it is here
 static constexpr float kBossFadeOut = 1.0f, kBossGap = 0.6f, kBossLeave = 0.7f, kBossReturn = 1.2f;
 static void bossTick(float dt);
@@ -802,11 +823,14 @@ static void bossTick(float dt) {
 				else startFor(sContext);
 				sBossStage = BOSS_RETURNING;
 				sBossT = 0;
+				sBossWait = 0;
 			}
 			break;
 		case BOSS_RETURNING:
-			// The fade in waits for the track to be playing again, or gives up waiting after a few seconds.
-			if (!sStarted && sBossT < 3 && sCurrent >= 0) sBossT = 0;
+			// The fade in waits for the track to be playing again, or gives up waiting after 3 seconds. The wait has
+			// its own clock: holding sBossT at 0 alone would wait for ever on a track that never arrives.
+			sBossWait += dt;
+			if (!sStarted && sBossWait < 3 && sCurrent >= 0) sBossT = 0;
 			sBossFade = clampf(sBossT / kBossReturn, 0, 1);
 			if (sBossT >= kBossReturn) {
 				sBossFade = 1;

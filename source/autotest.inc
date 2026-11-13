@@ -12,8 +12,12 @@
 //   TEST_BALANCE play every mode at high speed with nothing ending a game early, and count what is thrown
 //   TEST_SPAWN   print what every mode and difficulty throws, from thousands of waves, then quit
 //   TEST_LOUD    in audio.cpp: fire big combos and full swipes of cuts on a timer, to measure the mix
+//   LAB_QUICK    with LAB: the quick Lab. Plays only the 1.2 modes and runs only their checks (Orchard Blast,
+//                bosses, Inventory, Boss Rush, Recipe, Sharpshooter, Juggle); everything older is skipped
 #ifdef BOT_ONLY
 static int sBotMode = BOT_ONLY;
+#elif defined(LAB_QUICK)
+static int sBotMode = MODE_ORCHARD;  // the quick Lab plays only the 1.2 modes
 #else
 static int sBotMode = 0;
 #endif
@@ -28,7 +32,7 @@ static u32 sBotKeys = 0;        // buttons to press for one frame
 static int sBotWheel = 0;       // mouse wheel notches for one frame, up is positive
 static int sBotDragDY = 0;      // a tap that moves this far down each frame: a drag
 static u32 sBotModeFrames = 0;
-#if defined(BOT_ONLY) || defined(TEST_SPEED) || defined(BOT_SHOTS) || defined(TEST_BALANCE)
+#if defined(BOT_ONLY) || defined(TEST_SPEED) || defined(BOT_SHOTS) || defined(TEST_BALANCE) || defined(LAB_QUICK)
 static int sBotMenuStep = 100;
 #else
 static int sBotMenuStep = 0;

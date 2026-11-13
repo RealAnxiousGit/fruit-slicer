@@ -1008,7 +1008,9 @@ def build_audio():
     folder = os.path.dirname(path("romfs", "audio", "x"))
     # The Shop's recorded tracks (see the credits) are not generated, so they stay.
     recorded = ("music_summer", "music_hero", "music_trap", "music_unruly", "music_vengeance", "music_explorer",
-                "music_ahead", "music_spare", "music_fright", "music_worthless", "music_lies", "music_liesvip", "music_staywithme")
+                "music_ahead", "music_spare", "music_fright", "music_worthless", "music_lies", "music_liesvip", "music_staywithme",
+                # the five found boss tracks (convert_shop_music.py found)
+                "music_boss_minto", "music_boss_ansimuz", "music_boss_bounce", "music_boss_champion", "music_boss_epic")
     for f in os.listdir(folder):
         if os.path.splitext(f)[0] in recorded:
             continue

@@ -28,7 +28,7 @@
 #include "custom_music.h"
 #endif
 
-#define VERSION_STRING "1.1.0"
+#define VERSION_STRING "1.2.0"
 
 #if PORT_TWO_SCREENS
 static constexpr float kSlideTop = 400, kSlideBottom = 320;
