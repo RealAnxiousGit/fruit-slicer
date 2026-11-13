@@ -72,6 +72,9 @@ enum BossAttack : u8 {
 };
 // Only the last attack of a chain tires the boss out and drops its guard.
 
+// The boss art's poses, in the order the sprite sheet holds them (gen_assets.py BOSS_POSES).
+enum BossPose { BOSS_POSE_GUARD, BOSS_POSE_OPEN, BOSS_POSE_DAZE, BOSS_POSE_WIND };
+
 // The Bomb King's Giant Bomb: left in the middle while he hides off screen. Scrubbing it knocks it upward; enough
 // hits launch it off the stage before its timer runs out.
 struct GiantBomb {

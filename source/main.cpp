@@ -2997,13 +2997,13 @@ static void updateJournal(const Input& in, bool wasTouching) {
 }
 
 static bool bossBeaten(int boss) { return gSave.bossesBeaten >> boss & 1; }
-static int bossSprite(int boss) { return boss == BOSS_MELON ? fruit_melon_idx : fruit_bomb_idx; }
+static int bossSprite(int boss) { return boss == BOSS_MELON ? sprites_boss_melon_guard_idx : sprites_boss_king_guard_idx; }
 
 static void drawJournalBossTile(const Button& b, int boss, bool focused, bool pressed) {
 	drawPlank(b.x, b.y, b.w, b.h, focused, pressed);
 	const float cx = b.x + b.w * 0.5f;
 	const bool beaten = bossBeaten(boss);
-	gfx::sprite(SHEET_FRUIT, bossSprite(boss), cx, b.y + 17, 0.62f, 0.62f, 0, beaten ? WHITE : kUnfound);
+	gfx::sprite(SHEET_SPRITES, bossSprite(boss), cx, b.y + 17, 0.42f, 0.42f, 0, beaten ? WHITE : kUnfound);
 	// A small crown marks it as a boss.
 	const u32 gold = beaten ? rgba(255, 210, 80) : rgba(90, 80, 70, 220);
 	gfx::rect(cx - 7, b.y + 3, 14, 3, gold);
@@ -3047,7 +3047,7 @@ static void drawJournalBossTop(int boss) {
 	char buf[64];
 	const bool beaten = bossBeaten(boss);
 	gfx::setDepth(1.0f);
-	gfx::sprite(SHEET_FRUIT, bossSprite(boss), 200, 60, 1.5f, 1.5f, gSave.calmFx ? 0 : sinf(sTime * 1.3f) * 0.1f, beaten ? WHITE : kUnfound);
+	gfx::sprite(SHEET_SPRITES, bossSprite(boss), 200, 60, 1.0f, 1.0f, gSave.calmFx ? 0 : sinf(sTime * 1.3f) * 0.1f, beaten ? WHITE : kUnfound);
 	gfx::setDepth(0.7f);
 	gfx::text(beaten ? kBosses[boss].name : "Not beaten yet", 200, 98, 0.6f, COL_ACCENT, ALIGN_CENTER);
 	snprintf(buf, sizeof buf, "ORCHARD BLAST, ROOM %d", boss == BOSS_MELON ? 5 : 10);

@@ -3,7 +3,7 @@
 // field coordinates, like the blade.
 
 static bool sOrcInv;          // the Inventory is open (it holds the run, like the pause menu)
-static int sOrcInvFocus;      // 0 Back to the run, 1 Swap Slots
+static int sOrcInvFocus;      // the picked item (see orcInvItems)
 static float sOrcOpenT;       // seconds the cards have been up: a short lock-out stops a swipe picking one
 static bool sOrcSlotTouch;    // this touch began on a charm slot, so it never becomes a slice
 static int sOrcCardDown = -1;
@@ -93,6 +93,329 @@ static void orcPlaceRect(int s, float* x, float* y, float* w, float* h) {
 	*y = kFieldTop + 80;
 }
 
+// ---------------------------------------------------------------- the Inventory
+// Three areas on a wide screen: Stats, Charms and Run. On a narrow one, Stats and Charms sit side by side (or
+// stacked on a tall phone) and the Run numbers go under the title. Anything can be picked with a tap or the
+// D-pad, and its details show in a strip above the buttons.
+enum OrcInvKind { INV_SLOT, INV_PASSIVE, INV_UPGRADE, INV_BUTTON };
+enum OrcInvButton { INVB_RESUME, INVB_SWAP, INVB_DROP, INVB_QUIT, INVB_COUNT };
+struct OrcInvItem {
+	u8 kind, index;
+	float x, y, w, h;
+};
+static int sOrcConfirm;        // 0 none, 1 "Drop this charm?", 2 "End this run?"
+static int sOrcConfirmYes;     // the focused answer: 1 yes, 0 no
+static int sOrcInvSlot;        // the slot Drop acts on: the last one picked
+static const char* const kInvButtons[INVB_COUNT] = {"Resume", "Swap Slots", "Drop", "Quit"};
+
+struct OrcInvLayout {
+	bool runCol, stacked;
+	float top, bottom;            // the content area
+	float sx, sy, sw;             // Stats
+	float cx, cy, cw;             // Charms
+	float rx, ry, rw;             // Run
+	float row;                    // a Stats row
+};
+
+static OrcInvLayout orcInvLayout() {
+	OrcInvLayout L = {};
+	L.runCol = kFieldW >= 380;
+	L.stacked = !L.runCol && kFieldH >= 380;
+	L.top = kFieldTop + 26 + (L.runCol ? 0 : 12);
+	L.bottom = kFieldH - 64;
+	const float pad = 8;
+	if (L.runCol) {
+		const float w = kFieldW - pad * 4;
+		L.sw = w * 0.36f;
+		L.cw = w * 0.36f;
+		L.rw = w - L.sw - L.cw;
+		L.sx = pad;
+		L.cx = L.sx + L.sw + pad;
+		L.rx = L.cx + L.cw + pad;
+		L.sy = L.cy = L.ry = L.top;
+	} else if (L.stacked) {
+		L.sw = L.cw = kFieldW - pad * 2;
+		L.sx = L.cx = pad;
+		L.sy = L.top;
+		L.cy = L.top + 14 + 14 + 9 * 11 + 8;
+	} else {
+		L.sw = L.cw = (kFieldW - pad * 3) * 0.5f;
+		L.sx = pad;
+		L.cx = pad * 2 + L.sw;
+		L.sy = L.cy = L.top;
+	}
+	const float statsH = (L.stacked ? L.cy - 8 : L.bottom) - L.sy - 28;
+	L.row = clampf(statsH / 9, 8.5f, 11.0f);
+	return L;
+}
+
+// Every item that can be picked, with where it sits. Returns the count.
+static int orcInvItems(OrcInvItem* out) {
+	const Orchard& o = sGame.orc;
+	const OrcInvLayout L = orcInvLayout();
+	int n = 0;
+	const float bw = (L.cw - 6) * 0.5f;
+	for (int s = 0; s < kSlots; s++) out[n++] = {INV_SLOT, (u8)s, L.cx + s * (bw + 6), L.cy + 14, bw, 40};
+	const float icon = 20;
+	const int perRow = (int)(L.cw / icon) > 0 ? (int)(L.cw / icon) : 1;
+	for (int i = 0; i < o.passiveCount; i++)
+		out[n++] = {INV_PASSIVE, (u8)i, L.cx + (i % perRow) * icon, L.cy + 72 + (i / perRow) * icon, icon, icon};
+	int u = 0;
+	for (int c = 0; c < CARD_COUNT; c++) {
+		if (kCards[c].kind != KIND_UPGRADE) continue;
+		out[n++] = {INV_UPGRADE, (u8)c, L.sx, L.sy + 28 + u * L.row, L.sw, L.row};
+		u++;
+	}
+	const float gap = 6, w = clampf((kFieldW - 16 - gap * 3) / INVB_COUNT, 50, 96);
+	const float x0 = (kFieldW - (w * INVB_COUNT + gap * (INVB_COUNT - 1))) * 0.5f;
+	for (int b = 0; b < INVB_COUNT; b++) out[n++] = {INV_BUTTON, (u8)b, x0 + b * (w + gap), kFieldH - 32, w, 26};
+	return n;
+}
+
+static void orcPips(float x, float y, int have, int max, u32 on) {
+	for (int i = 0; i < max; i++) {
+		const float px = x + i * 7;
+		if (i < have) {
+			gfx::rect(px, y, 5, 5, on);
+		} else {
+			// Hollow, not just a darker shade, so it reads in High Contrast and for colour-blind players.
+			gfx::rect(px, y, 5, 1, COL_DIM);
+			gfx::rect(px, y + 4, 5, 1, COL_DIM);
+			gfx::rect(px, y, 1, 5, COL_DIM);
+			gfx::rect(px + 4, y, 1, 5, COL_DIM);
+		}
+	}
+}
+
+static void orcBar(float x, float y, float w, float h, float k, u32 color) {
+	gfx::rect(x, y, w, h, rgba(40, 30, 20, 200));
+	gfx::rect(x, y, w * clampf(k, 0, 1), h, color);
+}
+
+static const char* orcSlotKey(int s) {
+	if (PORT_3DS) return s == 0 ? "L" : "R";
+	if (gStickInUse) return s == 0 ? "LB" : "RB";
+	return s == 0 ? "Q" : "E";
+}
+
+static void drawOrcInventory() {
+	const Orchard& o = sGame.orc;
+	const OrcInvLayout L = orcInvLayout();
+	OrcInvItem items[64];
+	const int n = orcInvItems(items);
+	char buf[96];
+	gfx::rect(kFillX, kFillX, kFillW, kFillW, rgba(20, 12, 8, 200));
+	gfx::text("INVENTORY", kFieldW * 0.5f, kFieldTop + 1, 0.46f, rgba(255, 230, 140), ALIGN_CENTER);
+	const u32 head = rgba(255, 210, 150);
+	const int room = o.room > kOrchardRooms ? kOrchardRooms : o.room;
+	const int mins = (int)sGame.elapsed / 60, secs = (int)sGame.elapsed % 60;
+	if (!L.runCol) {
+		snprintf(buf, sizeof buf, "Room %d of %d   Level %d   %d:%02d   %d sliced", room, kOrchardRooms, o.level, mins, secs, sGame.sliced);
+		orcFit(buf, kFieldW * 0.5f, kFieldTop + 21, 0.26f, kFieldW - 16, COL_CREAM);
+	}
+	// Stats: HP, then each upgrade with its level as pips.
+	gfx::text("Stats", L.sx, L.sy, 0.3f, head);
+	snprintf(buf, sizeof buf, "HP %d of %d", (int)ceilf(o.hp), (int)o.maxHp);
+	orcBar(L.sx, L.sy + 14, L.sw, 10, o.maxHp > 0 ? o.hp / o.maxHp : 0, rgba(230, 80, 80));
+	orcFit(buf, L.sx + L.sw * 0.5f, L.sy + 14, 0.24f, L.sw - 4, COL_CREAM);
+	// Run: where you are and how it is going.
+	if (L.runCol) {
+		float y = L.ry;
+		gfx::text("Run", L.rx, y, 0.3f, head);
+		y += 15;
+		snprintf(buf, sizeof buf, "Room %d of %d", room, kOrchardRooms);
+		orcFit(buf, L.rx, y, 0.26f, L.rw, COL_CREAM, ALIGN_LEFT);
+		y += 12;
+		snprintf(buf, sizeof buf, "Level %d", o.level);
+		orcFit(buf, L.rx, y, 0.26f, L.rw, COL_CREAM, ALIGN_LEFT);
+		y += 12;
+		const int need = sGame.orcXpNeed();
+		orcBar(L.rx, y + 1, L.rw, 6, need > 0 ? o.xp / need : 0, rgba(110, 190, 255));
+		y += 9;
+		snprintf(buf, sizeof buf, "%d XP to level %d", (int)ceilf(need - o.xp), o.level + 1);
+		orcFit(buf, L.rx, y, 0.22f, L.rw, COL_DIM, ALIGN_LEFT);
+		y += 14;
+		snprintf(buf, sizeof buf, "Time %d:%02d", mins, secs);
+		orcFit(buf, L.rx, y, 0.24f, L.rw, COL_CREAM, ALIGN_LEFT);
+		y += 11;
+		snprintf(buf, sizeof buf, "Fruit sliced %d", sGame.sliced);
+		orcFit(buf, L.rx, y, 0.24f, L.rw, COL_CREAM, ALIGN_LEFT);
+		y += 11;
+		snprintf(buf, sizeof buf, "Bosses beaten %d", o.bossesBeaten);
+		orcFit(buf, L.rx, y, 0.24f, L.rw, COL_CREAM, ALIGN_LEFT);
+		y += 11;
+		snprintf(buf, sizeof buf, "Charms used %d", o.charmsUsed);
+		orcFit(buf, L.rx, y, 0.24f, L.rw, COL_CREAM, ALIGN_LEFT);
+	}
+	gfx::text("Charm slots", L.cx, L.cy, 0.3f, head);
+	gfx::text(o.passiveCount ? "Passive charms" : "No passive charms yet", L.cx, L.cy + 58, 0.26f, o.passiveCount ? head : COL_DIM);
+	const int focus = sOrcInvFocus >= 0 && sOrcInvFocus < n ? sOrcInvFocus : n - INVB_COUNT;
+	for (int i = 0; i < n; i++) {
+		const OrcInvItem& it = items[i];
+		const bool f = i == focus && !sOrcConfirm;
+		switch (it.kind) {
+			case INV_SLOT: {
+				const int card = o.slot[it.index];
+				gfx::sign(sprites_plank_idx, it.x, it.y, it.w, it.h, f ? COL_ACCENT : COL_PLANK);
+				snprintf(buf, sizeof buf, "%d  %s", it.index + 1, orcSlotKey(it.index));
+				gfx::text(buf, it.x + 4, it.y + 3, 0.22f, COL_DIM);
+				if (card == CARD_NONE) {
+					orcFit("Empty slot", it.x + it.w * 0.5f, it.y + 18, 0.24f, it.w - 6, COL_DIM);
+					break;
+				}
+				gfx::sprite(SHEET_SPRITES, cardIcon(card), it.x + 13, it.y + 25, 0.5f, 0.5f);
+				orcFit(kCards[card].name, it.x + 25, it.y + 15, 0.22f, it.w - 28, COL_CREAM, ALIGN_LEFT);
+				if (kCards[card].kind == KIND_SINGLE) {
+					orcFit("Used once", it.x + 25, it.y + 26, 0.2f, it.w - 28, COL_DIM, ALIGN_LEFT);
+				} else if (o.slotCool[it.index] > 0) {
+					snprintf(buf, sizeof buf, "Ready in %ds", (int)ceilf(o.slotCool[it.index]));
+					orcFit(buf, it.x + 25, it.y + 26, 0.2f, it.w - 28, rgba(170, 230, 255), ALIGN_LEFT);
+				} else {
+					orcFit("Ready", it.x + 25, it.y + 26, 0.2f, it.w - 28, rgba(170, 255, 170), ALIGN_LEFT);
+				}
+				break;
+			}
+			case INV_PASSIVE:
+				if (f) gfx::rect(it.x, it.y, it.w, it.h, withAlpha(COL_ACCENT, 0.5f));
+				gfx::sprite(SHEET_SPRITES, cardIcon(o.passiveOrder[it.index]), it.x + it.w * 0.5f, it.y + it.h * 0.5f, 0.42f, 0.42f);
+				break;
+			case INV_UPGRADE: {
+				const int lv = o.upgrade[it.index];
+				if (f) gfx::rect(it.x - 2, it.y, it.w + 4, it.h, withAlpha(COL_ACCENT, 0.45f));
+				gfx::sprite(SHEET_SPRITES, cardIcon(it.index), it.x + 5, it.y + it.h * 0.5f, 0.26f, 0.26f);
+				const int max = kCards[it.index].maxLevel;
+				orcFit(kCards[it.index].name, it.x + 12, it.y + (it.h - 9) * 0.5f, 0.22f, it.w - 14 - max * 7, lv ? COL_CREAM : COL_DIM, ALIGN_LEFT);
+				orcPips(it.x + it.w - max * 7, it.y + (it.h - 5) * 0.5f, lv, max, rgba(255, 220, 110));
+				break;
+			}
+			default: {
+				const Button b = {it.x, it.y, it.w, it.h, kInvButtons[it.index]};
+				const bool off = (it.index == INVB_DROP && o.slot[sOrcInvSlot] == CARD_NONE) ||
+				                 (it.index == INVB_SWAP && o.slot[0] == CARD_NONE && o.slot[1] == CARD_NONE);
+				drawSign(b, b.label, f, false, 0.36f);
+				if (off) gfx::rect(it.x, it.y, it.w, it.h, rgba(20, 12, 8, 120));
+				break;
+			}
+		}
+	}
+	// The details strip: what the picked item is and does.
+	const OrcInvItem& it = items[focus];
+	int card = CARD_NONE;
+	if (it.kind == INV_SLOT) card = o.slot[it.index];
+	else if (it.kind == INV_PASSIVE) card = o.passiveOrder[it.index];
+	else if (it.kind == INV_UPGRADE) card = it.index;
+	const float dy = kFieldH - 60;
+	if (card != CARD_NONE) {
+		const CardInfo& info = kCards[card];
+		if (info.kind == KIND_UPGRADE)
+			snprintf(buf, sizeof buf, "%s: %s, level %d of %d", info.name, cardKindName(info.kind), o.upgrade[card], info.maxLevel);
+		else
+			snprintf(buf, sizeof buf, "%s: %s %s", info.name, rarityName(info.rarity), cardKindName(info.kind));
+		orcFit(buf, kFieldW * 0.5f, dy, 0.26f, kFieldW - 16, rarityColor(info.rarity));
+		snprintf(buf, sizeof buf, "%s%s%s", info.line1, info.line2[0] ? " " : "", info.line2);
+		char next[48] = "";
+		if (info.kind == KIND_UPGRADE && o.upgrade[card] < info.maxLevel) cardNextLine(card, o.upgrade[card], next, sizeof next);
+		if (next[0]) {
+			const size_t len = strlen(buf);
+			snprintf(buf + len, sizeof buf - len, "  Next: %s", next);
+		}
+		orcFit(buf, kFieldW * 0.5f, dy + 13, 0.22f, kFieldW - 16, COL_CREAM);
+	} else if (it.kind == INV_SLOT) {
+		orcFit("An empty slot. The next charm you take can go here.", kFieldW * 0.5f, dy + 6, 0.24f, kFieldW - 16, COL_DIM);
+	} else if (it.kind == INV_BUTTON) {
+		static const char* const kHelp[INVB_COUNT] = {"Back to the run, after a 3, 2, 1.", "Switch the charms in Slot 1 and Slot 2.",
+		                                              "Empty the slot you last picked, to make room.", "End this run and keep its score."};
+		orcFit(kHelp[it.index], kFieldW * 0.5f, dy + 6, 0.24f, kFieldW - 16, COL_DIM);
+	}
+	if (sOrcConfirm) {
+		gfx::rect(kFillX, kFillX, kFillW, kFillW, rgba(10, 6, 4, 150));
+		const float w = 220, h = 80, x = (kFieldW - w) * 0.5f, y = (kFieldH - h) * 0.5f;
+		gfx::sign(sprites_plank_idx, x, y, w, h, COL_PLANK);
+		orcFit(sOrcConfirm == 1 ? "Drop this charm?" : "End this run?", kFieldW * 0.5f, y + 10, 0.4f, w - 16, COL_CREAM);
+		const Button yes = {x + 16, y + h - 36, 86, 26, "Yes"}, no = {x + w - 102, y + h - 36, 86, 26, "No"};
+		drawSign(yes, yes.label, sOrcConfirmYes == 1, false, 0.4f);
+		drawSign(no, no.label, sOrcConfirmYes == 0, false, 0.4f);
+	}
+}
+
+static void orcInvClose() {
+	audio::click();
+	sOrcInv = false;
+	sOrcConfirm = 0;
+	sGame.orcResume();
+}
+
+// The Inventory's input. Quitting goes through the pause menu's own path, so the score is kept.
+static void quitRun();
+static bool updateOrcInventory(const Input& in, bool wasTouching) {
+	Orchard& o = sGame.orc;
+	const bool tap = in.touching && !wasTouching;
+	if (sOrcConfirm) {
+		const float w = 220, h = 80, x = (kFieldW - w) * 0.5f, y = (kFieldH - h) * 0.5f;
+		const Button yes = {x + 16, y + h - 36, 86, 26, "Yes"}, no = {x + w - 102, y + h - 36, 86, 26, "No"};
+		if (in.down & (KEY_LEFT | KEY_RIGHT)) sOrcConfirmYes ^= 1;
+		int answer = -1;
+		if (tap && hit(yes, in.tx, in.ty)) answer = 1;
+		if (tap && hit(no, in.tx, in.ty)) answer = 0;
+		if (in.down & KEY_A) answer = sOrcConfirmYes;
+		if (in.down & KEY_B) answer = 0;
+		if (answer < 0) return true;
+		audio::click();
+		const int what = sOrcConfirm;
+		sOrcConfirm = 0;
+		if (answer == 1 && what == 1) sGame.orcDrop(sOrcInvSlot);
+		if (answer == 1 && what == 2) {
+			sOrcInv = false;
+			fadeThen(quitRun);
+		}
+		return true;
+	}
+	OrcInvItem items[64];
+	const int n = orcInvItems(items);
+	if (sOrcInvFocus < 0 || sOrcInvFocus >= n) sOrcInvFocus = n - INVB_COUNT;
+	if (in.down & (KEY_LEFT | KEY_UP)) sOrcInvFocus = sOrcInvFocus == 0 ? n - 1 : sOrcInvFocus - 1;
+	if (in.down & (KEY_RIGHT | KEY_DOWN)) sOrcInvFocus = (sOrcInvFocus + 1) % n;
+	int act = -1;
+	if (tap) {
+		for (int i = 0; i < n; i++)
+			if (in.tx >= items[i].x && in.tx < items[i].x + items[i].w && in.ty >= items[i].y && in.ty < items[i].y + items[i].h) {
+				sOrcInvFocus = i;
+				if (items[i].kind == INV_BUTTON) act = i;
+			}
+	}
+#if PORT_MOUSE
+	if (in.hovering)
+		for (int i = 0; i < n; i++)
+			if (in.tx >= items[i].x && in.tx < items[i].x + items[i].w && in.ty >= items[i].y && in.ty < items[i].y + items[i].h) sOrcInvFocus = i;
+#endif
+	if (items[sOrcInvFocus].kind == INV_SLOT) sOrcInvSlot = items[sOrcInvFocus].index;
+	if ((in.down & KEY_A) && items[sOrcInvFocus].kind == INV_BUTTON) act = sOrcInvFocus;
+	if (in.down & KEY_B) {
+		orcInvClose();
+		return true;
+	}
+	if (act < 0) return true;
+	switch (items[act].index) {
+		case INVB_RESUME: orcInvClose(); break;
+		case INVB_SWAP:
+			audio::click();
+			sGame.orcSwapSlots();
+			break;
+		case INVB_DROP:
+			if (o.slot[sOrcInvSlot] == CARD_NONE) break;
+			audio::click();
+			sOrcConfirm = 1;
+			sOrcConfirmYes = 0;
+			break;
+		default:
+			audio::click();
+			sOrcConfirm = 2;
+			sOrcConfirmYes = 0;
+			break;
+	}
+	return true;
+}
+
 static void drawOrchardMenus() {
 	if (sGame.mode != MODE_ORCHARD) return;
 	if (sOrcHowTo) {
@@ -131,66 +454,7 @@ static void drawOrchardMenus() {
 		return;
 	}
 	if (!sOrcInv) return;
-	// The Inventory: what the run has, and the stats it adds up to.
-	gfx::rect(kFillX, kFillX, kFillW, kFillW, rgba(20, 12, 8, 190));
-	gfx::text("INVENTORY", kFieldW * 0.5f, kFieldTop + 4, 0.6f, rgba(255, 230, 140), ALIGN_CENTER);
-	const float colW = (kFieldW - 30) * 0.5f;
-	const float lx = 12, rx = 18 + colW;
-	float y = kFieldTop + 34;
-	snprintf(buf, sizeof buf, "Room %d of %d   Level %d", o.room > kOrchardRooms ? kOrchardRooms : o.room, kOrchardRooms, o.level);
-	orcFit(buf, lx, y, 0.32f, colW, COL_CREAM, ALIGN_LEFT);
-	y += 16;
-	snprintf(buf, sizeof buf, "HP %d of %d   XP %d of %d", (int)ceilf(o.hp), (int)o.maxHp, (int)o.xp, sGame.orcXpNeed());
-	orcFit(buf, lx, y, 0.3f, colW, COL_CREAM, ALIGN_LEFT);
-	y += 20;
-	gfx::text("Upgrades", lx, y, 0.34f, rgba(255, 210, 150));
-	y += 16;
-	bool any = false;
-	for (int c = 0; c < CARD_COUNT; c++) {
-		if (kCards[c].kind != KIND_UPGRADE || !o.upgrade[c]) continue;
-		any = true;
-		snprintf(buf, sizeof buf, "%s %d", kCards[c].name, o.upgrade[c]);
-		gfx::sprite(SHEET_SPRITES, cardIcon(c), lx + 12, y + 6, 0.36f, 0.36f);
-		orcFit(buf, lx + 22, y, 0.28f, colW - 22, COL_CREAM, ALIGN_LEFT);
-		y += 13;
-		if (y > kFieldH - 60) break;
-	}
-	if (!any) {
-		gfx::text("None yet", lx + 6, y, 0.28f, COL_DIM);
-		y += 13;
-	}
-	// Right column: passive charms, then the slots.
-	float ry = kFieldTop + 34;
-	gfx::text("Passive charms", rx, ry, 0.34f, rgba(255, 210, 150));
-	ry += 16;
-	if (o.passiveCount == 0) {
-		gfx::text("None yet", rx + 6, ry, 0.28f, COL_DIM);
-		ry += 13;
-	}
-	for (int i = 0; i < o.passiveCount && ry < kFieldH - 110; i++) {
-		gfx::sprite(SHEET_SPRITES, cardIcon(o.passiveOrder[i]), rx + 12, ry + 6, 0.36f, 0.36f);
-		orcFit(kCards[o.passiveOrder[i]].name, rx + 22, ry, 0.28f, colW - 22, COL_CREAM, ALIGN_LEFT);
-		ry += 13;
-	}
-	ry += 8;
-	gfx::text("Charm slots", rx, ry, 0.34f, rgba(255, 210, 150));
-	ry += 16;
-	for (int s = 0; s < kSlots; s++) {
-		const int card = o.slot[s];
-		if (card == CARD_NONE) snprintf(buf, sizeof buf, "%d: Empty", s + 1);
-		else if (o.slotCool[s] > 0) snprintf(buf, sizeof buf, "%d: %s (%ds)", s + 1, kCards[card].name, (int)ceilf(o.slotCool[s]));
-		else snprintf(buf, sizeof buf, "%d: %s", s + 1, kCards[card].name);
-		orcFit(buf, rx + 6, ry, 0.28f, colW - 6, card == CARD_NONE ? COL_DIM : COL_CREAM, ALIGN_LEFT);
-		ry += 13;
-		if (card != CARD_NONE) {
-			orcFit(kCards[card].line1, rx + 14, ry, 0.24f, colW - 14, COL_DIM, ALIGN_LEFT);
-			ry += 12;
-		}
-	}
-	const Button back = {kFieldW * 0.5f - 130, kFieldH - 42.0f, 120, 32, "Back to Run"};
-	const Button swap = {kFieldW * 0.5f + 10, kFieldH - 42.0f, 120, 32, "Swap Slots"};
-	drawSign(back, back.label, sOrcInvFocus == 0, false, 0.44f);
-	drawSign(swap, swap.label, sOrcInvFocus == 1, false, 0.44f);
+	drawOrcInventory();
 }
 
 // How-to panels, once each: the first run, and the first boss. They hold the run until tapped away.
@@ -339,28 +603,14 @@ static bool updateOrchardMenus(const Input& in, bool wasTouching) {
 			sGame.orcResume();
 		} else {
 			sOrcInv = true;
-			sOrcInvFocus = 0;
+			sOrcInvFocus = -1;  // Resume
+			sOrcConfirm = 0;
 			sBlade.reset();
 			audio::fuse(false);
 		}
 		return true;
 	}
-	if (sOrcInv) {
-		const Button back = {kFieldW * 0.5f - 130, kFieldH - 42.0f, 120, 32, "Back to Run"};
-		const Button swap = {kFieldW * 0.5f + 10, kFieldH - 42.0f, 120, 32, "Swap Slots"};
-		if (in.down & (KEY_LEFT | KEY_RIGHT)) sOrcInvFocus ^= 1;
-		bool close = (in.down & KEY_B) || (in.touching && !wasTouching && hit(back, in.tx, in.ty)) || ((in.down & KEY_A) && sOrcInvFocus == 0);
-		if ((in.touching && !wasTouching && hit(swap, in.tx, in.ty)) || ((in.down & KEY_A) && sOrcInvFocus == 1)) {
-			audio::click();
-			sGame.orcSwapSlots();
-		}
-		if (close) {
-			audio::click();
-			sOrcInv = false;
-			sGame.orcResume();
-		}
-		return true;
-	}
+	if (sOrcInv) return updateOrcInventory(in, wasTouching);
 	// Charm slots: L and R (Q and E on a keyboard), or a tap on the slot. A touch that starts on a slot
 	// waits: let go quickly without moving and the charm fires; move away and it becomes a slice after all.
 	static int slotDown = -1;

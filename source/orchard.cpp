@@ -154,6 +154,10 @@ void Game::orcStart() {
 	orc.room = 4;
 	orc.roomT = 9;
 	orc.upgrade[CARD_ARMOR] = 2;
+#ifdef TEST_ORCHARD_ROOM
+	orc.room = TEST_ORCHARD_ROOM;  // a later boss, with HP to see the whole fight
+	orc.maxHp = orc.hp = 400;
+#endif
 #endif
 }
 

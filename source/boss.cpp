@@ -121,6 +121,13 @@ void Game::bossNextAttack() {
 		if (!b.finisher && b.phase >= 2 && b.lastAttack != KING_LOB) choices[n++] = KING_LOB;
 		if (b.phase >= 3 && b.lastAttack != KING_FUSE) choices[n++] = KING_FUSE;
 	}
+#ifdef TEST_GIANT
+	if (b.id == BOSS_KING) {  // screenshots of the Giant Bomb
+		choices[0] = KING_GIANT;
+		n = 1;
+		b.lastAttack = ATK_NONE;
+	}
+#endif
 	int pick = gRng.below(n);
 	if (choices[pick] == b.lastAttack && n > 1) pick = (pick + 1) % n;
 	const u8 a = choices[pick];
@@ -703,32 +710,25 @@ void Game::drawBoss(bool solid) const {
 		if (b.guard) gfx::sprite(SHEET_SPRITES, sprites_ring_idx, b.x, b.y, ring, ring, 0, rgba(140, 200, 255, (int)(200 * pulse * alpha)));
 		else gfx::sprite(SHEET_SPRITES, sprites_ring_idx, b.x, b.y, ring * 1.08f, ring * 1.08f, 0, rgba(255, 220, 110, (int)(230 * pulse * alpha)));
 	}
+	// The pose: dizzy when confused or beaten, laughing with the guard down, gritting its teeth mid-attack.
+	const int pose = b.beaten || b.dazeT > 0 ? BOSS_POSE_DAZE : !b.guard ? BOSS_POSE_OPEN : b.attack != ATK_NONE ? BOSS_POSE_WIND : BOSS_POSE_GUARD;
+	const bool king = b.id == BOSS_KING;
+	const u32 tint = hurt ? rgba(255, 140, 140, (int)(255 * alpha)) : rgba(255, 255, 255, (int)(255 * alpha));
+	// The art's body radius is 40 units for The Big Melon and 35 for The Bomb King (its spikes stick out).
+	const float art = b.radius / (king ? 35.5f : 40.0f);
 	if (drawing3D()) {
+		// The game's own 3D fruit, made big, with the pose's face laid over it.
 		m3d::begin(kFieldW, gfx::stereoPerZ(), true);
 		m3d::Skin skin = {hurt ? 0.6f : 0.0f, 1.0f, 0.35f, 0.35f, alpha, 0.3f};
 		m3d::setSkin(&skin);
-		const float s = b.radius / (b.id == BOSS_MELON ? 23.0f : 19.0f);
-		m3d::Pose pose = {b.x, b.y, 30, b.rx, b.t * 0.4f, wob, s * (1 + grow), 0, 0, 0};
-		m3d::draw(b.id == BOSS_MELON ? m3d::MESH_MELON : m3d::MESH_BOMB, m3d::PART_WHOLE, pose);
+		const float s = b.radius / (king ? 19.0f : 23.0f);
+		m3d::Pose pose3 = {b.x, b.y, 30, b.rx, b.t * 0.4f, wob, s * (1 + grow), 0, 0, 0};
+		m3d::draw(king ? m3d::MESH_BOMB : m3d::MESH_MELON, m3d::PART_WHOLE, pose3);
 		m3d::setSkin(nullptr);
 		m3d::end();
+		gfx::sprite(SHEET_SPRITES, (king ? sprites_bface_king_guard_idx : sprites_bface_melon_guard_idx) + pose, b.x, b.y, art * sx, art * sy, wob, tint);
 	} else {
-		const u32 tint = hurt ? rgba(255, 140, 140, (int)(255 * alpha)) : rgba(255, 255, 255, (int)(255 * alpha));
-		const float s = b.radius / (b.id == BOSS_MELON ? 23.0f : 19.0f);
-		gfx::sprite(SHEET_FRUIT, b.id == BOSS_MELON ? fruit_melon_idx : fruit_bomb_idx, b.x, b.y, s * sx, s * sy, wob, tint);
-	}
-	// A face, so it reads as a character and not a big fruit: angry brows, and dizzy ones while confused.
-	const u32 ink = rgba(40, 20, 20, (int)(230 * alpha));
-	const float fs = b.radius / 50 * (1 + grow);
-	const float ey = b.y - b.radius * 0.15f * sy;
-	for (int side = -1; side <= 1; side += 2) {
-		const float ex = b.x + side * b.radius * 0.32f * sx;
-		if (b.dazeT > 0) {
-			gfx::text("x", ex, ey - 8 * fs, 0.9f * fs, ink, ALIGN_CENTER);
-		} else {
-			gfx::rect(ex - 4 * fs, ey - 4 * fs, 8 * fs, 9 * fs, ink);
-			gfx::tri(ex - side * 11 * fs, ey - 16 * fs, ink, ex + side * 9 * fs, ey - 9 * fs, ink, ex - side * 11 * fs, ey - 11 * fs, ink);
-		}
+		gfx::sprite(SHEET_SPRITES, (king ? sprites_boss_king_guard_idx : sprites_boss_melon_guard_idx) + pose, b.x, b.y, art * sx, art * sy, wob, tint);
 	}
 	if (b.id == BOSS_KING && b.crownOut <= 0) drawCrown(b.x, b.y - b.radius * sy - 2, b.radius / 40, rgba(255, 210, 70, (int)(255 * alpha)));
 	if (b.attack == KING_FUSE) {

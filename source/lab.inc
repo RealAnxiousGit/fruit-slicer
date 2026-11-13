@@ -199,6 +199,63 @@ static void labShopPreview() {
 	shopSave();
 }
 
+// The Orchard Blast Inventory: opens on Select, resumes from its first sign, swaps, and asks before a drop or a quit.
+static void labInventory() {
+	const u8 seenWas = gSave.howToSeen;
+	gSave.howToSeen |= 3;
+	sGame.start(MODE_ORCHARD);
+	sGame.phase = PHASE_PLAY;
+	Orchard& o = sGame.orc;
+	o.choosing = false;
+	o.boss.on = false;
+	o.slot[0] = CARD_BLENDER;
+	o.slot[1] = CARD_GOLDAPPLE;
+	Input in = {};
+	auto press = [&](u32 key) {
+		in = {};
+		in.down = key;
+		updateOrchardMenus(in, false);
+	};
+	press(KEY_SELECT);
+	labCheck(sOrcInv && sOrcConfirm == 0, "Select opens the Inventory");
+	press(KEY_A);
+	labCheck(!sOrcInv && o.resumeT > 2.9f, "the Inventory opens on Resume, and Resume comes back with a 3, 2, 1");
+	press(KEY_SELECT);
+	OrcInvItem items[64];
+	const int n = orcInvItems(items);
+	const int first = n - INVB_COUNT;
+	sOrcInvFocus = first + INVB_SWAP;
+	press(KEY_A);
+	labCheck(o.slot[0] == CARD_GOLDAPPLE && o.slot[1] == CARD_BLENDER, "Swap Slots in the Inventory swaps the charms");
+	sOrcInvFocus = 1;  // Slot 2
+	press(0);
+	sOrcInvFocus = first + INVB_DROP;
+	press(KEY_A);
+	labCheck(sOrcConfirm == 1, "Drop asks first: Drop this charm?");
+	press(KEY_A);
+	labCheck(sOrcConfirm == 0 && o.slot[1] == CARD_BLENDER, "the drop question starts on No, so A keeps the charm");
+	press(KEY_A);
+	press(KEY_RIGHT);
+	press(KEY_A);
+	labCheck(o.slot[1] == CARD_NONE && o.slot[0] == CARD_GOLDAPPLE, "Yes drops the charm in the slot picked last");
+	sOrcInvFocus = first + INVB_QUIT;
+	press(KEY_A);
+	labCheck(sOrcConfirm == 2, "Quit asks first: End this run?");
+	press(KEY_B);
+	labCheck(sOrcInv && sOrcConfirm == 0, "B answers No and stays in the Inventory");
+	int upgrades = 0, buttons = 0;
+	for (int i = 0; i < n; i++) {
+		upgrades += items[i].kind == INV_UPGRADE;
+		buttons += items[i].kind == INV_BUTTON && items[i].y + items[i].h <= kFieldH && items[i].x >= 0 && items[i].x + items[i].w <= kFieldW;
+	}
+	char d[48];
+	snprintf(d, sizeof d, "%d upgrades, %d signs on a %.0f by %.0f field", upgrades, buttons, kFieldW, kFieldH);
+	labCheck(upgrades == 9 && buttons == INVB_COUNT, "the Inventory lists every upgrade, and its signs fit the field", d);
+	sOrcInv = false;
+	sOrcConfirm = 0;
+	gSave.howToSeen = seenWas;
+}
+
 static void labMenus() {
 	const float firstRowY = kListTop + kRowH * 0.5f;
 	switch (sBotMenuStep++) {
@@ -843,6 +900,7 @@ static void labFinish(Input& in) {
 			gSave.best[MODE_CLASSIC] = classic;
 			gSave.scoreRules = rules;
 		}
+		labInventory();
 		sGame.labProbes(sBlade, labCheck);
 		step = 1;
 #if PORT_3DS

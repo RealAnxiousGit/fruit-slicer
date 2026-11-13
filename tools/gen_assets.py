@@ -1380,12 +1380,164 @@ def spr_card_icon(index):
     return shrink(img)
 
 
+# ---------------------------------------------------------------- bosses
+# Each boss has four poses: guard (guard up), open (guard down, laughing), daze (confused after a slice) and wind
+# (winding up an attack). The 2D look is a whole sticker per pose; the 3D look draws the game's own 3D fruit and
+# lays a face-only overlay of the same pose on it. The crown and the fuse are drawn by the game, since they move.
+BOSS_CELL = 96
+BOSS_POSES = ("guard", "open", "daze", "wind")
+FACE_INK = (40, 22, 30, 255)
+
+
+def boss_face(d, cx, cy, r, pose, king, outline=False):
+    """Eyes, brows and mouth for a boss face centred on (cx, cy), sized to a body of radius r."""
+    ink = FACE_INK
+    w = max(1.0, r * 0.06)
+    white = (255, 252, 240, 255)
+    for side in (-1, 1):
+        ex, ey = cx + side * r * 0.34, cy - r * 0.12
+        if pose == "daze":
+            # Swirly eyes: a spiral of short strokes.
+            pts = []
+            for i in range(28):
+                a = i * 0.55 + (0 if side < 0 else math.pi)
+                rad = r * 0.02 + i * r * 0.0055
+                pts.append(((ex + math.cos(a) * rad) * SS, (ey + math.sin(a) * rad) * SS))
+            el(d, ex, ey, r * 0.17, r * 0.17, white)
+            d.line(pts, fill=ink, width=int(w * SS * 0.8), joint="curve")
+            continue
+        eh = {"guard": 0.16, "open": 0.07, "wind": 0.1}[pose]
+        if outline:
+            el(d, ex, ey, r * 0.15 + w, r * eh + w, ink)
+        el(d, ex, ey, r * 0.15, r * eh, white)
+        px = ex - side * r * 0.03 if pose != "open" else ex
+        el(d, px, ey + r * 0.02, r * 0.065, min(r * 0.065, r * eh * 0.9), ink)
+        # Brows: slanted in and down when angry, raised and cocky when the guard is down.
+        if pose == "open":
+            bx0, by0, bx1, by1 = ex - r * 0.16, ey - r * 0.2, ex + r * 0.16, ey - r * 0.24
+        else:
+            tilt = 0.12 if pose == "guard" else 0.18
+            bx0, by0 = ex + side * r * 0.2, ey - r * (0.2 + tilt)
+            bx1, by1 = ex - side * r * 0.14, ey - r * 0.14
+        d.line([bx0 * SS, by0 * SS, bx1 * SS, by1 * SS], fill=ink, width=int(w * 1.6 * SS))
+    my = cy + r * (0.42 if king else 0.32)
+    if pose == "open":
+        # A wide laugh, tongue and all.
+        el(d, cx, my, r * 0.26, r * 0.17, ink)
+        el(d, cx, my + r * 0.07, r * 0.15, r * 0.08, (232, 96, 110, 255))
+        d.rectangle([(cx - r * 0.2) * SS, (my - r * 0.17) * SS, (cx + r * 0.2) * SS, (my - r * 0.1) * SS], fill=white)
+        # A drop of sweat: it's tired, and it knows you can hit it now.
+        el(d, cx + r * 0.62, cy - r * 0.42, r * 0.06, r * 0.09, (150, 210, 255, 255))
+    elif pose == "wind":
+        # Gritted teeth.
+        d.rounded_rectangle([(cx - r * 0.24) * SS, (my - r * 0.08) * SS, (cx + r * 0.24) * SS, (my + r * 0.1) * SS],
+                            radius=r * 0.05 * SS, fill=white, outline=ink, width=int(w * SS))
+        for i in range(-2, 3):
+            x = cx + i * r * 0.09
+            d.line([x * SS, (my - r * 0.08) * SS, x * SS, (my + r * 0.1) * SS], fill=ink, width=int(w * 0.7 * SS))
+        d.line([(cx - r * 0.24) * SS, (my + r * 0.01) * SS, (cx + r * 0.24) * SS, (my + r * 0.01) * SS], fill=ink, width=int(w * 0.7 * SS))
+    elif pose == "daze":
+        pts = [((cx - r * 0.22 + i * r * 0.044) * SS, (my + math.sin(i * 1.3) * r * 0.04) * SS) for i in range(11)]
+        d.line(pts, fill=ink, width=int(w * 1.2 * SS), joint="curve")
+    else:
+        d.arc([(cx - r * 0.22) * SS, (my - r * 0.02) * SS, (cx + r * 0.22) * SS, (my + r * 0.26) * SS], 200, 340,
+              fill=ink, width=int(w * 1.4 * SS))
+    if king:
+        # The King's waxed moustache, over the mouth.
+        mc = (250, 214, 90, 255) if not outline else (250, 214, 90, 255)
+        for side in (-1, 1):
+            pts = []
+            for i in range(13):
+                t = i / 12
+                pts.append(((cx + side * r * (0.04 + t * 0.36)) * SS, (my - r * 0.17 - math.sin(t * math.pi) * r * 0.04 - (t ** 3) * r * 0.1) * SS))
+            d.line(pts, fill=ink, width=int(r * 0.1 * SS), joint="curve")
+            d.line(pts, fill=mc, width=int(r * 0.06 * SS), joint="curve")
+
+
+def boss_body(king, pose):
+    c = BOSS_CELL
+    img = canvas(c)
+    d = ImageDraw.Draw(img)
+    cx, cy, r = c / 2, c / 2 + 2, c * 0.42
+    if king:
+        for i in range(8):
+            a = i * math.pi / 4 + math.pi / 8
+            x, y = cx + math.cos(a) * r * 1.06, cy + math.sin(a) * r * 1.06
+            d.line([cx * SS, cy * SS, x * SS, y * SS], fill=(60, 54, 84, 255), width=int(r * 0.24 * SS))
+            el(d, x, y, r * 0.13, r * 0.13, (214, 62, 52, 255) if pose != "open" else (250, 202, 44, 255))
+        body = (46, 42, 70, 255) if pose != "wind" else (70, 40, 66, 255)
+        el(d, cx, cy, r * 0.88, r * 0.88, body)
+        img = shade(img, light=(180, 190, 255, 90), dark=(0, 0, 0, 80))
+        d = ImageDraw.Draw(img)
+        # A royal sash across the chest.
+        sash = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sash)
+        sd.line([(cx - r) * SS, (cy + r * 0.3) * SS, (cx + r) * SS, (cy + r * 0.95) * SS], fill=(170, 40, 70, 255), width=int(r * 0.2 * SS))
+        disc = Image.new("L", img.size, 0)
+        el(ImageDraw.Draw(disc), cx, cy, r * 0.88, r * 0.88, 255)
+        sash.putalpha(ImageChops.multiply(mask_of(sash), disc))
+        img.alpha_composite(sash)
+        d = ImageDraw.Draw(img)
+        boss_face(d, cx, cy - r * 0.08, r * 0.88, pose, True)
+    else:
+        green = (58, 148, 78, 255) if pose != "wind" else (84, 150, 64, 255)
+        el(d, cx, cy, r, r * 0.94, green)
+        img = shade(img)
+        d = ImageDraw.Draw(img)
+        for i, x in enumerate((-0.66, -0.3, 0.06, 0.42, 0.74)):
+            pts = []
+            for t in range(-10, 11):
+                y = t * r * 0.094
+                xx = cx + x * r * math.sqrt(max(0, 1 - (y / (r * 0.94)) ** 2))
+                pts.append(((xx + math.sin(t * 1.4 + i) * r * 0.06) * SS, (cy + y) * SS))
+            d.line(pts, fill=(28, 96, 52, 255), width=int(r * 0.1 * SS), joint="curve")
+        # A little stalk and a leaf, worn at an angle like a hat.
+        stem(d, cx + r * 0.05, cy - r * 0.9, cx + r * 0.2, cy - r * 1.08, w=max(2, int(r * 0.08)))
+        leaf(d, cx + r * 0.15, cy - r * 1.0, -20, r * 0.42, (96, 186, 80, 255))
+        # A pale patch behind the face, so it reads on the dark stripes.
+        patch = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        el(ImageDraw.Draw(patch), cx, cy + r * 0.05, r * 0.6, r * 0.5, (150, 206, 120, 150))
+        img.alpha_composite(patch.filter(ImageFilter.GaussianBlur(SS * 3)))
+        d = ImageDraw.Draw(img)
+        boss_face(d, cx, cy, r, pose, False)
+    if pose == "daze":
+        # Little stars circling the head.
+        for i in range(3):
+            a = -math.pi / 2 + (i - 1) * 0.7
+            sx, sy = cx + math.cos(a) * r * 0.62, cy - r * 0.72 + math.sin(a) * r * 0.1
+            pts = []
+            for k in range(10):
+                rr = r * (0.11 if k % 2 == 0 else 0.045)
+                aa = -math.pi / 2 + k * math.pi / 5
+                pts.append((sx + math.cos(aa) * rr, sy + math.sin(aa) * rr))
+            poly(d, pts, (255, 226, 90, 255))
+    return shrink(sticker(img, 2.0))
+
+
+def boss_face_overlay(king, pose):
+    """The face alone, for laying on the 3D boss."""
+    c = BOSS_CELL
+    img = canvas(c)
+    d = ImageDraw.Draw(img)
+    cx, cy, r = c / 2, c / 2 + 2, c * 0.42
+    boss_face(d, cx, cy - (r * 0.08 if king else 0), r * (0.88 if king else 1.0), pose, king, outline=True)
+    return shrink(img)
+
+
+def boss_sprites():
+    out = []
+    for who, king in (("melon", False), ("king", True)):
+        out += [(f"boss_{who}_{p}", boss_body(king, p)) for p in BOSS_POSES]
+        out += [(f"bface_{who}_{p}", boss_face_overlay(king, p)) for p in BOSS_POSES]
+    return out
+
+
 def orchard_sprites():
     """The 1.2 sprites, after every older one so that no older sprite number moves."""
     out = [("ic_tree", spr_mode_icon("tree")), ("ic_crown", spr_mode_icon("crown")), ("ic_cup", spr_mode_icon("cup")),
            ("ic_target", spr_mode_icon("target")), ("ic_juggle", spr_mode_icon("juggle"))]
     out += [("cd_" + key, spr_card_icon(i)) for i, key in enumerate(CARD_ICONS)]
-    return out
+    return out + boss_sprites()
 
 
 def spr_crack():
