@@ -4,7 +4,7 @@
 #pragma once
 
 namespace custom {
-static constexpr int kMax = 64;
+static constexpr int kMax = 64;  // kCustomSongsMax in common.h must match
 
 void scan();               // reads the folder again, making it the first time
 int count();
