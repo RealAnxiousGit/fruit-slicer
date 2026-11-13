@@ -1,0 +1,6 @@
+Boss Fight Bounce
+Author: Locomule
+Page: https://opengameart.org/content/boss-fight-bounce
+Licences listed on the page: GPL 3.0 and CC0. Fruit Slicer uses it under CC0.
+File used: Boss Fight Bounce.mp3
+Checked and downloaded 2026-11-12. In the game as music_boss_bounce, levelled to -19 LUFS, kept whole.

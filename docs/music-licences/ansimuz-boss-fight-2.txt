@@ -1,0 +1,7 @@
+Boss Fight 2
+Author: ansimuz (Luis Zuno)
+Page: https://opengameart.org/content/boss-fight-2
+Licence listed on the page: CC0. Attribution notice on the page: by Ansimuz (optional)
+File used: Boss Fight 2.wav from boss_fight_2_files.zip
+The zip's own public-license.txt is kept beside this file as ansimuz-public-license.txt.
+Checked and downloaded 2026-11-12. In the game as music_boss_ansimuz, levelled to -19 LUFS, kept whole.

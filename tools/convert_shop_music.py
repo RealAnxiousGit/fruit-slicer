@@ -1,6 +1,6 @@
 """Turns finished songs into Shop music that loops cleanly on every port.
 
-usage: convert_shop_music.py <folder with the masters> <universal repo> <3DS repo>
+usage: convert_shop_music.py <folder with the masters> <universal repo> <3DS repo> [names... | found]
 
 To add a song: put a line in SONGS, run this, then add the SHOP_TRACK line it prints to
 source/shop_items.inc. Everything else (the tile, the price, scrolling, saving) follows from that line.
@@ -27,6 +27,16 @@ SONGS = [
     ("Lies.flac", "music_lies", 128),
     ("Lies VIP Remix.wav", "music_liesvip", 128),  # sold as "Lies (VIP Remix)"
     ("JUST STAY WITH ME.wav", "music_staywithme", 150),
+]
+
+# 1.2 boss tracks found online (licences in docs/music-licences). Each is made to loop as a whole file, so it is
+# kept whole: only the silence an MP3 adds at the start is trimmed, and it is levelled like the rest.
+FOUND_LOOPS = [
+    ("mintodog/boss_battle_145.ogg", "music_boss_minto", 145),
+    ("ansimuz/Boss Fight 2.wav", "music_boss_ansimuz", 130),
+    ("locomule/boss_fight_bounce.mp3", "music_boss_bounce", 120),
+    ("junkala/epic_boss_battle.wav", "music_boss_epic", 175),
+    ("atmanan/a_champions_will.mp3", "music_boss_champion", 140),
 ]
 
 RATE = 44100           # the beat analysis runs at this rate; ONSET_LAG below is in its samples
@@ -163,6 +173,20 @@ def make_loop(x, name, bpm, out=None):
     return song
 
 
+def whole_loop(out, name, bpm):
+    """A track that already loops as a whole file: from its first sound to its last, levelled to TARGET_LUFS."""
+    level = np.abs(out).max(axis=1)
+    sounding = np.nonzero(level > 10 ** (-60 / 20))[0]
+    song = out[int(sounding[0]):int(sounding[-1]) + 1].copy()
+    lufs, peak = loudness(song, OUT_RATE)
+    gain_db = TARGET_LUFS - lufs
+    if peak + gain_db > MAX_TRUE_PEAK:
+        gain_db = MAX_TRUE_PEAK - peak
+    song *= 10 ** (gain_db / 20)
+    print(f"{name}: {bpm} bpm, {len(song) / OUT_RATE:.2f}s = {len(song) / OUT_RATE * bpm / 240:.2f} bars, {lufs:.1f} LUFS, gain {gain_db:.1f} dB")
+    return song
+
+
 def encode_ogg(song, out):
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "f32le", "-ar", str(OUT_RATE), "-ac", "2", "-i", "-", "-c:a", "libvorbis",
                     "-q:a", OGG_QUALITY, out], input=song.astype("<f4").tobytes(), check=True)
@@ -233,6 +257,12 @@ def encode_3ds(song, out):
 def main():
     masters, universal, three_ds = sys.argv[1:4]
     only = sys.argv[4:]
+    if only == ["found"]:
+        for master, name, bpm in FOUND_LOOPS:
+            song = whole_loop(load(os.path.join(masters, master), OUT_RATE), name, bpm)
+            encode_ogg(song, os.path.join(universal, "romfs", "audio", name + ".ogg"))
+            encode_3ds(song, os.path.join(three_ds, "romfs", "audio", name + ".pcm"))
+        return
     for master, name, bpm in SONGS:
         if only and name not in only:
             continue

@@ -38,6 +38,7 @@ static const char* const kSfxFiles[SFX_COUNT] = {
 	"finale_rise", "finale_hit", "finale_burst",
 	"coin", "plink", "shopbell",
 	"clang", "open", "roar", "bossin", "victory", "pop",
+	"laugh", "chuckle", "whoosh", "launch",
 };
 static_assert(sizeof kSfxFiles / sizeof kSfxFiles[0] == SFX_COUNT, "every sound needs a file name");
 // How much of the mix one sound may take. A new sound is turned down if the ones still playing have
@@ -515,6 +516,8 @@ static const char* captionFor(Sfx s) {
 		case SFX_SHOPBELL: return "Ding-a-ling!";
 		case SFX_FINALE_RISE: return "Big fruit!";
 		case SFX_FINALE_BURST: return "Burst!";
+		case SFX_LAUGH: return "Ha ha ha!";
+		case SFX_CHUCKLE: return "Ho ho!";
 		default: return nullptr;
 	}
 }

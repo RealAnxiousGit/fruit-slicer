@@ -1,0 +1,7 @@
+8bit Action Boss Battle
+Author: MintoDog
+Page: https://opengameart.org/node/172914
+Licence listed on the page: CC0
+File used: 8bit_action_boss_battle_bpm145.ogg (the main version, not Climax)
+Page description: 8bit music for boss battle theme. This music is loopable.
+Checked and downloaded 2026-11-12. In the game as music_boss_minto, levelled to -19 LUFS, kept whole.

@@ -67,6 +67,12 @@ BOSS_TRACK("Seed Spitter", 400, "The Big Melon's hopping chip tune.", "music_bos
 BOSS_TRACK("Rind and Run", 400, "The Big Melon's swung chase.", "music_boss_rind", 132, 0)
 BOSS_TRACK("Long Live the Fuse", 450, "The Bomb King's royal march.", "music_boss_fuse", 116, 1)
 BOSS_TRACK("Powder Keg Court", 450, "The Bomb King's drums and brass.", "music_boss_keg", 128, 1)
+// Found online, levelled by tools/convert_shop_music.py (licences in docs/music-licences, credited in Credits).
+BOSS_TRACK("8bit Action Boss Battle", 400, "MintoDog. Chiptune, CC0.", "music_boss_minto", 145, 0)
+BOSS_TRACK("Boss Fight 2", 400, "ansimuz. Chiptune and synthwave, CC0.", "music_boss_ansimuz", 130, 0)
+BOSS_TRACK("Boss Fight Bounce", 400, "Locomule. Chiptune, CC0.", "music_boss_bounce", 120, 0)
+BOSS_TRACK("Epic Boss Battle", 450, "Juhani Junkala. Orchestral, CC0.", "music_boss_epic", 175, 1)
+BOSS_TRACK("A Champion's Will", 450, "ATMANAN. Orchestral, CC BY 4.0.", "music_boss_champion", 140, 1)
 
 // Colours are 0xRRGGBB.
 SHOP_SPLAT("Ink Blot", 60, "Every fruit lands in black ink.", 0x201C30)

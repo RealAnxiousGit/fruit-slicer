@@ -273,7 +273,9 @@ private:
 	void bossStart(int id);
 	void bossUpdate(float dt);
 	void bossTest(Blade& blade);     // a slice, a Deflected!, or a cut shot
-	void bossOpen(float seconds);    // its guard drops
+	void bossOpen(float seconds, bool laugh = true);  // its guard drops, with a laugh unless it was stunned
+	void bossGiant(float dt);         // The Bomb King's Giant Bomb, under way
+	void bossGiantTest(const Blade& blade, float reach);
 	void bossNextAttack();
 	void bossAttack(float dt);
 	void bossFire(int kind, float x, float y, float vx, float vy);

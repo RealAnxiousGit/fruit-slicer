@@ -58,6 +58,28 @@ struct Shot {
 };
 
 // The boss in the room, if any.
+// What a boss is doing (see boss.cpp).
+enum BossAttack : u8 {
+	ATK_NONE,
+	MEL_SEEDS,   // Seed Spit: a spray of seeds; slice them before they land
+	MEL_FLOP,    // Belly Flop: jumps and slams down, splashing juice
+	MEL_CHARGE,  // Rolling Charge: rolls at the screen. Swipe it to block
+	KING_VOLLEY, // Cannon Volley: cannonballs that take two swipes
+	KING_LOB,    // Royal Lob: real bombs, and fruit that turn into bombs
+	KING_CROWN,  // Crown Toss: the crown flies out and back
+	KING_FUSE,   // Short Fuse: its fuse is lit; snuff it with three swipes, or it blows
+	KING_GIANT,  // The Giant Bomb: he hides off screen and leaves a giant bomb; scrub it off the stage before it blows
+};
+// Only the last attack of a chain tires the boss out and drops its guard.
+
+// The Bomb King's Giant Bomb: left in the middle while he hides off screen. Scrubbing it knocks it upward; enough
+// hits launch it off the stage before its timer runs out.
+struct GiantBomb {
+	bool on, launched, done;
+	u8 hits, need, ticks;
+	float x, y, vy, t, total, tick, travel, jolt;
+};
+
 struct Boss {
 	u8 id;
 	u8 left;          // clean slices still needed
@@ -89,6 +111,11 @@ struct Boss {
 	float crownOut;   // The Bomb King's crown is away on a Crown Toss
 	float enterT;     // drops in from above before the fight starts
 	float leaveT;     // beaten: fades away
+	u8 chain;         // attacks left in this chain: only the last one tires it out and drops the guard
+	bool finisher;    // the attack under way is the last of its chain
+	u8 giantPhases;   // bit n: the Giant Bomb has already come in phase n
+	bool hidden;      // The Bomb King is off screen while his Giant Bomb is out
+	GiantBomb giant;
 };
 
 // The run itself.

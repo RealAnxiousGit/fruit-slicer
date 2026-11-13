@@ -802,7 +802,7 @@ void Game::drawOrchardOverlay() const {
 #ifdef AUTOTEST
 // The Lab's checks of Orchard Blast: HP, XP, cards, charms, rooms and the bosses.
 void Game::labOrchard(void (*check)(bool, const char*, const char*)) {
-	char d[96];
+	char d[128];
 	const u8 diffWas = gSave.difficulty;
 	const u32 beatenWas = gSave.bossesBeaten;
 	gSave.difficulty = DIFF_NORMAL;
@@ -826,11 +826,11 @@ void Game::labOrchard(void (*check)(bool, const char*, const char*)) {
 
 	// The six boss and charm sounds made for 1.2.
 	if (audio::available()) {
-		const Sfx made[] = {SFX_CLANG, SFX_OPEN, SFX_ROAR, SFX_BOSSIN, SFX_VICTORY, SFX_POP};
+		const Sfx made[] = {SFX_CLANG, SFX_OPEN, SFX_ROAR, SFX_BOSSIN, SFX_VICTORY, SFX_POP, SFX_LAUGH, SFX_CHUCKLE, SFX_WHOOSH, SFX_LAUNCH};
 		int missing = 0;
 		for (Sfx s : made) missing += !audio::loaded(s);
 		snprintf(d, sizeof d, "%d missing", missing);
-		check(missing == 0, "Orchard Blast's own sounds load: Deflected!, Open!, roar, intro, victory, pop", d);
+		check(missing == 0, "Orchard Blast's own sounds load: Deflected!, Open!, roar, intro, victory, pop, laugh, chuckle, whoosh, launch", d);
 
 		// Boss music: the room's track hands over to a boss track, then comes back.
 		const u8 musicWas = gSave.bossMusic, lastWas = gSave.bossTrackLast[BOSS_MELON];
@@ -1095,7 +1095,7 @@ void Game::labOrchard(void (*check)(bool, const char*, const char*)) {
 	}
 	int count = 0;
 	for (int k = 0; k < 16; k++) count += (kinds >> k) & 1;
-	check(count == 4, "The Bomb King uses all four attacks by its last phase", "");
+	check(count == 5, "The Bomb King uses all five attacks by its last phase, the Giant Bomb among them", "");
 
 	// The Bomb King's decoy fruit turn into bombs.
 	setup();
@@ -1110,6 +1110,89 @@ void Game::labOrchard(void (*check)(bool, const char*, const char*)) {
 
 	// Difficulty numbers.
 	check(orchardLevel(DIFF_EASY).startHp == 25 && orchardLevel(DIFF_INSANE).startHp == 15 && orchardLevel(DIFF_HARD).bombDamage == 6, "Difficulty sets HP and bomb damage", "");
+
+
+	// Timed fights: a bot that plays like a good player beats each boss on each difficulty, three times. It slices
+	// shots after a short reaction, blocks charges, cuts fuses, scrubs the Giant Bomb at about five hits a second,
+	// and slices the boss 0.4 s after its guard drops. The fights must last long enough to feel like fights.
+	{
+		static const char* const kDiffName[DIFF_COUNT] = {"Easy", "Normal", "Hard", "Insane"};
+		float normalTime[BOSS_COUNT] = {};
+		bool allBeaten = true;
+		for (int boss = 0; boss < BOSS_COUNT; boss++) {
+			for (int dif = 0; dif < DIFF_COUNT; dif++) {
+				float total = 0, hurt = 0, longest = 0;
+				int giants = 0;
+				for (int run = 0; run < 3; run++) {
+					gSave.difficulty = (u8)dif;
+					setup();
+					orc.hp = orc.maxHp = 99999;
+					bossStart(boss);
+					Boss& f = orc.boss;
+					u32 stroke = 0x60000000u + (u32)(boss * 100000 + dif * 10000 + run * 1000);
+					float openFor = 0, fuseT = 0, t = 0;
+					int sawGiant = 0;
+					bool inBomb = false;
+					float scrub = 0;
+					while (t < 400 && !f.beaten && f.on) {
+						bossUpdate(kDt);
+						t += kDt;
+						for (auto& s : orc.shots)
+							if (s.on && s.age > 0.45f && s.kind != SHOT_CROWN) {
+								const float ddx = s.x - f.x, ddy = s.y - f.y;
+								if (ddx * ddx + ddy * ddy < f.radius * f.radius * 2.2f) continue;
+								Blade cut = swipe(s.x - 4, s.y - 4, s.x + 4, s.y + 4, ++stroke);
+								bossTest(cut);
+							}
+						if (f.attack != KING_GIANT) inBomb = false;
+						if (f.attack == KING_GIANT && f.giant.on && !f.giant.launched && f.volley == 1) {
+							if (!inBomb) sawGiant++;
+							inBomb = true;
+							scrub += 1;
+							const float side = ((int)scrub & 1) ? 1.0f : -1.0f;
+							Blade sc = swipe(f.giant.x - side * 3, f.giant.y, f.giant.x + side * 3, f.giant.y, 0x5F000000u);
+							bossTest(sc);
+						} else if (f.attack == MEL_CHARGE && f.attackT > 0.8f) {
+							Blade bl = swipe(f.x - 30, f.y, f.x + 30, f.y, ++stroke);
+							bossTest(bl);
+						} else if (f.attack == KING_FUSE) {
+							fuseT += kDt;
+							if (fuseT > 0.35f) {
+								fuseT = 0;
+								const float fy = f.y - f.radius - 8;
+								Blade fz = swipe(f.x - 10, fy, f.x + 10, fy, ++stroke);
+								bossTest(fz);
+							}
+						}
+						if (!f.guard && f.openT > 0 && f.dazeT <= 0 && !f.hidden) {
+							openFor += kDt;
+							if (openFor > 0.4f) {
+								Blade hit = swipe(f.x - 30, f.y - 10, f.x + 30, f.y + 10, ++stroke);
+								bossTest(hit);
+								openFor = 0;
+							}
+						} else {
+							openFor = 0;
+						}
+					}
+					allBeaten = allBeaten && f.beaten;
+					total += t;
+					if (t > longest) longest = t;
+					hurt += orc.damageTaken;
+					giants += sawGiant;
+					audio::fuse(false);
+				}
+				snprintf(d, sizeof d, "%s %s: %.0f s on average (longest %.0f), %.0f damage taken, %d Giant Bombs", kBosses[boss].name, kDiffName[dif], total / 3, longest, hurt / 3, giants);
+				check(true, "Timed fight", d);
+				if (dif == DIFF_NORMAL) normalTime[boss] = total / 3;
+			}
+		}
+		check(allBeaten, "A good player can beat both bosses on every difficulty", "");
+		snprintf(d, sizeof d, "%.0f s", normalTime[BOSS_MELON]);
+		check(normalTime[BOSS_MELON] >= 40 && normalTime[BOSS_MELON] <= 70, "The Big Melon takes a good player about 45 to 60 seconds on Normal", d);
+		snprintf(d, sizeof d, "%.0f s", normalTime[BOSS_KING]);
+		check(normalTime[BOSS_KING] >= 80 && normalTime[BOSS_KING] <= 130, "The Bomb King takes a good player about 90 to 120 seconds on Normal", d);
+	}
 
 	gSave.difficulty = diffWas;
 	gSave.bossesBeaten = beatenWas;

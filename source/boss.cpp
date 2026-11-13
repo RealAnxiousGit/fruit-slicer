@@ -15,18 +15,17 @@
 #include "sprites.h"
 
 namespace {
-enum BossAttack : u8 {
-	ATK_NONE,
-	MEL_SEEDS,   // Seed Spit: a spray of seeds; slice them before they land
-	MEL_FLOP,    // Belly Flop: jumps and slams down, splashing juice. Guard drops when it lands
-	MEL_CHARGE,  // Rolling Charge: rolls at the screen. Swipe it to block. Guard drops after
-	KING_VOLLEY, // Cannon Volley: cannonballs that take two swipes. Guard drops after
-	KING_LOB,    // Royal Lob: real bombs, and fruit that turn into bombs
-	KING_CROWN,  // Crown Toss: the crown flies out and back. Guard is down while it's away
-	KING_FUSE,   // Short Fuse: its fuse is lit; snuff it with three swipes, or it blows
-};
 
+// A chain of attacks: only its last one tires the boss out and drops the guard, so a fight is a real fight.
+// Tuned with the Lab's timed fights (labBossFight).
+int chainLength(const Boss&) { return 4; }  // both bosses; the Melon's attacks are quicker, so its fight stays shorter
+
+// The Giant Bomb: hits come from blade travel across it, like the Sunburst.
+constexpr int kGiantNeed[DIFF_COUNT] = {14, 18, 22, 26};
+constexpr float kGiantTime[DIFF_COUNT] = {8.0f, 7.0f, 6.0f, 5.5f};
 constexpr float kCrownLife = 3.2f;
+constexpr float kGiantTravelPerHit = 70.0f;
+constexpr int kGiantDamage = 10;  // twice a bomb, on Normal
 
 float segDist2(float px, float py, const Blade& b) {
 	const float dx = b.x - b.px, dy = b.y - b.py;
@@ -58,15 +57,17 @@ void Game::bossStart(int id) {
 	b.y = -b.radius * 2;
 	b.enterT = 1.6f;
 	b.nextAttack = 1.2f;
+	b.chain = (u8)chainLength(b);
 	for (auto& s : orc.shots) s.on = false;
 	orc.fightT = 0;
 	setCallout(kBosses[id].name, rgba(255, 200, 120), 0.8f);
 	showCaption("A boss drops in.");
 	audio::play(SFX_BOSSIN, 1.0f);
+	audio::play(SFX_WHOOSH, 0.9f, 0, 0.8f);
 	if (gSave.bossMusic) audio::bossMusic(bossTrackPick(id, gRng.next()));
 }
 
-void Game::bossOpen(float seconds) {
+void Game::bossOpen(float seconds, bool laugh) {
 	Boss& b = orc.boss;
 	if (!b.on || b.beaten || b.dazeT > 0) return;
 	float t = seconds + 0.25f * orc.upgrade[CARD_BLADE];
@@ -77,6 +78,8 @@ void Game::bossOpen(float seconds) {
 	if (wasUp) {
 		addPopup("OPEN!", b.x, b.y - b.radius - 16, rgba(255, 230, 120), 0.75f);
 		audio::play(SFX_OPEN, 0.9f, fieldPan(b.x));
+		// A cocky laugh as it drops its guard: higher for The Big Melon, lower for The Bomb King.
+		if (laugh) audio::play(SFX_LAUGH, 0.8f, fieldPan(b.x), b.id == BOSS_MELON ? 1.25f : 0.8f);
 		showCaption("Its guard is down. Slice it!");
 	}
 }
@@ -97,19 +100,25 @@ void Game::bossFire(int kind, float x, float y, float vx, float vy) {
 	}
 }
 
-// Picks what comes next. Every other attack at most is one without an opening, so the guard drops often.
+// Picks what comes next. Attacks come in chains, and only the last of a chain (one that can tire it out) drops
+// the guard. A chain that ends without a slice starts again one attack shorter.
 void Game::bossNextAttack() {
 	Boss& b = orc.boss;
+	if (b.chain == 0) b.chain = (u8)(chainLength(b) > 2 ? chainLength(b) - 1 : 1);
+	b.finisher = --b.chain == 0;
 	u8 choices[4];
 	int n = 0;
 	if (b.id == BOSS_MELON) {
-		if (b.lastAttack != MEL_SEEDS) choices[n++] = MEL_SEEDS;
+		if (!b.finisher && b.lastAttack != MEL_SEEDS) choices[n++] = MEL_SEEDS;
 		choices[n++] = MEL_FLOP;
 		if (b.phase >= 2) choices[n++] = MEL_CHARGE;
+	} else if (b.finisher && b.phase >= 2 && !(b.giantPhases >> b.phase & 1)) {
+		b.giantPhases |= (u8)(1u << b.phase);  // once in each of the later phases
+		choices[n++] = KING_GIANT;
 	} else {
 		choices[n++] = KING_VOLLEY;
 		choices[n++] = KING_CROWN;
-		if (b.phase >= 2 && b.lastAttack != KING_LOB) choices[n++] = KING_LOB;
+		if (!b.finisher && b.phase >= 2 && b.lastAttack != KING_LOB) choices[n++] = KING_LOB;
 		if (b.phase >= 3 && b.lastAttack != KING_FUSE) choices[n++] = KING_FUSE;
 	}
 	int pick = gRng.below(n);
@@ -152,6 +161,10 @@ void Game::bossNextAttack() {
 			showCaption("Its fuse is lit. Swipe the fuse three times.");
 			audio::fuse(true, fieldPan(b.x));
 			break;
+		case KING_GIANT:
+			b.volley = 0;  // the stage: floating off, the bomb, coming back
+			audio::play(SFX_WHOOSH, 1.0f, fieldPan(b.x), 0.7f);
+			break;
 		default: break;
 	}
 }
@@ -178,6 +191,8 @@ void Game::bossAttack(float dt) {
 			break;
 		case MEL_FLOP: {
 			const float t = b.attackT;
+			if (t <= dt * 1.5f) audio::play(SFX_WHOOSH, 0.8f, fieldPan(b.x), 1.15f);  // up it hops
+			if (t >= 0.85f && t - dt < 0.85f) audio::play(SFX_WHOOSH, 1.0f, fieldPan(b.x), 0.75f);  // and down
 			if (t < 0.55f) {
 				b.y = lerpf(b.y, kFieldTop + b.radius * 0.6f, 1 - powf(0.0005f, dt));
 			} else if (t < 0.85f) {
@@ -198,7 +213,7 @@ void Game::bossAttack(float dt) {
 					b.attackT = 0;  // the second flop
 				} else {
 					b.volleyT = -1000;  // landed for good
-					bossOpen(lv.openTime + 0.5f);
+					if (b.finisher) bossOpen(lv.openTime + 0.5f);
 					b.attack = ATK_NONE;
 				}
 			}
@@ -208,12 +223,13 @@ void Game::bossAttack(float dt) {
 			const float t = b.attackT;
 			b.x = lerpf(b.x, kFieldW * 0.5f, 1 - powf(0.02f, dt));
 			b.rx += dt * 9;
+			if (t >= 0.5f && t - dt < 0.5f) audio::play(SFX_WHOOSH, 1.0f, fieldPan(b.x), 0.6f);  // the roll comes at you
 			if (t > 0.5f) b.squash = -clampf((t - 0.5f) / 1.3f, 0, 1);  // negative squash: it grows toward the screen
 			if (t >= 1.8f) {
 				b.squash = 0;
 				shake = 0.8f;
 				orcHurt(bossDamage(3), b.x, b.y, "CHARGE");
-				bossOpen(lv.openTime);
+				if (b.finisher) bossOpen(lv.openTime);
 				b.attack = ATK_NONE;
 			}
 			break;
@@ -230,7 +246,7 @@ void Game::bossAttack(float dt) {
 				b.volleyT = 0.65f;
 			}
 			if (b.volley <= 0 && b.volleyT < -0.6f) {
-				bossOpen(lv.openTime);
+				if (b.finisher) bossOpen(lv.openTime);
 				b.attack = ATK_NONE;
 			}
 			break;
@@ -251,7 +267,7 @@ void Game::bossAttack(float dt) {
 			if (b.attackT < dt * 1.5f) {
 				bossFire(SHOT_CROWN, b.x, b.y - b.radius, 0, 0);
 				b.crownOut = kCrownLife;
-				bossOpen(kCrownLife - 0.4f);
+				if (b.finisher) bossOpen(kCrownLife - 0.4f);
 				audio::play(SFX_SWISH0, 0.8f, fieldPan(b.x), 0.8f);
 			}
 			if (b.attackT > 0.5f) b.attack = ATK_NONE;
@@ -261,7 +277,7 @@ void Game::bossAttack(float dt) {
 			if (b.fuseCuts >= 3) {
 				audio::fuse(false);
 				setCallout("SNUFFED!", rgba(170, 230, 255));
-				bossOpen(lv.openTime * 1.5f);
+				if (b.finisher) bossOpen(lv.openTime * 1.5f);
 				b.attack = ATK_NONE;
 			} else if (b.fuseT <= 0) {
 				audio::fuse(false);
@@ -274,9 +290,10 @@ void Game::bossAttack(float dt) {
 				b.attack = ATK_NONE;
 			}
 			break;
+		case KING_GIANT: bossGiant(dt); break;
 		default: b.attack = ATK_NONE; break;
 	}
-	if (b.attack == ATK_NONE) b.nextAttack = lerpf(3.0f, 1.8f, (b.phase - 1) * 0.5f) * (gSave.difficulty == DIFF_EASY ? 1.25f : 1.0f);
+	if (b.attack == ATK_NONE) b.nextAttack = lerpf(2.6f, 1.6f, (b.phase - 1) * 0.5f) * (gSave.difficulty == DIFF_EASY ? 1.25f : 1.0f);
 }
 
 void Game::shotsUpdate(float dt) {
@@ -346,6 +363,7 @@ void Game::bossUpdate(float dt) {
 			b.guard = true;
 			b.openT = 0;
 			b.nextAttack = 0.8f;
+			b.chain = (u8)chainLength(b);
 		}
 		return;
 	}
@@ -362,7 +380,7 @@ void Game::bossUpdate(float dt) {
 		return;
 	}
 	// Drifts about between attacks, and floats back up after a flop.
-	if (b.attack != MEL_FLOP && b.attack != MEL_CHARGE) {
+	if (b.attack != MEL_FLOP && b.attack != MEL_CHARGE && b.attack != KING_GIANT) {
 		const float speed = b.id == BOSS_KING ? 0.9f : 0.6f;
 		const float tx = kFieldW * 0.5f + sinf(b.t * speed) * kFieldW * 0.28f;
 		b.x = lerpf(b.x, tx, 1 - powf(0.2f, dt));
@@ -402,6 +420,10 @@ void Game::bossTest(Blade& blade) {
 		emitJuice(s.x, s.y, s.kind == SHOT_CANNON ? rgba(110, 110, 120) : rgba(255, 110, 120), juiceAmount(8), blade.x - blade.px, blade.y - blade.py);
 		orcGainXp(s.kind == SHOT_CANNON ? 2 : 1);
 	}
+	if (b.attack == KING_GIANT) {
+		bossGiantTest(blade, reach);
+		return;  // the King is away
+	}
 	if (b.dazeT > 0) return;  // confused: swipes pass straight through
 	// The Bomb King's fuse sits on top of it.
 	if (b.attack == KING_FUSE) {
@@ -420,13 +442,13 @@ void Game::bossTest(Blade& blade) {
 	const float r = b.radius * scale * 0.92f * reach;
 	if (segDist2(b.x, b.y, blade) > r * r) return;
 	if (b.attack == MEL_CHARGE && b.attackT > 0.6f) {
-		// Blocked the charge: it bounces off and its guard drops for longer.
+		// Blocked the charge: it bounces off, and if the chain is done its guard drops for longer.
 		b.attack = ATK_NONE;
 		b.squash = 0;
 		b.nextAttack = 2;
 		setCallout("BLOCKED!", rgba(170, 230, 255));
 		audio::play(SFX_CLANG, 1.0f, fieldPan(b.x), 0.8f);
-		bossOpen(orchardLevel(gSave.difficulty).openTime * 1.3f);
+		if (b.finisher) bossOpen(orchardLevel(gSave.difficulty).openTime * 1.3f);
 		return;
 	}
 	if (b.guard && !orc.cleaver) {
@@ -436,6 +458,7 @@ void Game::bossTest(Blade& blade) {
 		b.deflectT = 0.5f;
 		audio::play(SFX_CLANG, 1.0f, fieldPan(b.x));
 		emitSparks(blade.x, blade.y, rgba(170, 210, 255), juiceAmount(10), 150);
+		audio::play(SFX_CHUCKLE, 0.7f, fieldPan(b.x), b.id == BOSS_MELON ? 1.25f : 0.8f);
 		blade.speed *= 0.3f;
 		if (orc.lastStandT > 0 || gRng.unit() < 0.1f * orc.upgrade[CARD_PARRY]) {
 			addPopup("PARRIED!", b.x, b.y - b.radius - 14, rgba(170, 230, 255), 0.6f);
@@ -494,6 +517,114 @@ void Game::bossTest(Blade& blade) {
 	}
 }
 
+// The Giant Bomb. Stage 0: the King floats off the top. Stage 1: the bomb sits ticking in the middle until it is
+// scrubbed off the stage or goes off. Stage 2: the King drops back in, stunned if it was launched.
+void Game::bossGiant(float dt) {
+	Boss& b = orc.boss;
+	GiantBomb& g = b.giant;
+	const int d = gSave.difficulty < DIFF_COUNT ? gSave.difficulty : DIFF_NORMAL;
+	if (b.volley == 0) {
+		b.y = lerpf(b.y, -b.radius * 3, 1 - powf(0.002f, dt));
+		if (b.attackT >= 0.9f) {
+			b.volley = 1;
+			b.attackT = 0;
+			b.hidden = true;
+			g = {};
+			g.on = true;
+			g.x = kFieldW * 0.5f;
+			g.y = -b.radius * 2;
+			g.need = (u8)kGiantNeed[d];
+			g.t = g.total = kGiantTime[d];
+			g.travel = kGiantTravelPerHit;  // the first touch counts straight away
+			setCallout("GIANT BOMB!", rgba(255, 150, 90));
+			showCaption("Scrub the giant bomb to launch it away before it blows.");
+			audio::play(SFX_WHOOSH, 1.0f, 0, 0.55f);
+		}
+	} else if (b.volley == 1) {
+		if (g.launched) {
+			g.vy -= 400 * kFieldK * dt;
+			g.y += g.vy * dt;
+			if (g.y < -b.radius * 2.5f) {
+				g.on = false;
+				b.volley = 2;
+				b.attackT = 0;
+			}
+			return;
+		}
+		// It settles onto its spot; every hit knocks it up a little.
+		g.y = lerpf(g.y, fieldMidY() + 14, 1 - powf(0.12f, dt));
+		g.jolt *= powf(0.004f, dt);
+		g.t -= dt;
+		// The quit bomb's tick-tock, faster as the end comes.
+		g.tick += dt;
+		const float gap = 0.5f - 0.36f * clampf(1 - g.t / g.total, 0, 1);
+		if (g.tick >= gap) {
+			g.tick = 0;
+			audio::play(SFX_KNOCK, 0.7f, fieldPan(g.x), g.ticks++ % 2 ? 1.5f : 1.85f);
+			PORT_VIBRATE(0.25f, 20);
+		}
+		if (g.t <= 0) {
+			g.on = false;
+			audio::play(SFX_BOOM, 1.0f, fieldPan(g.x), 0.7f);
+			audio::play(SFX_FINALE_BURST, 0.6f, fieldPan(g.x), 0.6f);
+			flash = 0.7f;
+			flashColor = rgba(255, 200, 140);
+			shake = 1.6f;
+			PORT_VIBRATE(1.0f, 300);
+			emitSparks(g.x, g.y, rgba(255, 190, 90), juiceAmount(40), 300);
+			addRing(g.x, g.y, rgba(255, 170, 80), 4.0f, 0.4f);
+			orcHurt(bossDamage(kGiantDamage), g.x, g.y, "GIANT BOMB");
+			b.volley = 2;
+			b.attackT = 0;
+		}
+	} else {
+		if (b.hidden) {
+			b.hidden = false;
+			audio::play(SFX_WHOOSH, 1.0f, 0, 0.75f);
+		}
+		b.y = lerpf(b.y, b.baseY, 1 - powf(0.003f, dt));
+		if (b.attackT >= 0.9f) {
+			b.attack = ATK_NONE;
+			if (g.launched) {
+				setCallout("STUNNED!", rgba(170, 230, 255));
+				bossOpen(orchardLevel(gSave.difficulty).openTime * 1.5f, false);
+			} else {
+				audio::play(SFX_LAUGH, 1.0f, fieldPan(b.x), 0.8f);
+				addPopup("HA HA HA!", b.x, b.y - b.radius - 14, rgba(255, 170, 120), 0.6f);
+			}
+			g.launched = false;
+		}
+	}
+}
+
+void Game::bossGiantTest(const Blade& blade, float reach) {
+	Boss& b = orc.boss;
+	GiantBomb& g = b.giant;
+	if (!g.on || g.launched || b.volley != 1) return;
+	const float dx = blade.x - blade.px, dy = blade.y - blade.py, len = sqrtf(dx * dx + dy * dy);
+	Obj probe = {};
+	probe.x = g.x;
+	probe.y = g.y;
+	if (len < 1.5f || !hitTest(probe, blade, b.radius * reach)) return;
+	g.travel += len;
+	while (g.travel >= kGiantTravelPerHit && !g.launched) {
+		g.travel -= kGiantTravelPerHit;
+		g.hits++;
+		g.y -= 7 * kFieldK;
+		g.jolt = 1;
+		emitSparks(blade.x, blade.y, rgba(255, 200, 120), juiceAmount(3), 120);
+		audio::play(SFX_FINALE_HIT, 0.75f, fieldPan(g.x), clampf(0.8f + g.hits * 0.03f, 0.8f, 1.8f));
+		if (g.hits >= g.need) {
+			g.launched = true;
+			g.vy = -260 * kFieldK;
+			setCallout("LAUNCHED!", rgba(170, 230, 255));
+			audio::play(SFX_LAUNCH, 1.0f, fieldPan(g.x));
+			award(300);
+			orcGainXp(6);
+		}
+	}
+}
+
 // ---------------------------------------------------------------- drawing
 static void drawCrown(float x, float y, float s, u32 gold) {
 	const u32 dark = rgba(200, 140, 30, (gold >> 24) & 0xFF);
@@ -524,6 +655,36 @@ void Game::drawBoss(bool solid) const {
 	(void)solid;
 	const Boss& b = orc.boss;
 	if (!b.on) return;
+	if (b.giant.on) {
+		// The Giant Bomb: it warms toward red as its time runs out, with a ring of dots for the time left and the
+		// hits still needed over it. No flashing: the colour changes smoothly.
+		const GiantBomb& g = b.giant;
+		const float k = clampf(g.t / g.total, 0, 1), warm = 1 - k;
+		const float s = b.radius / 19.0f * (1 + 0.08f * g.jolt);
+		if (drawing3D()) {
+			m3d::begin(kFieldW, gfx::stereoPerZ(), true);
+			m3d::Skin skin = {warm * 0.55f, 1.0f, 0.3f, 0.2f, 1.0f, 0.35f};
+			m3d::setSkin(&skin);
+			m3d::Pose pose = {g.x, g.y, 30, 0, b.t * 0.6f, sinf(b.t * 3) * 0.08f, s, 0, 0, 0};
+			m3d::draw(m3d::MESH_BOMB, m3d::PART_WHOLE, pose);
+			m3d::setSkin(nullptr);
+			m3d::end();
+		} else {
+			gfx::sprite(SHEET_FRUIT, fruit_bomb_idx, g.x, g.y, s, s, sinf(b.t * 3) * 0.08f, rgba(255, (int)(255 - 110 * warm), (int)(255 - 150 * warm)));
+		}
+		if (!g.launched) {
+			const int dots = 32, lit = (int)ceilf(k * dots);
+			const float rr = b.radius * 1.25f;
+			for (int i = 0; i < dots; i++) {
+				const float a = -1.5708f + i * 6.2832f / dots;
+				gfx::rect(g.x + cosf(a) * rr - 2, g.y + sinf(a) * rr - 2, 4, 4, i < lit ? rgba(255, 220, 120) : rgba(60, 40, 30, 140));
+			}
+			char buf[8];
+			snprintf(buf, sizeof buf, "%d", g.need - g.hits);
+			gfx::text(buf, g.x, g.y - rr - 30, 0.9f, rgba(255, 230, 140), ALIGN_CENTER);
+		}
+	}
+	if (b.hidden) return;
 	float alpha = 1;
 	if (b.beaten) alpha = clampf(1 - b.leaveT / 1.6f, 0, 1);
 	if (b.dazeT > 0) {

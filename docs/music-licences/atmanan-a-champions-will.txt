@@ -1,0 +1,8 @@
+A Champion's Will
+Author: ATMANAN
+Page: https://opengameart.org/node/141442
+Licence listed on the page: CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Attribution notice on the page: Please credit "ATMANAN". Credited in the game's Credits, the README and the Shop.
+File used: a_champions_will.mp3
+Changes: converted, the MP3's leading silence trimmed, and turned down 1.1 dB to match the game's loudness.
+Checked and downloaded 2026-11-12. In the game as music_boss_champion.

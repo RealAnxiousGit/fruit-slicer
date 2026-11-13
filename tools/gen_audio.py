@@ -552,6 +552,60 @@ def pop():
 
 
 
+def _syllable(f0, f1, dur, vowel, seed):
+    """One sung syllable: a buzzing voice with an "h" of breath first, shaped by the vowel's formants."""
+    n = n_of(dur)
+    t = np.arange(n) / SFX_RATE
+    f = np.linspace(f0, f1, n) * (1 + 0.015 * np.sin(2 * np.pi * 6 * t))
+    ph = np.cumsum(f) / SFX_RATE
+    buzz = sum(np.sin(2 * np.pi * h * ph) / h ** 1.1 for h in range(1, 30) if h * max(f0, f1) < 9000)
+    breath = np.random.default_rng(seed).normal(0, 1, n)
+    src = buzz * np.minimum(1, t / 0.03) + breath * 0.5 * np.exp(-t / 0.025)
+    out = sum(band(src, fc * 0.8, fc * 1.2) * g for fc, g in vowel)
+    return out * np.minimum(1, t / 0.012) * np.exp(-t / (dur * 0.45))
+
+
+VOWEL_HA = ((750, 1.0), (1200, 0.7), (2600, 0.25))
+VOWEL_HO = ((500, 1.0), (850, 0.75), (2400, 0.15))
+
+
+def laugh():
+    """A boss's cocky laugh, ha-ha-ha-ha falling away. Played higher for The Big Melon, lower for The Bomb King."""
+    out = np.zeros(n_of(1.0))
+    for i in range(5):
+        f0 = 230 - i * 14
+        place(out, _syllable(f0, f0 * 0.9, 0.12, VOWEL_HA, 700 + i), i * 0.135, 1.0 - i * 0.12)
+    return norm(reverb_tail(out, 0.4, 0.15), 0.75)
+
+
+def chuckle():
+    """A short ho-ho when your blade is Deflected."""
+    out = np.zeros(n_of(0.5))
+    for i in range(2):
+        place(out, _syllable(190 - i * 20, 170 - i * 20, 0.1, VOWEL_HO, 710 + i), i * 0.12, 1.0 - i * 0.2)
+    return norm(reverb_tail(out, 0.3, 0.12), 0.65)
+
+
+def whoosh():
+    """Something big moving fast: low, wide air that swells and passes."""
+    r = np.random.default_rng(720)
+    n = n_of(0.45)
+    t = np.linspace(0, 1, n)
+    air = band(r.normal(0, 1, n), 120, 1800) * np.sin(np.pi * t) ** 1.8
+    hiss = band(r.normal(0, 1, n), 1500, 5000) * np.sin(np.pi * np.clip(t * 1.3 - 0.15, 0, 1)) ** 2 * 0.3
+    return norm(air + hiss, 0.6)
+
+
+def launch():
+    """The Giant Bomb knocked clear: a rising rush and a distant pop as it leaves the stage."""
+    out = np.zeros(n_of(1.4))
+    place(out, riser(0.5, 300, 5000, 721), 0, 0.6)
+    place(out, swish(722, 0.3, 500, 2600), 0.35, 0.8)
+    far = boom()[:n_of(0.8)] * np.exp(-np.arange(n_of(0.8)) / n_of(0.25))
+    place(out, band(far, 60, 1500), 0.75, 0.35)
+    return norm(out, 0.7)
+
+
 # ---------------------------------------------------------------- boss music
 # Brighter and busier than the calm tracks, so a higher rate: hats and the chip lead need the top end.
 BOSS_RATE = 22050
@@ -1032,6 +1086,10 @@ def build_audio():
     write_pcm("bossin", boss_intro(), s)
     write_pcm("victory", victory(), s)
     write_pcm("pop", pop(), s)
+    write_pcm("laugh", laugh(), s)
+    write_pcm("chuckle", chuckle(), s)
+    write_pcm("whoosh", whoosh(), s)
+    write_pcm("launch", launch(), s)
 
     # Original tracks: all slow, soft and major-leaning.
     menu = [[60, 64, 67, 71, 74], [57, 60, 64, 67, 71], [65, 69, 72, 76], [55, 59, 62, 67, 69]]
