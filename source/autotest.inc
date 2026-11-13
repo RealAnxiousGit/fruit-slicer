@@ -330,6 +330,14 @@ static void autotestInput(Input& in) {
 	if (sScreen == SCREEN_BENCH && sBenchDone) sBotDone = true;
 	return;
 #endif
+#ifdef TEST_STATS
+	// A picture of Stats with every best filled in.
+	if (sScreen == SCREEN_TITLE && sBotPhaseFrames > 60) {
+		for (int m = 0; m < MODE_COUNT; m++) gSave.best[m] = 1234 + m * 1111;
+		goTo(SCREEN_STATS, 1);
+	}
+	return;
+#endif
 
 	if (sBotMenuStep < 100 && sScreen != SCREEN_GAME) {
 		autotestMenus(in);

@@ -3149,16 +3149,18 @@ static void drawStatsTop() {
 	topPanel(30, 86, 340, 146);
 	gfx::setDepth(0.7f);
 	gfx::text("BEST SCORES", 200, 92, 0.4f, COL_ACCENT, ALIGN_CENTER);
-	// The modes on Pick a Game, five to a column.
+	// The modes on Pick a Game, in two columns: all 14 fit at seven to a column.
+	constexpr int kPerColumn = (MODE_COUNT + 1) / 2;
+	static_assert(kPerColumn <= 7, "the best scores need a second page");
 	int shown = 0;
 	for (int i = 0; i < (int)sizeof kModeOrder; i++) {
 		const int m = kModeOrder[i];
-		if (m >= MODE_COUNT || shown >= 10) continue;
-		const float x = shown < 5 ? 46 : 214, y = 114 + (shown % 5) * 22;
+		if (m >= MODE_COUNT) continue;
+		const float x = shown < kPerColumn ? 46 : 214, y = 112 + (shown % kPerColumn) * 16.5f;
 		shown++;
-		gfx::text(kModes[m].name, x, y, 0.34f, COL_DIM);
+		gfx::text(kModes[m].name, x, y, 0.3f, COL_DIM);
 		snprintf(buf, sizeof buf, "%lu", (unsigned long)gSave.best[m]);
-		gfx::text(buf, x + 140, y - 1, 0.38f, COL_CREAM, ALIGN_RIGHT);
+		gfx::text(buf, x + 140, y - 1, 0.33f, COL_CREAM, ALIGN_RIGHT);
 	}
 }
 
