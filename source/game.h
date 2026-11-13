@@ -16,6 +16,7 @@ struct Obj {
 	u8 fruit;
 	u8 hits;            // slices still needed
 	bool loose;         // broke off a trick fruit: worth a bonus, and never a miss if dropped
+	u8 tag;             // Sharpshooter: 1 + its ring colour, 0 for none
 	bool on;
 };
 struct Half {
@@ -179,6 +180,8 @@ struct Game {
 	int beatPerLoop;      // throw slots in one play of a custom song; 0 for the game's tracks, which run on forever
 	// Orchard Blast (orchard.cpp, boss.cpp).
 	Orchard orc;
+	// Boss Rush, Recipe, Sharpshooter and Juggle (modes12.cpp).
+	Modes12 m12;
 #ifdef AUTOTEST
 	// Measures how often a fruit is actually drawn on top of a bomb.
 	u32 statBombFrames, statOverlapFrames, statWaves, statFrenzies, statResets;
@@ -188,6 +191,7 @@ struct Game {
 	u32 statPendingMask;  // queue slots already taken when a wave began
 	void logWave() const;  // Daily Fruit: what this wave threw, to prove every run gets the same
 	void labOrchard(void (*check)(bool, const char*, const char*));  // orchard.cpp
+	void labModes12(void (*check)(bool, const char*, const char*));  // modes12.cpp
 #endif
 
 	void start(Mode m);
@@ -230,7 +234,10 @@ struct Game {
 	void drawBeatPulse() const;  // Beat Slice: the field's edges glow while a slice would count
 
 	// Orchard Blast, for the menus (orchard.cpp).
-	bool orchardHeld() const { return mode == MODE_ORCHARD && (orc.choosing || orc.resumeT > 0); }  // play holds still
+	bool orchardLike() const { return mode == MODE_ORCHARD || mode == MODE_BOSSRUSH; }  // HP, charms and bosses
+	bool orchardHeld() const { return orchardLike() && (orc.choosing || orc.resumeT > 0 || m12.rushPicking); }  // play holds still
+	void rushPick(int build);   // Boss Rush: takes a build and brings the first boss in
+	void drawModes12Field() const;  // the recipe, the call, the rings
 	bool orcCanReroll() const { return orc.choosing && !orc.placing && orc.rerolls > 0; }
 	void orcPick(int i);        // takes offer i
 	void orcReroll();
@@ -269,8 +276,16 @@ private:
 	void orcBlender();
 	bool orcOnBeat() const;
 	void orcFinish(bool won);
+	// The other 1.2 modes (modes12.cpp).
+	void m12Start();
+	bool m12Wave();                  // throws the wave for Recipe or Juggle; true when it did
+	bool m12Sliced(const Obj& o);    // Recipe and Sharpshooter: false when the fruit was the wrong one
+	void m12Update();
+	void juggleTest(Blade& blade);    // Juggle: a swipe knocks fruit up instead of cutting
+	void rushNext();                 // Boss Rush: the next boss, or the end
+	void recipeNew();
 	// The boss (boss.cpp).
-	void bossStart(int id);
+	void bossStart(int id, bool royal = false);
 	void bossUpdate(float dt);
 	void bossTest(Blade& blade);     // a slice, a Deflected!, or a cut shot
 	void bossOpen(float seconds, bool laugh = true);  // its guard drops, with a laugh unless it was stunned

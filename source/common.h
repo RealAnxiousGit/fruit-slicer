@@ -170,12 +170,12 @@ struct Settings {
 	u16 orchardBestRoom, orchardBestLevel;
 	u16 orchardRuns, orchardWins;
 	u8 bossMusic;           // 1 plays the boss tracks in a boss fight
-	u8 howToSeen;           // bit n: the how-to of new mode n (MODE_ORCHARD + n) has been shown
+	u8 howToSeen;           // how-tos shown: bit 0 Orchard Blast, 1 its first boss, 2 Boss Rush, 3 Recipe, 4 Sharpshooter, 5 Juggle
 	u8 bossTrackLast[4];    // per boss, the track (+1) heard in its last fight, so the next one differs
 	u8 reserved12[30];      // later 1.2.x fields take bytes from here
 };
 static_assert(MODE_COUNT + 1 <= kMaxModes, "more modes than the save holds");
-static_assert(MODE_JUGGLE - MODE_ORCHARD < 8, "howToSeen has a bit for each new mode");
+static_assert(MODE_JUGGLE - MODE_ORCHARD + 2 <= 8, "howToSeen has a bit for each how-to");
 extern Settings gSave;
 // Beat Timing in seconds: how far after the beat this player's slices land (Latency Test sets it).
 inline float beatLatencySec() { return ((int)gSave.beatLatency - 100) * 0.002f; }

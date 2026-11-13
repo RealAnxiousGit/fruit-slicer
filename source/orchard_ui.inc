@@ -7,7 +7,7 @@ static int sOrcInvFocus;      // the picked item (see orcInvItems)
 static float sOrcOpenT;       // seconds the cards have been up: a short lock-out stops a swipe picking one
 static bool sOrcSlotTouch;    // this touch began on a charm slot, so it never becomes a slice
 static int sOrcCardDown = -1;
-static int sOrcHowTo;         // a how-to panel is up: 0 none, 1 the run, 2 the first boss
+static int sOrcHowTo;         // a how-to panel is up: 0 none, else a HOWTO_ value
 static float sOrcHowToT;
 static void drawOrchardHowTo();
 
@@ -416,10 +416,18 @@ static bool updateOrcInventory(const Input& in, bool wasTouching) {
 	return true;
 }
 
+static bool newModeOn() { return sGame.mode >= MODE_ORCHARD && sGame.mode <= MODE_JUGGLE; }
+static void drawRushPick();
+
 static void drawOrchardMenus() {
-	if (sGame.mode != MODE_ORCHARD) return;
+	if (!newModeOn()) return;
 	if (sOrcHowTo) {
 		drawOrchardHowTo();
+		return;
+	}
+	if (!sGame.orchardLike()) return;
+	if (sGame.m12.rushPicking) {
+		drawRushPick();
 		return;
 	}
 	const Orchard& o = sGame.orc;
@@ -457,7 +465,14 @@ static void drawOrchardMenus() {
 	drawOrcInventory();
 }
 
-// How-to panels, once each: the first run, and the first boss. They hold the run until tapped away.
+static bool tapped(const Input& in, bool wasTouching, float x, float y, float w, float h) {
+	return in.touching && !wasTouching && in.tx >= x && in.tx < x + w && in.ty >= y && in.ty < y + h;
+}
+
+// How-to panels, once each: Orchard Blast's first run and first boss, and each of the other new modes. They hold
+// the run until tapped away. sOrcHowTo n is bit n - 1 of gSave.howToSeen.
+enum { HOWTO_ORCHARD = 1, HOWTO_BOSS, HOWTO_RUSH, HOWTO_RECIPE, HOWTO_SHARP, HOWTO_JUGGLE };
+
 static void drawOrchardHowTo() {
 	if (!sOrcHowTo) return;
 	const char* slots = PORT_3DS ? "L and R" : (gStickInUse ? "LB and RB" : "Q and E");
@@ -466,22 +481,57 @@ static void drawOrchardHowTo() {
 	const char* lines[6];
 	const char* title;
 	int n = 0;
-	if (sOrcHowTo == 1) {
-		title = "ORCHARD BLAST";
-		lines[n++] = "Ten rooms. A boss waits in rooms 5 and 10.";
-		lines[n++] = "Bombs and bosses cost HP. Dropped fruit never do.";
-		lines[n++] = "Slice fruit for XP. Each level up, pick a card.";
-		snprintf(a, sizeof a, "Charms sit in two slots: tap them, or use %s.", slots);
-		lines[n++] = a;
-		snprintf(b, sizeof b, "%s opens your Inventory.", inv);
-		lines[n++] = b;
-	} else {
-		title = "BOSS FIGHT";
-		lines[n++] = "A blue ring means its guard is up.";
-		lines[n++] = "Slicing it then costs you HP: Deflected!";
-		lines[n++] = "A gold ring means the guard is down. Slice!";
-		lines[n++] = "After a slice it's confused for a moment.";
-		lines[n++] = "Slice its shots before they land.";
+	switch (sOrcHowTo) {
+		case HOWTO_ORCHARD:
+			title = "ORCHARD BLAST";
+			lines[n++] = "Ten rooms. A boss waits in rooms 5 and 10.";
+			lines[n++] = "Bombs and bosses cost HP. Dropped fruit never do.";
+			lines[n++] = "Slice fruit for XP. Each level up, pick a card.";
+			snprintf(a, sizeof a, "Charms sit in two slots: tap them, or use %s.", slots);
+			lines[n++] = a;
+			snprintf(b, sizeof b, "%s opens your Inventory.", inv);
+			lines[n++] = b;
+			break;
+		case HOWTO_BOSS:
+			title = "BOSS FIGHT";
+			lines[n++] = "A blue ring means its guard is up.";
+			lines[n++] = "Slicing it then costs you HP: Deflected!";
+			lines[n++] = "A gold ring means the guard is down. Slice!";
+			lines[n++] = "After a slice it's confused for a moment.";
+			lines[n++] = "Slice its shots before they land.";
+			break;
+		case HOWTO_RUSH:
+			title = "BOSS RUSH";
+			lines[n++] = "Pick a build, then fight every boss back to back.";
+			lines[n++] = "No level ups: your build is all you get.";
+			lines[n++] = "Half your HP comes back after each boss.";
+			lines[n++] = "Then they come back as Royals: tougher, quicker.";
+			lines[n++] = "The faster you finish, the higher you score.";
+			break;
+		case HOWTO_RECIPE:
+			title = "RECIPE";
+			lines[n++] = "The recipe at the top shows what the cup needs.";
+			lines[n++] = "Slice those fruit, in those amounts.";
+			lines[n++] = "A wrong fruit, or one too many, spoils the cup.";
+			lines[n++] = "Every full cup adds 8 seconds.";
+			lines[n++] = "Bombs cost 10 points.";
+			break;
+		case HOWTO_SHARP:
+			title = "SHARPSHOOTER";
+			lines[n++] = "Fruit wear coloured rings, each with its own shape.";
+			lines[n++] = "Only the called one scores, and it scores double.";
+			lines[n++] = "A wrong one costs 3 points and your combo.";
+			lines[n++] = "The call changes every few seconds.";
+			lines[n++] = "Bombs cost 10 points.";
+			break;
+		default:
+			title = "JUGGLE";
+			lines[n++] = "Your blade knocks fruit back up, not in half.";
+			lines[n++] = "Each knock scores the number of fruit in the air.";
+			lines[n++] = "Swipe sideways to send a fruit sideways.";
+			lines[n++] = "Three on the floor and the run ends.";
+			lines[n++] = "Knocking a bomb counts as one of the three.";
+			break;
 	}
 	gfx::rect(kFillX, kFillX, kFillW, kFillW, rgba(20, 12, 8, 190));
 	const float w = kFieldW - 24 > 380 ? 380 : kFieldW - 24, x = (kFieldW - w) * 0.5f;
@@ -496,8 +546,22 @@ static void drawOrchardHowTo() {
 static bool orchardHowTo(const Input& in, bool wasTouching) {
 	const Orchard& o = sGame.orc;
 	if (!sOrcHowTo && !o.choosing && !sOrcInv) {
-		if (!(gSave.howToSeen & 1)) sOrcHowTo = 1;
-		else if (o.boss.on && !o.boss.beaten && o.boss.enterT <= 0 && !(gSave.howToSeen & 2)) sOrcHowTo = 2;
+		const u8 seen = gSave.howToSeen;
+		const bool bossUp = o.boss.on && !o.boss.beaten && o.boss.enterT <= 0;
+		switch (sGame.mode) {
+			case MODE_ORCHARD:
+				if (!(seen & 1)) sOrcHowTo = HOWTO_ORCHARD;
+				else if (bossUp && !(seen & 2)) sOrcHowTo = HOWTO_BOSS;
+				break;
+			case MODE_BOSSRUSH:
+				if (!(seen & 4)) sOrcHowTo = HOWTO_RUSH;
+				else if (bossUp && !(seen & 2)) sOrcHowTo = HOWTO_BOSS;
+				break;
+			case MODE_RECIPE: if (!(seen & 8)) sOrcHowTo = HOWTO_RECIPE; break;
+			case MODE_SHARP: if (!(seen & 16)) sOrcHowTo = HOWTO_SHARP; break;
+			case MODE_JUGGLE: if (!(seen & 32)) sOrcHowTo = HOWTO_JUGGLE; break;
+			default: break;
+		}
 		if (sOrcHowTo) {
 			sOrcHowToT = 0;
 			sBlade.reset();
@@ -508,24 +572,73 @@ static bool orchardHowTo(const Input& in, bool wasTouching) {
 	sOrcHowToT += kDt;
 	if (sOrcHowToT > 0.6f && ((in.touching && !wasTouching) || (in.down & (KEY_A | KEY_B | KEY_START | KEY_SELECT)))) {
 		audio::click();
-		gSave.howToSeen |= sOrcHowTo == 1 ? 1 : 2;
+		gSave.howToSeen |= (u8)(1u << (sOrcHowTo - 1));
 		sOrcHowTo = 0;
-		sGame.orcResume();
+		if (sGame.orchardLike()) sGame.orcResume();
 	}
 	return true;
 }
 
-static bool tapped(const Input& in, bool wasTouching, float x, float y, float w, float h) {
-	return in.touching && !wasTouching && in.tx >= x && in.tx < x + w && in.ty >= y && in.ty < y + h;
+// Boss Rush's build signs, before the first boss.
+static void rushBuildRect(int i, float* x, float* y, float* w, float* h) { orcCardRect(i, BUILD_COUNT, x, y, w, h); }
+
+static void drawRushPick() {
+	gfx::rect(kFillX, kFillX, kFillW, kFillW, rgba(20, 12, 8, 170));
+	orcFit("PICK A BUILD", kFieldW * 0.5f, kFieldTop + 8, 0.6f, kFieldW - 20, rgba(255, 230, 140));
+	static const int kIcon[BUILD_COUNT] = {CARD_ARMOR, CARD_GLASS, CARD_JUICE};
+	for (int i = 0; i < BUILD_COUNT; i++) {
+		float x, y, w, h;
+		rushBuildRect(i, &x, &y, &w, &h);
+		const RushBuildInfo& b = kRushBuilds[i];
+		// The focused build gets a gold frame: the plank stays dark so its text reads.
+		if (sGame.m12.rushFocus == i) gfx::rect(x - 3, y - 3, w + 6, h + 6, COL_ACCENT);
+		gfx::sign(sprites_plank_idx, x, y, w, h, COL_PLANK);
+		gfx::sprite(SHEET_SPRITES, cardIcon(kIcon[i]), x + w * 0.5f, y + 24, 0.8f, 0.8f);
+		orcFit(b.name, x + w * 0.5f, y + 44, 0.4f, w - 10, COL_CREAM);
+		orcFit(b.line1, x + w * 0.5f, y + 72, 0.25f, w - 10, COL_CREAM);
+		orcFit(b.line2, x + w * 0.5f, y + 86, 0.25f, w - 10, COL_CREAM);
+	}
+	orcFit("No level ups in a Boss Rush.", kFieldW * 0.5f, kFieldH - 30, 0.28f, kFieldW - 20, COL_DIM);
+}
+
+static bool updateRushPick(const Input& in, bool wasTouching) {
+	Modes12& m = sGame.m12;
+	sOrcOpenT += kDt;
+	if (sOrcOpenT < 0.45f) return true;
+	if (in.down & KEY_LEFT) m.rushFocus = (u8)(m.rushFocus == 0 ? BUILD_COUNT - 1 : m.rushFocus - 1);
+	if (in.down & KEY_RIGHT) m.rushFocus = (u8)((m.rushFocus + 1) % BUILD_COUNT);
+	int pick = -1;
+	for (int i = 0; i < BUILD_COUNT; i++) {
+		float x, y, w, h;
+		rushBuildRect(i, &x, &y, &w, &h);
+		if (tapped(in, wasTouching, x, y, w, h)) pick = i;
+#if PORT_MOUSE
+		if (in.hovering && in.tx >= x && in.tx < x + w && in.ty >= y && in.ty < y + h) m.rushFocus = (u8)i;
+#endif
+	}
+	if (in.down & KEY_A) pick = m.rushFocus;
+	if (pick >= 0) {
+		sGame.rushPick(pick);
+		sOrcOpenT = 0;
+	}
+	return true;
 }
 
 // Runs the Orchard menus for the game screen. True when they took the frame, so the blade and game input wait.
 static bool updateOrchardMenus(const Input& in, bool wasTouching) {
-	if (sGame.mode != MODE_ORCHARD || sGame.phase != PHASE_PLAY) {
+	if (!newModeOn() || sGame.phase != PHASE_PLAY) {
 		sOrcInv = false;
 		return false;
 	}
 	if (orchardHowTo(in, wasTouching)) return true;
+	if (!sGame.orchardLike()) {
+		sOrcInv = false;
+		return false;
+	}
+	if (sGame.m12.rushPicking) {
+		sOrcInv = false;
+		return updateRushPick(in, wasTouching);
+	}
 	Orchard& o = sGame.orc;
 	if (o.choosing) {
 		sOrcInv = false;

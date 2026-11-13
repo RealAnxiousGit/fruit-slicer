@@ -421,6 +421,12 @@ static bool labModePages() {
 			botTapXY((int)(next.x + next.w / 2), (int)(next.y + next.h / 2));
 			return true;
 		case 4:
+			static int taps = 0;
+			if (sModePage != 0 && ++taps < kModePages) {
+				step--;  // tap on past the last page
+				botTapXY((int)(next.x + next.w / 2), (int)(next.y + next.h / 2));
+				return true;
+			}
 			labCheck(sModePage == 0, "turning past the last page wraps to the first");
 			sBotKeys = KEY_SELECT;  // a 3DS's Select, or Back or View on a controller
 			return true;
@@ -501,6 +507,18 @@ static void labWatchGame() {
 			cardsChecked = true;
 			labCheck(gSave.howToSeen & 1, "a level-up card is picked with A, and play goes on", "");
 		}
+	}
+	if (sGame.mode >= MODE_BOSSRUSH && sGame.mode <= MODE_JUGGLE) {
+		// Each of the other new modes opens on a how-to of its own, the first time.
+		static bool sawOwn;
+		if (sBotModeFrames == 1) sawOwn = false;
+		if (sOrcHowTo && !sawOwn && sOrcHowToT > 0.7f) {
+			sawOwn = true;
+			labCheck(sOrcHowTo == HOWTO_RUSH + (sGame.mode - MODE_BOSSRUSH) && sGame.elapsed < 1, "a new mode shows its own how-to first", modeName(sGame.mode));
+		}
+		if (sBotModeFrames == 600 && !sawOwn) labCheck(false, "a new mode shows its own how-to first", modeName(sGame.mode));
+		if (sGame.mode == MODE_BOSSRUSH && sBotModeFrames == 1200)
+			labCheck(sGame.m12.rushBuild < BUILD_COUNT && !sGame.m12.rushPicking, "Boss Rush's build is picked with A", "");
 	}
 	if (sGame.mode == MODE_PRACTICE && sGame.practiceStep < PS_FRENZY && (sGame.feverMeter > 0 || sGame.chain >= 2)) sLabMeterEarly = true;
 	if (sGame.statBombHits != sLabBombHits) {

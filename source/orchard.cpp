@@ -231,7 +231,7 @@ bool Game::orcWave() {
 }
 
 void Game::orcGainXp(float amount) {
-	if (amount <= 0) return;
+	if (amount <= 0 || mode == MODE_BOSSRUSH) return;  // Boss Rush has no level ups
 	amount *= 1.0f + 0.2f * orc.upgrade[CARD_RING];
 	if (orc.upgrade[CARD_GLASS]) amount *= 2;
 	if (orc.floodT > 0) amount *= 2;
@@ -346,13 +346,17 @@ void Game::orcDropped(const Obj& o) {
 
 void Game::orcFinish(bool won) {
 	orc.won = won;
-	if (won) setCallout("ORCHARD CLEARED!", rgba(255, 230, 140), 0.86f);
+	if (won) setCallout(mode == MODE_BOSSRUSH ? "RUSH CLEARED!" : "ORCHARD CLEARED!", rgba(255, 230, 140), 0.86f);
 	else setCallout("OUT OF HP!", rgba(255, 120, 100), 0.8f);
 	for (auto& s : orc.shots) s.on = false;
 	endGame();
 }
 
 void Game::orcNextRoom() {
+	if (mode == MODE_BOSSRUSH) {
+		rushNext();  // no rooms: the next boss
+		return;
+	}
 	if (orc.upgrade[CARD_SWEEP] && !orc.droppedThisRoom && !orc.bossRoom) {
 		orc.hp = fminf(orc.maxHp, orc.hp + 3);
 		addPopup("CLEAN SWEEP +3 HP", kFieldW * 0.5f, kFieldTop + 70, rgba(160, 240, 170), 0.6f);
@@ -509,7 +513,7 @@ void Game::orcDrop(int s) {
 
 // ---------------------------------------------------------------- charms in play
 void Game::orcUse(int s) {
-	if (mode != MODE_ORCHARD || phase != PHASE_PLAY || orchardHeld() || s < 0 || s >= kSlots) return;
+	if (!orchardLike() || phase != PHASE_PLAY || orchardHeld() || s < 0 || s >= kSlots) return;
 	const int card = orc.slot[s];
 	if (card == CARD_NONE) return;
 	if (orc.slotCool[s] > 0) {
@@ -728,9 +732,9 @@ void Game::drawOrchardHud(float x, float y, float w, float u) const {
 	const Boss& b = orc.boss;
 	// The room, or the boss and the slices it still needs.
 	if (b.on && !b.beaten) {
-		snprintf(buf, sizeof buf, "%s", b.id == BOSS_MELON ? "BIG MELON" : "BOMB KING");
+		snprintf(buf, sizeof buf, "%s", b.id == BOSS_MELON ? (b.royal ? "ROYAL MELON" : "BIG MELON") : (b.royal ? "ROYAL KING" : "BOMB KING"));
 		gfx::text(buf, x, y + 5 * u, 0.3f * u, rgba(255, 200, 140), ALIGN_RIGHT);
-		const int all = kBosses[b.id].slices;
+		const int all = b.total;
 		for (int i = 0; i < all; i++) {
 			const bool cut = i < all - b.left;
 			// One mark per slice it needs: bright while still to do, dim once landed.
@@ -738,7 +742,8 @@ void Game::drawOrchardHud(float x, float y, float w, float u) const {
 			gfx::rect(px, y + 17 * u, 9 * u, 7 * u, cut ? rgba(90, 70, 60, 200) : rgba(255, 110, 90));
 		}
 	} else {
-		snprintf(buf, sizeof buf, "ROOM %d/%d", orc.room > kOrchardRooms ? kOrchardRooms : orc.room, kOrchardRooms);
+		if (mode == MODE_BOSSRUSH) snprintf(buf, sizeof buf, "BOSS %d/%d", m12.rushStage + 1 > kRushStages ? kRushStages : m12.rushStage + 1, kRushStages);
+		else snprintf(buf, sizeof buf, "ROOM %d/%d", orc.room > kOrchardRooms ? kOrchardRooms : orc.room, kOrchardRooms);
 		gfx::text(buf, x, y + 5 * u, 0.3f * u, COL_CREAM, ALIGN_RIGHT);
 		if (!orc.bossRoom) {
 			const float k = clampf(1 - orc.roomT / kRoomSeconds, 0, 1);
@@ -762,7 +767,8 @@ void Game::drawOrchardHud(float x, float y, float w, float u) const {
 	if (orc.peelShield) gfx::rect(bx, y + 4 * u, 3 * u, bh, rgba(190, 240, 150));
 	snprintf(buf, sizeof buf, "HP %d/%d", (int)ceilf(orc.hp), (int)orc.maxHp);
 	gfx::text(buf, bx + 4 * u, y + 3 * u, 0.26f * u, COL_CREAM);
-	// XP and the level.
+	// XP and the level. Boss Rush has neither.
+	if (mode == MODE_BOSSRUSH) return;
 	const float xpK = clampf(orc.xp / (float)orcXpNeed(), 0, 1);
 	const float xy = y + 16 * u;
 	gfx::rect(bx - 1, xy - 1, bw + 2, 6 * u + 2, gfx::themeBar());

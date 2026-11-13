@@ -43,14 +43,16 @@ int bossDamage(int base) {
 float fieldMidY() { return kFieldTop + (kFieldH - kFieldTop) * 0.36f; }
 }  // namespace
 
-void Game::bossStart(int id) {
+void Game::bossStart(int id, bool royal) {
 	Boss& b = orc.boss;
 	b = {};
 	b.id = (u8)id;
 	b.on = true;
 	b.guard = true;
 	b.phase = 1;
-	b.left = kBosses[id].slices;
+	b.royal = royal;
+	b.total = (u8)(kBosses[id].slices + (royal ? 1 : 0));
+	b.left = b.total;
 	b.radius = (id == BOSS_MELON ? 50.0f : 44.0f) * (PORT_3DS ? 0.85f : 1.0f);
 	b.x = kFieldW * 0.5f;
 	b.baseY = fieldMidY();
@@ -60,7 +62,13 @@ void Game::bossStart(int id) {
 	b.chain = (u8)chainLength(b);
 	for (auto& s : orc.shots) s.on = false;
 	orc.fightT = 0;
-	setCallout(kBosses[id].name, rgba(255, 200, 120), 0.8f);
+	if (royal) {
+		char name[32];
+		snprintf(name, sizeof name, "Royal %s", kBosses[id].name + 4);  // "The Big Melon" is the Royal Big Melon
+		setCallout(name, rgba(255, 220, 110), 0.8f);
+	} else {
+		setCallout(kBosses[id].name, rgba(255, 200, 120), 0.8f);
+	}
 	showCaption("A boss drops in.");
 	audio::play(SFX_BOSSIN, 1.0f);
 	audio::play(SFX_WHOOSH, 0.9f, 0, 0.8f);
@@ -72,6 +80,7 @@ void Game::bossOpen(float seconds, bool laugh) {
 	if (!b.on || b.beaten || b.dazeT > 0) return;
 	float t = seconds + 0.25f * orc.upgrade[CARD_BLADE];
 	if (orc.upgrade[CARD_GLASS]) t *= 2;
+	if (b.royal) t *= 0.75f;  // a Royal opens up for less time
 	const bool wasUp = b.guard;
 	if (t > b.openT) b.openT = t;
 	b.guard = false;
@@ -300,7 +309,7 @@ void Game::bossAttack(float dt) {
 		case KING_GIANT: bossGiant(dt); break;
 		default: b.attack = ATK_NONE; break;
 	}
-	if (b.attack == ATK_NONE) b.nextAttack = lerpf(2.6f, 1.6f, (b.phase - 1) * 0.5f) * (gSave.difficulty == DIFF_EASY ? 1.25f : 1.0f);
+	if (b.attack == ATK_NONE) b.nextAttack = lerpf(2.6f, 1.6f, (b.phase - 1) * 0.5f) * (gSave.difficulty == DIFF_EASY ? 1.25f : 1.0f) * (b.royal ? 0.8f : 1.0f);
 }
 
 void Game::shotsUpdate(float dt) {
@@ -496,7 +505,7 @@ void Game::bossTest(Blade& blade) {
 	PORT_VIBRATE(0.6f, 140);
 	orcGainXp(6);
 	award(150);
-	const int done = kBosses[b.id].slices - b.left;
+	const int done = b.total - b.left;
 	if (b.left == 0) {
 		b.beaten = true;
 		b.leaveT = 0;
@@ -513,7 +522,7 @@ void Game::bossTest(Blade& blade) {
 		award(500 * (b.id + 1));
 		return;
 	}
-	const int phase = 1 + done * kBosses[b.id].phases / kBosses[b.id].slices;
+	const int phase = 1 + done * kBosses[b.id].phases / b.total;
 	if (phase > b.phase) {
 		b.phase = (u8)phase;
 		b.roarT = 1.2f;
@@ -730,7 +739,9 @@ void Game::drawBoss(bool solid) const {
 	} else {
 		gfx::sprite(SHEET_SPRITES, (king ? sprites_boss_king_guard_idx : sprites_boss_melon_guard_idx) + pose, b.x, b.y, art * sx, art * sy, wob, tint);
 	}
-	if (b.id == BOSS_KING && b.crownOut <= 0) drawCrown(b.x, b.y - b.radius * sy - 2, b.radius / 40, rgba(255, 210, 70, (int)(255 * alpha)));
+	// The King wears his crown; a Royal Big Melon wears one too.
+	if ((b.id == BOSS_KING && b.crownOut <= 0) || (b.royal && b.id == BOSS_MELON))
+		drawCrown(b.x, b.y - b.radius * sy - (b.id == BOSS_MELON ? 8 : 2), b.radius / (b.royal ? 32.0f : 40.0f), rgba(255, 210, 70, (int)(255 * alpha)));
 	if (b.attack == KING_FUSE) {
 		const float fx = b.x, fy = b.y - b.radius - 8;
 		const bool lit = ((int)(b.t * 10)) & 1;

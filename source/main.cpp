@@ -305,13 +305,12 @@ enum { SIGN_MIXER = MODE_COUNT + 1, SIGN_PASS };  // signs on Pick a Game that o
 // The Mixer changes any mode, so where the info side can be touched it is a fruit of its own under the
 // mode's info sign. The 3DS can't touch its top screen, so there it stays a sign among the modes.
 static constexpr bool kMixerFruit = !PORT_3DS;
-// Boss Rush, Recipe, Sharpshooter and Juggle join the list as each one is built.
 #if PORT_3DS
-static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, MODE_ORCHARD, SIGN_MIXER, SIGN_PASS};
+static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, MODE_ORCHARD, MODE_BOSSRUSH, MODE_RECIPE, MODE_SHARP, MODE_JUGGLE, SIGN_MIXER, SIGN_PASS};
 #else
-static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, MODE_ORCHARD, SIGN_PASS};
+static const u8 kModeOrder[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_ZEN, MODE_SUDDEN, MODE_DAILY, MODE_MINEFIELD, MODE_COMBO, MODE_BEAT, MODE_ORCHARD, MODE_BOSSRUSH, MODE_RECIPE, MODE_SHARP, MODE_JUGGLE, SIGN_PASS};
 #endif
-static constexpr int kModesComing = 4;  // the 1.2 modes not built yet; lower it as each one gets its sign
+static constexpr int kModesComing = 0;  // modes not built yet, so they have no sign
 static_assert(sizeof kModeOrder == MODE_COUNT + 2 - (kMixerFruit ? 1 : 0) - kModesComing, "a sign for every mode");
 static constexpr int kModesPerPage = 6;
 static constexpr int kModePages = ((int)sizeof kModeOrder + kModesPerPage - 1) / kModesPerPage;
@@ -1118,8 +1117,8 @@ static const char* const kTrackRowNames[kTrackCount + 1] = {
 
 // Pass and Play: 2 to 4 people take one run each on the same device, and the highest score wins.
 static constexpr int kPassMax = 4, kPassNameLen = 10;
-static const u8 kPassModes[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_SUDDEN, MODE_MINEFIELD, MODE_COMBO};
-static const char* const kPassModeNames[] = {"Classic", "Arcade", "Frenzy", "Sudden Death", "Minefield", "Combo Rush"};
+static const u8 kPassModes[] = {MODE_CLASSIC, MODE_ARCADE, MODE_FRENZY, MODE_SUDDEN, MODE_MINEFIELD, MODE_COMBO, MODE_RECIPE, MODE_SHARP, MODE_JUGGLE};
+static const char* const kPassModeNames[] = {"Classic", "Arcade", "Frenzy", "Sudden Death", "Minefield", "Combo Rush", "Recipe", "Sharpshooter", "Juggle"};
 static const char* const kPassCounts[] = {"2", "3", "4"};
 static u8 sPassPlayers = 0, sPassModeRow = 0;  // row values: players is 0 for two people
 static char sPassNames[kPassMax][kPassNameLen + 1];
@@ -1168,7 +1167,7 @@ static int passWinner() {
 
 static const Row kPassRows[] = {
 	{ROW_CHOICE, "Players", &sPassPlayers, 0, 2, kPassCounts, 0, 0, ACT_NONE, "Everyone takes one turn", "on this device."},
-	{ROW_CHOICE, "Game", &sPassModeRow, 0, 5, kPassModeNames, 0, 0, ACT_NONE, "Everyone plays this mode.", "Scores here don't change your bests."},
+	{ROW_CHOICE, "Game", &sPassModeRow, 0, 8, kPassModeNames, 0, 0, ACT_NONE, "Everyone plays this mode.", "Scores here don't change your bests."},
 	{ROW_ACTION, sPassNames[0], nullptr, 0, 0, nullptr, 0, 0, ACT_PASS_NAME, "Choose it to type a name.", ""},
 	{ROW_ACTION, sPassNames[1], nullptr, 0, 0, nullptr, 0, 0, ACT_PASS_NAME, "Choose it to type a name.", ""},
 	{ROW_ACTION, sPassNames[2], nullptr, 0, 0, nullptr, 0, 0, ACT_PASS_NAME, "Choose it to type a name.", ""},
@@ -3995,6 +3994,11 @@ static void drawTopContent(Screen screen) {
 				gfx::text("plays, with bests of their own.", 200, yLine + 18, 0.38f, COL_CREAM, ALIGN_CENTER);
 				snprintf(buf, sizeof buf, mixerRulesOn() ? "%d ON" : "ALL OFF", mixerRulesOn());
 				gfx::text(buf, 200, yBest, 0.6f, COL_CREAM, ALIGN_CENTER);
+			} else if (mode == MODE_BOSSRUSH && !bossBeaten(BOSS_MELON)) {
+				gfx::text(kModes[mode].name, 200, yName, 0.6f, COL_ACCENT, ALIGN_CENTER);
+				gfx::text("Locked. Beat The Big Melon in", 200, yLine, 0.38f, COL_CREAM, ALIGN_CENTER);
+				gfx::text("Orchard Blast to open it.", 200, yLine + 18, 0.38f, COL_CREAM, ALIGN_CENTER);
+				drawPadlock(200, yBest + 10, 1.0f);
 			} else if (mode >= 0) {
 				const ModeInfo& m = kModes[mode];
 				gfx::text(m.name, 200, yName, 0.6f, COL_ACCENT, ALIGN_CENTER);
@@ -4207,7 +4211,20 @@ static void drawTopContent(Screen screen) {
 				snprintf(buf, sizeof buf, sGame.mixed ? "MIXER BEST %lu" : (sGame.assisted ? "ASSISTED BEST %lu" : "BEST %lu"), (unsigned long)sGame.best);
 				gfx::text(buf, 200, 116, 0.6f, COL_DIM, ALIGN_CENTER);
 			}
-			if (sGame.mode == MODE_ORCHARD) {
+			if (sGame.mode == MODE_BOSSRUSH) {
+				// Boss Rush: how many bosses fell, the build, and the time.
+				const Orchard& o = sGame.orc;
+				const Modes12& m = sGame.m12;
+				if (o.won) snprintf(buf, sizeof buf, "RUSH CLEARED IN %d:%02d", (int)sGame.elapsed / 60, (int)sGame.elapsed % 60);
+				else snprintf(buf, sizeof buf, "BEAT %d OF %d BOSSES", m.rushStage, kRushStages);
+				gfx::text(buf, 200, o.newTracks > 0 ? 136 : 142, 0.44f, o.won ? rgba(255, 230, 140) : COL_CREAM, ALIGN_CENTER);
+				snprintf(buf, sizeof buf, "BUILD: %s", m.rushBuild < BUILD_COUNT ? kRushBuilds[m.rushBuild].name : "NONE");
+				gfx::text(buf, 200, o.newTracks > 0 ? 152 : 160, 0.36f, COL_DIM, ALIGN_CENTER);
+				if (o.newTracks > 0) {
+					snprintf(buf, sizeof buf, "NEW IN THE SHOP: %d BOSS TRACK%s", o.newTracks, o.newTracks == 1 ? "" : "S");
+					gfx::text(buf, 200, 166, 0.34f, COL_ACCENT, ALIGN_CENTER);
+				}
+			} else if (sGame.mode == MODE_ORCHARD) {
 				// How far the run got, and what it was built from.
 				const Orchard& o = sGame.orc;
 				if (o.won) snprintf(buf, sizeof buf, "ORCHARD CLEARED!");
@@ -4221,6 +4238,9 @@ static void drawTopContent(Screen screen) {
 				}
 			} else {
 				if (sGame.mode == MODE_BEAT) snprintf(buf, sizeof buf, "SLICED %d   ON THE BEAT %d", sGame.sliced, sGame.beatHits);
+				else if (sGame.mode == MODE_RECIPE) snprintf(buf, sizeof buf, "SMOOTHIES %d   SPOILED %d", sGame.m12.cups, sGame.m12.spoiled);
+				else if (sGame.mode == MODE_SHARP) snprintf(buf, sizeof buf, "ON CALL %d   WRONG %d", sGame.m12.calledHits, sGame.m12.wrongHits);
+				else if (sGame.mode == MODE_JUGGLE) snprintf(buf, sizeof buf, "KNOCKS %d   MOST IN THE AIR %d", sGame.m12.knocks, sGame.m12.bestAir);
 				else snprintf(buf, sizeof buf, "SLICED %d   BEST COMBO %d", sGame.sliced, sGame.bestCombo);
 				gfx::text(buf, 200, 152, 0.42f, COL_CREAM, ALIGN_CENTER);
 			}
@@ -4860,8 +4880,8 @@ static void updateFrame(const Input& in, bool wasTouching) {
 	readingsTick();
 #endif
 	// On Pick a Game, Select opens the Mixer instead.
-	// In Orchard Blast, Select opens the Inventory.
-	if ((in.down & KEY_SELECT) && sScreen != SCREEN_MODES && !((sScreen == SCREEN_GAME || sScreen == SCREEN_PAUSE) && sGame.mode == MODE_ORCHARD)) sShowDebug = !sShowDebug;
+	// In Orchard Blast and Boss Rush, Select opens the Inventory.
+	if ((in.down & KEY_SELECT) && sScreen != SCREEN_MODES && !((sScreen == SCREEN_GAME || sScreen == SCREEN_PAUSE) && sGame.orchardLike())) sShowDebug = !sShowDebug;
 	if (sSuspended) {
 		sSuspended = false;
 		pauseGame();
@@ -4969,6 +4989,8 @@ static void updateFrame(const Input& in, bool wasTouching) {
 				audio::musicBeat(beatSong());
 				beatScrollTo(beatSong());
 				goTo(SCREEN_BEAT, 1);
+			} else if (mode == MODE_BOSSRUSH && !bossBeaten(BOSS_MELON)) {
+				audio::play(SFX_CLANG, 0.5f);  // locked: the info side says how to open it
 			} else if (t > 0) {
 				sStartMode = (Mode)mode;
 				fadeThen(startGame);
@@ -5223,7 +5245,7 @@ static void updateFrame(const Input& in, bool wasTouching) {
 				sOptionsFromPause = false;
 				sScreen = SCREEN_GAME;
 				sBlade.reset();
-				if (sGame.mode == MODE_ORCHARD) sGame.orcResume();
+				if (sGame.orchardLike()) sGame.orcResume();
 			} else if (t == 2) {
 				sOptionsFromPause = true;
 				sFocus[SCREEN_OPTIONS] = 1;

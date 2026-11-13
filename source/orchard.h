@@ -119,6 +119,8 @@ struct Boss {
 	u8 giantPhases;   // bit n: the Giant Bomb has already come in phase n
 	bool hidden;      // The Bomb King is off screen while his Giant Bomb is out
 	GiantBomb giant;
+	bool royal;       // Boss Rush's second lap: one more slice, shorter openings, quicker attacks
+	u8 total;         // slices to beat it
 };
 
 // The run itself.
@@ -199,3 +201,38 @@ struct OrchardLevel {
 };
 const OrchardLevel& orchardLevel(int diff);
 int orchardXpFor(int level);  // XP to go from this level to the next, on Normal
+
+// ---------------------------------------------------------------- the other 1.2 modes (modes12.cpp)
+// Boss Rush: a ready-made build, then every boss back to back, then all of them again as Royals.
+enum RushBuild : u8 { BUILD_TANK, BUILD_GLASS, BUILD_CHARMER, BUILD_COUNT, BUILD_NONE = 0xFF };
+struct RushBuildInfo {
+	const char* name;
+	const char* line1;
+	const char* line2;
+};
+extern const RushBuildInfo kRushBuilds[BUILD_COUNT];
+constexpr int kRushStages = 4;     // The Big Melon, The Bomb King, then both again as Royals
+constexpr int kRecipeMax = 3;      // kinds of fruit in one recipe
+constexpr int kRecipeBonusTime = 8;
+constexpr int kSharpColours = 4;   // red circle, blue square, yellow triangle, green star
+constexpr int kJuggleDrops = 3;
+
+struct Modes12 {
+	// Boss Rush
+	bool rushPicking;      // the build signs are up
+	u8 rushBuild, rushFocus, rushStage;
+	// Recipe
+	u8 recipeFruit[kRecipeMax], recipeNeed[kRecipeMax], recipeHave[kRecipeMax];
+	int recipeKinds, cups, spoiled;
+	float cupT, cupPulse, spoilPulse;
+	// Sharpshooter
+	u8 call;               // the colour that scores, 0 to 3
+	float callT, callFlash;
+	int calledHits, wrongHits;
+	// Juggle
+	int knocks, bestAir;
+	float addT;
+};
+
+const char* sharpName(int colour);     // "red circle" and so on
+u32 sharpColour(int colour, bool strong);

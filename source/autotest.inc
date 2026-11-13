@@ -377,6 +377,22 @@ static void autotestInput(Input& in) {
 				botTapXY((int)(next.x + next.w / 2), (int)(next.y + next.h / 2));
 				return;
 			}
+#ifdef LAB
+			if (sBotMode == MODE_BOSSRUSH && !(gSave.bossesBeaten & 1u << BOSS_MELON)) {
+				// Locked until The Big Melon is beaten: a tap leaves Pick a Game where it is. Then it opens.
+				static bool tried = false;
+				if (!tried) {
+					tried = true;
+					botTap(modeSignOnPage(sBotMode));
+					return;
+				}
+				labCheck(sScreen == SCREEN_MODES, "Boss Rush stays locked until The Big Melon is beaten");
+				gSave.bossesBeaten |= 1u << BOSS_MELON;
+				return;
+			}
+#else
+			if (sBotMode == MODE_BOSSRUSH) gSave.bossesBeaten |= 1u << BOSS_MELON;  // open it for a bot run
+#endif
 			fprintf(stderr, "[bot] starting %s\n", kModes[sBotMode].name);
 			sBotModeFrames = 0;
 #if defined(LAB) && PORT_3DS
@@ -530,8 +546,8 @@ static void autotestInput(Input& in) {
 			return;
 		}
 	}
-	if (sGame.mode == MODE_ORCHARD && (sOrcHowTo || sGame.orc.choosing) && sBotModeFrames % 90 == 0) {
-		in.down |= KEY_A;  // Orchard Blast: past the how-to, and the first card
+	if ((sOrcHowTo || (sGame.orchardLike() && (sGame.orc.choosing || sGame.m12.rushPicking))) && sBotModeFrames % 90 == 0) {
+		in.down |= KEY_A;  // past a how-to, a level-up card, or Boss Rush's build
 		return;
 	}
 
@@ -582,7 +598,7 @@ static void autotestInput(Input& in) {
 	const u32 kSeekBombsAt = 1500;
 #endif
 	bool suicide = sBotModeFrames > kSeekBombsAt && sGame.timeLeft <= 0 && sGame.mode != MODE_PRACTICE;  // lessons want bombs left alone
-	if (sGame.mode == MODE_ORCHARD && sBotModeFrames < kSeekBombsAt + 1200) suicide = false;  // HP takes a while to run out: slice first
+	if (sGame.orchardLike() && sBotModeFrames < kSeekBombsAt + 1200) suicide = false;  // HP takes a while to run out: slice first
 #endif
 #endif
 	if (sGame.mode == MODE_ZEN && sBotModeFrames == 900) sGame.finishRun();  // Zen is endless: stop it as the pause menu would

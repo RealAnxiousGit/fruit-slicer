@@ -274,6 +274,9 @@ void Game::start(Mode m) {
 		case MODE_SUDDEN: maxStrikes = 1; break;
 		case MODE_COMBO: feverMeter = kComboRushStart; break;
 		case MODE_DAILY: timeLeft = 60; break;
+		case MODE_RECIPE:
+		case MODE_SHARP: timeLeft = 60; break;
+		case MODE_JUGGLE: maxStrikes = kJuggleDrops; break;
 		default: break;
 	}
 	// Daily Fruit throws the day's sequence; every other run gets a fresh one.
@@ -285,7 +288,8 @@ void Game::start(Mode m) {
 	memcpy(journalStart, gSave.fruitSliced, sizeof journalStart);
 	if (m < MODE_COUNT && gSave.modePlays[m] < 0xFFFF) gSave.modePlays[m]++;
 	if (m == MODE_PRACTICE) practiceStart();
-	if (m == MODE_ORCHARD) orcStart();
+	if (m == MODE_ORCHARD || m == MODE_BOSSRUSH) orcStart();
+	if (m >= MODE_BOSSRUSH && m <= MODE_JUGGLE) m12Start();
 #ifdef TEST_BALANCE
 	// Measures what each mode throws, so nothing ends a game early.
 	if (timeLeft <= 0 && m != MODE_PRACTICE) timeLeft = 120;
@@ -309,7 +313,11 @@ float Game::difficulty() const {
 		case MODE_MINEFIELD: rampTime = 90; rampScore = 200; break;
 		case MODE_COMBO: return clampf(chain / 60.0f, 0, 1);  // the combo sets the pace, nothing else
 		case MODE_DAILY: return clampf(dailyWave / 27.0f, 0, 1);  // by wave, so nothing the player does changes what is thrown
-		case MODE_ORCHARD: return orcDifficulty();
+		case MODE_ORCHARD:
+		case MODE_BOSSRUSH: return orcDifficulty();
+		case MODE_RECIPE:
+		case MODE_SHARP: rampTime = 90; rampScore = 500; break;
+		case MODE_JUGGLE: return clampf(elapsed / 120.0f, 0, 1);
 		default: break;
 	}
 	return clampf(elapsed / rampTime + score / rampScore, 0, 1);
@@ -355,7 +363,11 @@ void Game::launch(const Pending& p) {
 			audio::play(SFX_COIN, 0.75f, fieldPan(p.x), gRng.range(0.96f, 1.06f));
 		}
 		o.hits = p.kind != OBJ_FRUIT ? 1 : (p.fruit == kCoconut ? 2 : (p.fruit == kPinata ? kPinataHits : 1));
-		if (mode == MODE_ORCHARD && orc.upgrade[CARD_BLADE] && o.kind == OBJ_FRUIT && o.hits > 1) o.hits = (u8)(o.fruit == kPinata ? (o.hits - orc.upgrade[CARD_BLADE] < 2 ? 2 : o.hits - orc.upgrade[CARD_BLADE]) : 1);
+		if (orchardLike() && orc.upgrade[CARD_BLADE] && o.kind == OBJ_FRUIT && o.hits > 1) o.hits = (u8)(o.fruit == kPinata ? (o.hits - orc.upgrade[CARD_BLADE] < 2 ? 2 : o.hits - orc.upgrade[CARD_BLADE]) : 1);
+		if (mode == MODE_SHARP && o.kind == OBJ_FRUIT && o.fruit < kSpiky) {
+			// Two in five wear the called colour, so there is always something to aim at.
+			o.tag = (u8)(1 + (gRng.unit() < 0.4f ? m12.call : gRng.below(kSharpColours)));
+		}
 		audio::play(SFX_THROW, 0.3f, fieldPan(p.x), gRng.range(0.9f, 1.15f));
 		if (p.kind == OBJ_BOMB) showCaption("Bomb!");
 #ifdef AUTOTEST
@@ -486,7 +498,8 @@ void Game::spawnWave() {
 	// Daily Fruit seeds every wave from the day and its number, so whatever happened in earlier waves
 	// (a pattern held back by a bomb, say), wave n throws the same for everyone.
 	if (mode == MODE_DAILY) gSpawn.s = progress::dailySeed(day + 0x10000u * ++dailyWave);
-	if (mode == MODE_ORCHARD && orcWave()) return;
+	if (orchardLike() && orcWave()) return;
+	if (m12Wave()) return;
 	float d = difficulty();
 #ifdef AUTOTEST
 	statWaves++;
@@ -867,7 +880,7 @@ void Game::finishCombo() {
 	comboCount = 0;
 	comboTimer = 0;
 	if (mode == MODE_PRACTICE) practiceSwipe(n);
-	if (mode == MODE_ORCHARD) orcCombo(n);
+	if (orchardLike()) orcCombo(n);
 	if (n < 3) return;
 	if (n > swipeBest && strokeLen > 1) {  // kept for the replay after a new best
 		swipeBest = n;
@@ -955,9 +968,11 @@ void Game::commitScore() {
 	gSave.totalFruit += sliced;
 	// Each coin caught is worth 5, and every 100 points adds one more.
 	if (mode == MODE_DAILY) dailyCoins = progress::dailyRecord(day, score);
-	if (mode == MODE_ORCHARD) {
+	if (orchardLike()) {
 		// Lucky Coin adds a quarter a level, and each boss beaten pays 10 more.
 		coinsBonus += (int)(runCoins() * 0.25f * orc.upgrade[CARD_LUCKY]) + 10 * orc.bossesBeaten;
+	}
+	if (mode == MODE_ORCHARD) {
 		if (gSave.orchardRuns < 0xFFFF) gSave.orchardRuns++;
 		if (orc.won && gSave.orchardWins < 0xFFFF) gSave.orchardWins++;
 		const int room = orc.won ? kOrchardRooms + 1 : orc.room;
@@ -1104,7 +1119,7 @@ void Game::sliceFruit(Obj& o, const Blade& blade) {
 		return;
 	}
 
-	if (mode == MODE_ORCHARD) orcSliced(o);
+	if (orchardLike()) orcSliced(o);
 	addHalves(o, def, blade, dx, dy);
 
 	if (gSave.effects != FX_NONE) {
@@ -1137,7 +1152,14 @@ void Game::sliceFruit(Obj& o, const Blade& blade) {
 			return;
 		}
 	}
+	if ((mode == MODE_RECIPE || mode == MODE_SHARP) && phase == PHASE_PLAY && !m12Sliced(o)) {
+		sliced++;  // the wrong fruit: cut, but it scores nothing and the combo ends
+		chain = 0;
+		o.on = false;
+		return;
+	}
 	int pts = o.kind == OBJ_GOLD ? 5 : (def.cut == CUT_SHELL ? 3 : (o.kind == OBJ_FRUIT && (o.fruit == kJelly || o.loose) ? 2 : 1));
+	if (mode == MODE_SHARP && o.tag) pts *= 2;  // a called fruit is worth double
 	if (mode == MODE_BEAT && phase == PHASE_PLAY && !beatSlice(o)) {
 		// Off the beat: the fruit is cut, but scores nothing and ends the combo.
 		sliced++;
@@ -1203,6 +1225,8 @@ void Game::hitBomb(Obj& o) {
 	switch (mode) {
 		case MODE_ARCADE:
 		case MODE_DAILY:
+		case MODE_RECIPE:
+		case MODE_SHARP:
 		case MODE_BEAT:
 			if (mode == MODE_BEAT) beatStreak = 0;
 			score = score > 10 ? score - 10 : 0;
@@ -1223,6 +1247,7 @@ void Game::hitBomb(Obj& o) {
 			practiceBomb();
 			break;
 		case MODE_ORCHARD:
+		case MODE_BOSSRUSH:
 			orcBomb(o);  // costs HP, not the run
 			break;
 		default:
@@ -1244,7 +1269,7 @@ void Game::sliceObj(Obj& o, const Blade& blade) {
 			// One coin and five points. It bursts into sparkles instead of splitting.
 			coinsCaught++;
 			coinPulse = 1;
-			if (mode == MODE_ORCHARD) orcSliced(o);
+			if (orchardLike()) orcSliced(o);
 			if (mode == MODE_PRACTICE) practiceSliced(o);
 			if (mode != MODE_COMBO) {  // Combo Rush: combos are the whole score, though the coin still counts
 				award(5);
@@ -1259,7 +1284,7 @@ void Game::sliceObj(Obj& o, const Blade& blade) {
 			// Worth a point, and every seed caught in the swipe that cut the pomegranate adds to its combo.
 			const int pts = mode == MODE_COMBO ? comboRushPoints(chain + 1) : 1;
 			if (pts > 0) award(pts);
-			if (mode == MODE_ORCHARD) orcSliced(o);
+			if (orchardLike()) orcSliced(o);
 			if (meterLive()) chain++;
 			if (chain > bestCombo) bestCombo = chain;
 			if (comboStroke != blade.strokeId && comboCount > 0) finishCombo();
@@ -1475,7 +1500,11 @@ void Game::testSlices(Blade& blade) {
 		blade.swishCooldown = 0.2f;
 	}
 	if (stunT > 0) return;  // a spiky fruit stunned the blade: nothing cuts, bombs included
-	if (mode == MODE_ORCHARD) {
+	if (mode == MODE_JUGGLE) {
+		juggleTest(blade);  // knocks, not cuts
+		return;
+	}
+	if (orchardLike()) {
 		bossTest(blade);
 		if (phase != PHASE_PLAY) return;
 	}
@@ -1484,7 +1513,7 @@ void Game::testSlices(Blade& blade) {
 	bool cutFruit = false;
 	for (auto& o : objs) {
 		if (!o.on || o.kind == OBJ_BOMB || o.hitCooldown > 0) continue;
-		if (hitTest(o, blade, o.radius * (0.7f + slider(gSave.forgiveness) * 0.006f) * kCutReach * (gSave.sliceAssist ? 1.3f : 1.0f) * (wideT > 0 ? 1.6f : 1.0f) * (mode == MODE_ORCHARD ? orcReach() : 1.0f))) {
+		if (hitTest(o, blade, o.radius * (0.7f + slider(gSave.forgiveness) * 0.006f) * kCutReach * (gSave.sliceAssist ? 1.3f : 1.0f) * (wideT > 0 ? 1.6f : 1.0f) * (orchardLike() ? orcReach() : 1.0f))) {
 			if (o.kind == OBJ_FRUIT && o.fruit == kJelly && blade.speed < kJellySpeed) {
 				bounceJelly(o, blade);
 				continue;
@@ -1722,7 +1751,7 @@ void Game::updateObjects(float dt) {
 			// A dropped spiky fruit, pinata or loose piece is never a miss.
 			bool counts = o.kind == OBJ_GOLD || (o.kind == OBJ_FRUIT && o.fruit != kSpiky && o.fruit != kGrape && o.fruit != kPinata && !o.loose);
 			if (counts && phase == PHASE_PLAY) addStrike(o.x);
-			if (counts && mode == MODE_ORCHARD) orcDropped(o);
+			if (counts && orchardLike()) orcDropped(o);
 		}
 	}
 }
@@ -1809,7 +1838,7 @@ void Game::update(Blade& blade) {
 		}
 		float objDt = (freezeT > 0 ? kDt * 0.45f : kDt) * (0.7f + slider(gSave.fruitSpeed) * 0.006f) * gameSpeedScale();
 		if (chiliT > 0) objDt *= 1.3f;  // the chili rush
-		if (mode == MODE_ORCHARD) objDt *= orcObjScale();  // Steady Hands, Slow-Mo, Freeze Pop
+		if (orchardLike()) objDt *= orcObjScale();  // Steady Hands, Slow-Mo, Freeze Pop
 		updateTricks(blade);
 		if (slowT > 0) {
 			objDt *= 0.3f;
@@ -1906,7 +1935,8 @@ void Game::update(Blade& blade) {
 			recordStroke(blade);
 			testSlices(blade);
 		}
-		if (mode == MODE_ORCHARD && phase == PHASE_PLAY) orcUpdate(blade);
+		if (orchardLike() && phase == PHASE_PLAY) orcUpdate(blade);
+		if (mode >= MODE_RECIPE && mode <= MODE_JUGGLE && phase == PHASE_PLAY) m12Update();
 		if (comboCount > 0) {
 			comboTimer -= kDt;
 			if (comboTimer <= 0 || !blade.active) finishCombo();
@@ -2151,7 +2181,7 @@ void Game::drawField(const Blade& blade) const {
 		gfx::sprite(SHEET_SPRITES, sprites_glow_idx, finaleX, finaleY, g * 1.5f, g * 1.5f, 0, rgba(255, 190, 70, 170));
 	}
 
-	if (mode == MODE_ORCHARD) drawOrchardField();  // the boss sits behind the fruit
+	if (orchardLike()) drawOrchardField();  // the boss sits behind the fruit
 	drawMarks(false, 0, 0);
 	if (solid) drawObjects3D(false, 0, 0);
 	else drawObjects2D(false, 0, 0);
@@ -2173,6 +2203,7 @@ void Game::drawField(const Blade& blade) const {
 				break;
 		}
 	}
+	if (mode >= MODE_RECIPE && mode <= MODE_JUGGLE) drawModes12Field();
 	if (finaleOn && finaleT > kFinaleRise) {
 		// Time left, as a bar along the top of the field.
 		float left = 1 - (finaleT - kFinaleRise) / kFinaleWindow;
@@ -2199,7 +2230,7 @@ void Game::drawField(const Blade& blade) const {
 		if (!p.on) continue;
 		gfx::text(p.text, p.x, p.y - 12, p.scale * uiScale(), withAlpha(p.color, clampf(p.life * 2.5f, 0, 1)), ALIGN_CENTER);
 	}
-	if (mode == MODE_ORCHARD) drawOrchardOverlay();
+	if (orchardLike()) drawOrchardOverlay();
 	drawSwipeReplay();
 #if PORT_TWO_SCREENS
 	if (mode == MODE_PRACTICE) drawPractice();  // one screen: drawn over the score sign instead, in drawHud
@@ -2255,7 +2286,7 @@ void Game::drawHud() const {
 
 	gfx::setDepth(0.9f);
 	gfx::text(modeName(mode), 380, 10, 0.5f, COL_CREAM, ALIGN_RIGHT);
-	if (mode == MODE_ORCHARD) {
+	if (orchardLike()) {
 		drawOrchardHud(380, 28, 220, 1);
 	} else {
 	if (passName) snprintf(buf, sizeof buf, "%s", passName);
@@ -2395,7 +2426,7 @@ void Game::drawHud() const {
 		drawBeat(rx - 50 * u, 14 * u, u);
 		rx -= 60 * u;
 	}
-	if (mode == MODE_ORCHARD) {
+	if (orchardLike()) {
 		drawOrchardHud(rx, 0, rx - 16 - gfx::textWidth("00000", 0.58f * u) - 20, u);
 	} else {
 	if (passName) snprintf(buf, sizeof buf, "%s", passName);
@@ -2661,6 +2692,7 @@ void Game::labProbes(Blade& blade, void (*check)(bool, const char*, const char*)
 	check(progress::fruitName(kPinata)[0] != 0, "Every new fruit has a Journal name", "");
 
 	labOrchard(check);
+	labModes12(check);
 
 	setup(MODE_ZEN);  // leave nothing live for the screens that follow
 	phase = PHASE_OVER;
