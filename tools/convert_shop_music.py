@@ -27,6 +27,7 @@ SONGS = [
     ("Lies.flac", "music_lies", 128),
     ("Lies VIP Remix.wav", "music_liesvip", 128),  # sold as "Lies (VIP Remix)"
     ("JUST STAY WITH ME.wav", "music_staywithme", 150),
+    ("Show The World You're Enough.wav", "music_enough", 100),
 ]
 
 # 1.2 boss tracks found online (licences in docs/music-licences). Each is made to loop as a whole file, so it is

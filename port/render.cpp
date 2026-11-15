@@ -406,10 +406,10 @@ struct MenuLayout {
 static MenuLayout menuLayout() {
 	MenuLayout m;
 	if (sWinW / sWinH >= 1.4f) {
-		constexpr float kPic = 0.9f, kW = 400 * kPic + 320, kH = 240;
+		constexpr float kPic = 0.9f, kGap = 8.0f, kW = 400 * kPic + 320 + kGap, kH = 240;
 		float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
 		float x = (sWinW - kW * u) * 0.5f, y = (sWinH - kH * u) * 0.5f;
-		m = {u * kPic, x, y + (240 - 240 * kPic) * 0.5f * u, u, x + 400 * kPic * u, y};
+		m = {u * kPic, x, y + (240 - 240 * kPic) * 0.5f * u, u, x + (400 * kPic + kGap) * u, y};
 	} else {
 		constexpr float kPic = 0.6f, kMargin = 8, kW = 320, kH = 240 * kPic + 240 + kMargin * 2;
 		float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
@@ -419,10 +419,10 @@ static MenuLayout menuLayout() {
 	return m;
 }
 
-// A side's slide-in and its long lists stay within that side.
-static void clipTo(float x, float y, float w, float h) {
+// A side's slide-in and its long lists stay within that side. Bleed preserves focus rings & outlines.
+static void clipTo(float x, float y, float w, float h, float bleed = 0) {
 	flush();
-	SDL_Rect r = {(int)x, (int)y, (int)w, (int)h};
+	SDL_Rect r = {(int)(x - bleed), (int)(y - bleed), (int)(w + bleed * 2), (int)(h + bleed * 2)};
 	SDL_SetRenderClipRect(sRenderer, &r);
 	sClipX0 = SDL_max((float)r.x, 0.0f);
 	sClipY0 = SDL_max((float)r.y, 0.0f);
@@ -444,7 +444,7 @@ bool beginTop(int eye) {
 	sOx = m.picX;
 	sOy = m.picY;
 	sShaking = sMenuShake;
-	clipTo(m.picX, m.picY, 400 * m.picScale, 240 * m.picScale);
+	clipTo(m.picX, m.picY, 400 * m.picScale, 240 * m.picScale, 48.0f * m.picScale);
 	return true;
 }
 
@@ -470,7 +470,7 @@ void beginBottom() {
 	sOx = m.signX;
 	sOy = m.signY;
 	sShaking = sMenuShake;
-	clipTo(m.signX, m.signY, 320 * m.signScale, 240 * m.signScale);
+	clipTo(m.signX, m.signY, 320 * m.signScale, 240 * m.signScale, 48.0f * m.signScale);
 }
 
 void windowArea(float* x, float* y, float* w, float* h) {

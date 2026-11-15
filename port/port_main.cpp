@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#if !defined(_WIN32)
+#include <sys/stat.h>
+#endif
 #ifdef __ANDROID__
 #include <jni.h>
 #endif
@@ -44,7 +47,13 @@ void assetClose(AssetFile* a) {
 
 static char sDataDir[400];
 void dataPath(char* out, size_t size, const char* name) { snprintf(out, size, "%s%s", sDataDir, name); }
-void ensureDataDir() {}  // SDL_GetPrefPath already made it
+void ensureDataDir() {
+	if (sDataDir[0]) {
+#if !defined(_WIN32)
+		mkdir(sDataDir, 0755);
+#endif
+	}
+}
 
 static bool sRunning = true;
 bool running() {
@@ -203,6 +212,7 @@ int main(int, char**) {
 #endif
 	snprintf(port::sDataDir, sizeof port::sDataDir, "%s", pref ? pref : "");
 	SDL_free(pref);
+	port::ensureDataDir();
 #ifdef LAB
 	{
 		char save[460];
