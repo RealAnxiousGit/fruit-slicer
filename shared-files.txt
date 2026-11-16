@@ -41,3 +41,5 @@ source/orchard.cpp
 source/boss.cpp
 source/orchard_ui.inc
 source/modes12.cpp
+source/streetpass.h
+source/streetpass.cpp

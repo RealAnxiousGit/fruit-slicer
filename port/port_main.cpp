@@ -98,6 +98,14 @@ static bool textKey(SDL_Keycode key) {
 	else if (key == SDLK_ESCAPE || key == SDLK_AC_BACK) sTypeResult = -1;
 	return true;
 }
+
+bool spSupported() { return false; }
+void spUserName(char* out, size_t size) {
+	if (out && size) snprintf(out, size, "Player");
+}
+void spSetEnabled(bool) {}
+bool spPublish(const void*, int) { return false; }
+bool spPopInbox(void*, int, int*) { return false; }
 }  // namespace port
 
 // ---------------------------------------------------------------- controllers
