@@ -53,7 +53,7 @@ void updateDir(char* out, size_t size, const char* name) {
 
 // ---------------------------------------------------------------- fetching to a file
 #if defined(_WIN32)
-bool fetch(const char* url, FILE* out) {
+bool fetch(const char* url, FILE* out, const char* postJson = nullptr) {
 	wchar_t wurl[700], host[256], path[1400];
 	if (!MultiByteToWideChar(CP_UTF8, 0, url, -1, wurl, 700)) return false;
 	URL_COMPONENTS uc = {};
@@ -66,11 +66,14 @@ bool fetch(const char* url, FILE* out) {
 	bool ok = false;
 	HINTERNET s = WinHttpOpen(L"FruitSlicer", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
 	HINTERNET c = s ? WinHttpConnect(s, host, uc.nPort, 0) : nullptr;
-	HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", path, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : nullptr;
+	HINTERNET r = c ? WinHttpOpenRequest(c, postJson ? L"POST" : L"GET", path, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : nullptr;
 	if (r) {
 		WinHttpSetTimeouts(r, 20000, 20000, 30000, 30000);
+		const wchar_t* hdr = postJson ? L"Content-Type: application/json\r\n" : WINHTTP_NO_ADDITIONAL_HEADERS;
+		const DWORD hdrLen = postJson ? (DWORD)wcslen(hdr) : 0;
+		const DWORD bodyLen = postJson ? (DWORD)strlen(postJson) : 0;
 		DWORD code = 0, len = sizeof code;
-		if (WinHttpSendRequest(r, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(r, nullptr) &&
+		if (WinHttpSendRequest(r, hdr, hdrLen, (LPVOID)postJson, bodyLen, bodyLen, 0) && WinHttpReceiveResponse(r, nullptr) &&
 		    WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &code, &len, WINHTTP_NO_HEADER_INDEX) && code == 200) {
 			static char buf[64 * 1024];
 			ok = true;
@@ -96,7 +99,7 @@ bool fetch(const char* url, FILE* out) {
 }
 #elif PORT_ANDROID
 jclass sActivityClass;  // found on the main thread: other threads can't look up the game's classes
-jmethodID sFetch, sInstall;
+jmethodID sFetch, sFetchBody, sInstall;
 
 bool javaReady() {
 	if (sActivityClass) return true;
@@ -106,8 +109,9 @@ bool javaReady() {
 	jclass c = env->GetObjectClass(act);
 	env->DeleteLocalRef(act);
 	sFetch = env->GetStaticMethodID(c, "fetch", "(Ljava/lang/String;Ljava/lang/String;)Z");
+	sFetchBody = env->GetStaticMethodID(c, "fetchBody", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z");
 	sInstall = env->GetStaticMethodID(c, "installApk", "(Ljava/lang/String;)Z");
-	if (!sFetch || !sInstall) {
+	if (!sFetch || !sFetchBody || !sInstall) {
 		env->ExceptionClear();
 		env->DeleteLocalRef(c);
 		return false;
@@ -117,15 +121,19 @@ bool javaReady() {
 	return true;
 }
 
-bool callJava(jmethodID m, const char* a, const char* b) {
+bool callJava(jmethodID m, const char* a, const char* b, const char* c = nullptr) {
 	JNIEnv* env = (JNIEnv*)SDL_GetAndroidJNIEnv();  // attaches this thread
 	if (!env) return false;
 	jstring ja = env->NewStringUTF(a);
 	jstring jb = b ? env->NewStringUTF(b) : nullptr;
-	const jboolean ok = b ? env->CallStaticBooleanMethod(sActivityClass, m, ja, jb) : env->CallStaticBooleanMethod(sActivityClass, m, ja);
+	jstring jc = c ? env->NewStringUTF(c) : nullptr;
+	const jboolean ok = c ? env->CallStaticBooleanMethod(sActivityClass, m, ja, jb, jc)
+	                      : (b ? env->CallStaticBooleanMethod(sActivityClass, m, ja, jb)
+	                           : env->CallStaticBooleanMethod(sActivityClass, m, ja));
 	if (env->ExceptionCheck()) env->ExceptionClear();
 	env->DeleteLocalRef(ja);
 	if (jb) env->DeleteLocalRef(jb);
+	if (jc) env->DeleteLocalRef(jc);
 	return ok;
 }
 #else
@@ -134,6 +142,8 @@ struct Curl {
 	int (*setopt)(void*, int, ...);
 	int (*perform)(void*);
 	void (*cleanup)(void*);
+	void* (*slistAppend)(void*, const char*);
+	void (*slistFreeAll)(void*);
 };
 Curl sCurl;
 
@@ -146,6 +156,8 @@ bool curlReady() {
 	sCurl.perform = (int (*)(void*))dlsym(lib, "curl_easy_perform");
 	sCurl.cleanup = (void (*)(void*))dlsym(lib, "curl_easy_cleanup");
 	sCurl.init = (void* (*)())dlsym(lib, "curl_easy_init");
+	sCurl.slistAppend = (void* (*)(void*, const char*))dlsym(lib, "curl_slist_append");
+	sCurl.slistFreeAll = (void (*)(void*))dlsym(lib, "curl_slist_free_all");
 	return sCurl.init && sCurl.setopt && sCurl.perform && sCurl.cleanup;
 }
 
@@ -155,7 +167,7 @@ size_t toFile(char* p, size_t size, size_t n, void* user) {
 	return got;
 }
 
-bool fetch(const char* url, FILE* out) {
+bool fetch(const char* url, FILE* out, const char* postJson = nullptr) {
 	void* c = sCurl.init();
 	if (!c) return false;
 	// libcurl's option numbers, which never change: see curl.h.
@@ -169,19 +181,29 @@ bool fetch(const char* url, FILE* out) {
 	sCurl.setopt(c, 20, 30L);                         // LOW_SPEED_TIME: for 30 seconds
 	sCurl.setopt(c, 45, 1L);                          // FAILONERROR
 	sCurl.setopt(c, 99, 1L);                          // NOSIGNAL: safe on a thread
+	void* hdrs = nullptr;
+	if (postJson) {
+		sCurl.setopt(c, 10015, postJson);             // POSTFIELDS
+		if (sCurl.slistAppend) {
+			hdrs = sCurl.slistAppend(hdrs, "Content-Type: application/json");
+			sCurl.setopt(c, 10023, hdrs);             // HTTPHEADER
+		}
+	}
 	const bool ok = sCurl.perform(c) == 0;
+	if (hdrs && sCurl.slistFreeAll) sCurl.slistFreeAll(hdrs);
 	sCurl.cleanup(c);
 	return ok;
 }
 #endif
 
-bool fetchTo(const char* url, const char* path) {
+bool fetchTo(const char* url, const char* path, const char* postJson = nullptr) {
 #if PORT_ANDROID
+	if (postJson) return callJava(sFetchBody, url, postJson, path);
 	return callJava(sFetch, url, path);
 #else
 	FILE* f = fopen(path, "wb");
 	if (!f) return false;
-	bool ok = fetch(url, f);
+	bool ok = fetch(url, f, postJson);
 	if (fclose(f) != 0) ok = false;
 	return ok;
 #endif
@@ -410,4 +432,54 @@ void updateAfterQuit() {
 	execv(sRestartPath, argv);
 #endif
 }
+
+// Independent HTTP/HTTPS slot for Online Leaderboards (never blocks or cancels update checks).
+static SDL_Thread* sLbThread;
+static SDL_AtomicInt sLbResult;
+static char sLbUrl[600], sLbBody[512], sLbFile[700];
+static bool sLbHasBody;
+static char* sLbText;
+
+static int lbWork(void*) {
+	const bool ok = fetchTo(sLbUrl, sLbFile, sLbHasBody ? sLbBody : nullptr);
+	size_t len = 0;
+	sLbText = ok ? (char*)SDL_LoadFile(sLbFile, &len) : nullptr;
+	remove(sLbFile);
+	SDL_SetAtomicInt(&sLbResult, sLbText != nullptr ? 1 : -1);
+	return 0;
+}
+
+bool lbRequest(const char* url, const char* jsonBody) {
+	if (sLbThread) {
+		if (SDL_GetAtomicInt(&sLbResult) == 0) return false;
+		SDL_WaitThread(sLbThread, nullptr);
+		sLbThread = nullptr;
+	}
+#if PORT_ANDROID
+	if (!javaReady()) return false;
+#elif !defined(_WIN32)
+	if (!curlReady()) return false;
+#endif
+	SDL_free(sLbText);
+	sLbText = nullptr;
+	updateDir(sLbFile, sizeof sLbFile, "leaderboard.json");
+	snprintf(sLbUrl, sizeof sLbUrl, "%s", url ? url : "");
+	sLbHasBody = jsonBody && jsonBody[0];
+	if (sLbHasBody) snprintf(sLbBody, sizeof sLbBody, "%s", jsonBody);
+	else sLbBody[0] = 0;
+	SDL_SetAtomicInt(&sLbResult, 0);
+	sLbThread = SDL_CreateThread(lbWork, "lb", nullptr);
+	return sLbThread != nullptr;
+}
+
+int lbPoll() {
+	const int r = SDL_GetAtomicInt(&sLbResult);
+	if (r != 0 && sLbThread) {
+		SDL_WaitThread(sLbThread, nullptr);
+		sLbThread = nullptr;
+	}
+	return r;
+}
+
+const char* lbText() { return sLbText; }
 }  // namespace port

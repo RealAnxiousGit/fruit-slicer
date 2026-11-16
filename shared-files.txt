@@ -43,3 +43,5 @@ source/orchard_ui.inc
 source/modes12.cpp
 source/streetpass.h
 source/streetpass.cpp
+source/leaderboard.h
+source/leaderboard.cpp

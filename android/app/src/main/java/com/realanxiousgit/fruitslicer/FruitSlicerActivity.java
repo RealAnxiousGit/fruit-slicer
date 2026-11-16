@@ -25,12 +25,26 @@ public class FruitSlicerActivity extends SDLActivity {
     // Updates (port/update_port.cpp): fetches one file to `path`, following GitHub's redirects.
     // Runs on the game's update thread, never the UI thread.
     public static boolean fetch(String url, String path) {
+        return fetchBody(url, "", path);
+    }
+
+    public static boolean fetchBody(String url, String jsonBody, String path) {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(url).openConnection();
             c.setRequestProperty("User-Agent", "FruitSlicer");
-            c.setConnectTimeout(20000);
-            c.setReadTimeout(30000);
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(20000);
+            if (jsonBody != null && !jsonBody.isEmpty()) {
+                c.setRequestMethod("POST");
+                c.setRequestProperty("Content-Type", "application/json");
+                c.setDoOutput(true);
+                byte[] bytes = jsonBody.getBytes("UTF-8");
+                c.setFixedLengthStreamingMode(bytes.length);
+                try (OutputStream os = c.getOutputStream()) {
+                    os.write(bytes);
+                }
+            }
             if (c.getResponseCode() != 200) return false;
             try (InputStream in = c.getInputStream(); OutputStream out = new FileOutputStream(path)) {
                 byte[] buf = new byte[64 * 1024];
