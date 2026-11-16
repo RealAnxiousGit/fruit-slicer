@@ -10,6 +10,9 @@
 #include <windows.h>
 #include <psapi.h>
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten/heap.h>
+#endif
 
 namespace port {
 constexpr int kMaxRes = 24;
@@ -116,7 +119,10 @@ int resolutionCount() {
 static void showNow() {
 	SDL_Window* win = gfx::window();
 	if (!win) return;
-#if !PORT_ANDROID
+#if PORT_WEB
+	// The page sets the size; F11 only goes in and out of the browser's fullscreen.
+	SDL_SetWindowFullscreen(win, gSave.windowMode != 0);
+#elif !PORT_ANDROID
 	if (gSave.windowMode == 0) {
 		int w = gSave.winW, h = gSave.winH;
 		if (!w || !h) defaultWindowSize(&w, &h);
@@ -180,6 +186,10 @@ void displayDiscard() {
 void applyVsync() {
 	SDL_Renderer* r = gfx::renderer();
 	if (!r) return;
+#if PORT_WEB
+	gVsyncOn = false;  // the browser paces its own frames; the game's timer keeps it at 60 steps a second
+	return;
+#endif
 	const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(display());
 	float hz = mode && mode->refresh_rate > 0 ? mode->refresh_rate : 60;
 	int interval = 0;
@@ -198,6 +208,13 @@ void applyVsync() {
 // At start, after the renderer: the window takes the saved mode.
 void displayStart() {
 	applyGraphics();  // remembers the Texture Quality the art was loaded at
+#if PORT_WEB
+	// A page can only go fullscreen when the player asks, so it always starts in the page.
+	gSave.windowMode = 0;
+	sNow = sBefore = fromSave();
+	applyVsync();
+	return;
+#endif
 	resolutionCount();
 	if (gSave.windowMode != 0 || gSave.winW) showNow();
 	else {
@@ -237,7 +254,9 @@ static char sOverlayText[96];
 void toggleOverlay() { sOverlay = !sOverlay; }
 
 static unsigned memoryMb() {
-#ifdef _WIN32
+#if PORT_WEB
+	return (unsigned)(emscripten_get_heap_size() >> 20);  // the page's whole WebAssembly memory
+#elif defined(_WIN32)
 	PROCESS_MEMORY_COUNTERS pmc;
 	if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof pmc)) return (unsigned)(pmc.WorkingSetSize >> 20);
 	return 0;

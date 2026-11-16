@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fruit Slicer: Orchard Blast</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0e1620; overflow: hidden; touch-action: none; }
+  /* Always the whole page; the game matches its drawing size to this every frame (port_main.cpp). */
+  canvas { display: block; position: fixed; left: 0; top: 0; width: 100vw !important; height: 100vh !important; outline: none; }
+  #status {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #f3e6c8; font: 600 18px/1.4 system-ui, sans-serif; letter-spacing: 0.02em; text-align: center; padding: 16px;
+  }
+  #status.gone { display: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="status">Getting the fruit ready</div>
+<script>
+  var statusEl = document.getElementById('status');
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    setStatus: function (text) {
+      // Emscripten reports "Downloading data... (12/61)" while the game's files arrive.
+      var m = text && text.match(/\((\d+(\.\d+)?)\/(\d+)\)/);
+      if (m) statusEl.textContent = 'Getting the fruit ready ' + Math.round(m[1] * 100 / m[3]) + '%';
+      else if (!text) statusEl.classList.add('gone');
+    },
+    onAbort: function () {
+      statusEl.classList.remove('gone');
+      statusEl.textContent = 'The game stopped. Reload the page to play again.';
+    }
+  };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

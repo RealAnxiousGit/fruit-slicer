@@ -65,6 +65,21 @@ endif()
 if(DEV_TOOLS)
   target_compile_definitions(${GAME_TARGET} PRIVATE DEV_TOOLS)
 endif()
-if(NOT ANDROID)
+if(EMSCRIPTEN)
+  # The browser version: FruitSlicer.html, .js, .wasm and .data, the game's files packed in the .data.
+  # ASYNCIFY lets the game's own loops hand each frame back to the browser, so the shared code stays as it is.
+  # The 4K art is left out (no Ultra in a browser), and the save lives in the browser's IndexedDB (web/pre.js).
+  set_target_properties(${GAME_TARGET} PROPERTIES SUFFIX ".html")
+  target_link_options(${GAME_TARGET} PRIVATE
+    -sASYNCIFY -sASYNCIFY_STACK_SIZE=262144 -sSTACK_SIZE=1048576
+    -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728
+    -sEXPORTED_RUNTIME_METHODS=FS,UTF8ToString,stringToUTF8 -lidbfs.js
+    "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/romfs@/romfs"
+    "SHELL:--exclude-file ${CMAKE_SOURCE_DIR}/romfs/gfx4k"
+    "SHELL:--exclude-file ${CMAKE_SOURCE_DIR}/romfs/tex4k"
+    "SHELL:--pre-js ${CMAKE_SOURCE_DIR}/web/pre.js"
+    "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/web/shell.html")
+  set_property(TARGET ${GAME_TARGET} APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/web/pre.js ${CMAKE_SOURCE_DIR}/web/shell.html)
+elseif(NOT ANDROID)
   add_custom_command(TARGET ${GAME_TARGET} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/romfs $<TARGET_FILE_DIR:${GAME_TARGET}>/romfs)
 endif()

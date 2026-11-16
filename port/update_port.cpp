@@ -20,6 +20,8 @@
 #include <winhttp.h>
 #elif PORT_ANDROID
 #include <jni.h>
+#elif PORT_WEB
+#include <emscripten.h>
 #else
 #include <dlfcn.h>
 #include <unistd.h>
@@ -136,6 +138,8 @@ bool callJava(jmethodID m, const char* a, const char* b, const char* c = nullptr
 	if (jc) env->DeleteLocalRef(jc);
 	return ok;
 }
+#elif PORT_WEB
+// Browser builds use window.fetch() directly for leaderboards and skip GitHub self-updates.
 #else
 struct Curl {
 	void* (*init)();
@@ -200,6 +204,11 @@ bool fetchTo(const char* url, const char* path, const char* postJson = nullptr) 
 #if PORT_ANDROID
 	if (postJson) return callJava(sFetchBody, url, postJson, path);
 	return callJava(sFetch, url, path);
+#elif PORT_WEB
+	(void)url;
+	(void)path;
+	(void)postJson;
+	return false;
 #else
 	FILE* f = fopen(path, "wb");
 	if (!f) return false;
@@ -279,6 +288,8 @@ bool install() {
 }
 #elif PORT_ANDROID
 bool install() { return callJava(sInstall, sFile, nullptr); }
+#elif PORT_WEB
+bool install() { return false; }
 #else
 bool install() {
 	if (const char* image = SDL_getenv("APPIMAGE")) {
@@ -325,6 +336,10 @@ bool begin(Job job, const char* url) {
 	}
 #if PORT_ANDROID
 	if (!javaReady()) return false;
+#elif PORT_WEB
+	(void)job;
+	(void)url;
+	return false;
 #elif !defined(_WIN32)
 	if (!curlReady()) return false;
 #endif
@@ -427,18 +442,61 @@ void updateAfterQuit() {
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 	}
-#elif !PORT_ANDROID
+#elif !PORT_ANDROID && !PORT_WEB
 	char* argv[] = {sRestartPath, nullptr};
 	execv(sRestartPath, argv);
 #endif
 }
 
 // Independent HTTP/HTTPS slot for Online Leaderboards (never blocks or cancels update checks).
+static char* sLbText;
+#if PORT_WEB
+bool lbRequest(const char* url, const char* jsonBody) {
+	if (!url || !url[0]) return false;
+	SDL_free(sLbText);
+	sLbText = nullptr;
+	const char* body = (jsonBody && jsonBody[0]) ? jsonBody : "";
+	EM_ASM({
+		const url = UTF8ToString($0);
+		const body = UTF8ToString($1);
+		window._fsLbState = 0;
+		window._fsLbBytes = null;
+		var o = new Object();
+		o.method = body ? 'POST' : 'GET';
+		if (body) {
+			var h = new Headers();
+			h.append('Content-Type', 'application/json');
+			o.headers = h;
+			o.body = body;
+		}
+		fetch(url, o)
+			.then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
+			.then(txt => { window._fsLbBytes = new TextEncoder().encode(txt); window._fsLbState = 1; })
+			.catch(() => { window._fsLbState = -1; });
+	}, url, body);
+	return true;
+}
+
+int lbPoll() {
+	const int r = EM_ASM_INT({ return window._fsLbState || 0; });
+	if (r > 0 && !sLbText) {
+		const int len = EM_ASM_INT({ return window._fsLbBytes ? window._fsLbBytes.length : 0; });
+		sLbText = (char*)SDL_malloc((size_t)len + 1);
+		if (!sLbText) return -1;
+		EM_ASM({
+			if (window._fsLbBytes) HEAPU8.set(window._fsLbBytes, $0);
+			HEAPU8[$0 + $1] = 0;
+		}, sLbText, len);
+	}
+	return r;
+}
+
+const char* lbText() { return sLbText; }
+#else
 static SDL_Thread* sLbThread;
 static SDL_AtomicInt sLbResult;
 static char sLbUrl[600], sLbBody[512], sLbFile[700];
 static bool sLbHasBody;
-static char* sLbText;
 
 static int lbWork(void*) {
 	const bool ok = fetchTo(sLbUrl, sLbFile, sLbHasBody ? sLbBody : nullptr);
@@ -482,4 +540,5 @@ int lbPoll() {
 }
 
 const char* lbText() { return sLbText; }
+#endif
 }  // namespace port

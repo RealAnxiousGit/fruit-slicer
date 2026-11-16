@@ -9,19 +9,29 @@
 #define PORT_ANDROID 0
 #endif
 
+#ifdef __EMSCRIPTEN__
+#define PORT_WEB 1
+#else
+#define PORT_WEB 0
+#endif
+
 #define PORT_3DS 0
-#define PORT_ULTRA (!PORT_ANDROID)  // Textures: Ultra, the 4K art in romfs/gfx4k and romfs/tex4k
+#define PORT_ULTRA (!PORT_ANDROID && !PORT_WEB)  // Textures: Ultra, the 4K art in romfs/gfx4k and romfs/tex4k
 #define PORT_HAS_VORBIS 1  // recorded Shop music ships as Ogg Vorbis here
-#define PORT_CUSTOM_MUSIC 1  // the player's own songs for Beat Slice, from a Custom Music folder
-#define PORT_QUIT_BOMB 1     // the Quit Game bomb on the title
+#define PORT_CUSTOM_MUSIC (!PORT_WEB)  // the player's own songs for Beat Slice, from a Custom Music folder
+#define PORT_QUIT_BOMB (!PORT_WEB)     // the Quit Game bomb on the title; a browser tab can't close itself
 #define PORT_TWO_SCREENS 0
 #define PORT_HAS_SENSITIVITY PORT_ANDROID
-#define PORT_PAUSE_BUTTON PORT_ANDROID
+#define PORT_PAUSE_BUTTON (PORT_ANDROID || PORT_WEB)  // a phone's browser has no Escape key either
 #define PORT_MOUSE (!PORT_ANDROID)
 #define PORT_LIGHT_FRENZY PORT_ANDROID
 #define PORT_SENSITIVITY_LABEL "Touch Sensitivity"
 #define PORT_SENSITIVITY_HINT "Higher follows quick finger flicks."
+#if PORT_WEB
+#define PORT_ART_HINT "2D suits slower devices."
+#else
 #define PORT_ART_HINT "2D suits the Software renderer."
+#endif
 #define PORT_DETAIL_HINT "Low suits older devices."
 #define PORT_RESET_HINT "Back to the default look."
 #define PORT_VISUALS_HINT "Art style, board, blade,"
@@ -34,6 +44,12 @@
 #define PORT_CONFIRM_TEXT "Tap again to confirm"
 #define PORT_GAMEPLAY_HINT "Touch, difficulty, and how the"
 #define PORT_DEFAULT_SENSITIVITY 70
+#elif PORT_WEB
+#define PORT_HOWTO_PAUSE "Escape or the pause sign stops it."
+#define PORT_PRACTICE_SKIP "Pause to skip the lessons"
+#define PORT_CONFIRM_TEXT "Press again to confirm"
+#define PORT_GAMEPLAY_HINT "Difficulty, and how the"
+#define PORT_DEFAULT_SENSITIVITY 75
 #else
 #define PORT_HOWTO_PAUSE "Escape pauses and goes back."
 #define PORT_PRACTICE_SKIP "Escape to skip the lessons"

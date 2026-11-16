@@ -10,6 +10,9 @@
 #ifdef __ANDROID__
 #include <jni.h>
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "app.h"
 #include "common.h"
@@ -268,7 +271,11 @@ int main(int, char**) {
 		if (port::gVsyncOn && owed > kStep * 3 / 4 && owed < kStep * 5 / 4) owed = kStep;  // vsync's small jitter isn't a missed frame
 		steps = (int)(owed / kStep);
 		if (steps == 0) {
+#if PORT_WEB
+			SDL_Delay((Uint32)((kStep - owed) / 1000000 + 1));  // gives the page back to the browser meanwhile
+#else
 			SDL_DelayPrecise(kStep - owed);
+#endif
 			continue;
 		}
 		owed -= steps * kStep;
@@ -277,6 +284,18 @@ int main(int, char**) {
 #ifdef TEST_SHOTS
 		Uint64 workFrom = SDL_GetTicksNS();
 		statSteps += steps;
+#endif
+#if PORT_WEB
+		// The game fills the browser page and follows its size (outside fullscreen, which the browser sizes).
+		{
+			static int pageW = 0, pageH = 0;
+			const int w = EM_ASM_INT({ return window.innerWidth; }), h = EM_ASM_INT({ return window.innerHeight; });
+			if ((w != pageW || h != pageH) && !(SDL_GetWindowFlags(gfx::window()) & SDL_WINDOW_FULLSCREEN)) {
+				pageW = w;
+				pageH = h;
+				SDL_SetWindowSize(gfx::window(), w, h);
+			}
+		}
 #endif
 		Input in{};
 		SDL_Event e;
@@ -451,7 +470,23 @@ int main(int, char**) {
 
 // Vibration: the phone's own motor. Controllers rumble through SDL's gamepad API instead.
 namespace port {
+#if PORT_WEB
+// Always a new tab, so the game's own page never leaves the game. A link with target _blank never
+// replaces this page: if the browser blocks the new tab, nothing happens.
+void openLink(const char* url) {
+	EM_ASM({
+		const link = document.createElement('a');
+		link.href = UTF8ToString($0);
+		link.target = '_blank';
+		link.rel = 'noopener noreferrer';
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+	}, url);
+}
+#else
 void openLink(const char* url) { SDL_OpenURL(url); }
+#endif
 
 // Score cards. A phone keeps only the newest one, in the game's own files, and lends it to the app the
 // player picks through CardProvider (android/.../CardProvider.java). A computer keeps every one.
@@ -526,6 +561,21 @@ int shareCardPoll(const char** note) {
 		return -1;
 	}
 	*note = "Pick where to send it.";
+#elif PORT_WEB
+	// The picture is in the page's own files; the browser hands it over as a download.
+	const char* slash = strrchr(sCardPath, '/');
+	EM_ASM({
+		const data = FS.readFile(UTF8ToString($0));
+		const link = document.createElement('a');
+		link.href = URL.createObjectURL(new Blob([data], {type: 'image/png'}));
+		link.download = UTF8ToString($1);
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+		FS.unlink(UTF8ToString($0));
+	}, sCardPath, slash ? slash + 1 : sCardPath);
+	*note = "Saved to your downloads.";
 #else
 	*note = SDL_GetUserFolder(SDL_FOLDER_PICTURES) ? "Saved in Pictures, in Fruit Slicer." : "Saved in the game's Score Cards folder.";
 #endif

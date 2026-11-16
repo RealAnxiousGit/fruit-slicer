@@ -20,6 +20,9 @@
 #if defined(_WIN32)
 const char* const kRendererNames[] = {"DirectX", "OpenGL", "Vulkan", "Software"};
 static const char* const kDrivers[] = {"direct3d11", "opengl", "vulkan", "software"};
+#elif PORT_WEB
+const char* const kRendererNames[] = {"WebGL"};
+static const char* const kDrivers[] = {"opengles2"};
 #elif PORT_ANDROID
 const char* const kRendererNames[] = {"OpenGL ES", "Vulkan", "Software"};
 static const char* const kDrivers[] = {"opengles2", "vulkan", "software"};
@@ -191,7 +194,9 @@ bool init() {
 		fprintf(stderr, "[gfx] no window: %s\n", SDL_GetError());
 		return false;
 	}
+#if !PORT_WEB  // a phone's browser can be narrower than this
 	SDL_SetWindowMinimumSize(sWindow, 360, 360);  // any shape: an upright window gets a tall field (updateField)
+#endif
 	sRenderer = SDL_CreateRenderer(sWindow, driver);
 	if (!sRenderer) {
 		// Not every machine has every API, so a bad choice must never stop the game from starting.
