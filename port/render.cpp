@@ -426,16 +426,22 @@ struct MenuLayout {
 
 static MenuLayout menuLayout() {
 	MenuLayout m;
-	if (sWinW / sWinH >= 1.4f) {
-		constexpr float kPic = 0.9f, kGap = 8.0f, kW = 400 * kPic + 320 + kGap, kH = 240;
-		float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
-		float x = (sWinW - kW * u) * 0.5f, y = (sWinH - kH * u) * 0.5f;
-		m = {u * kPic, x, y + (240 - 240 * kPic) * 0.5f * u, u, x + (400 * kPic + kGap) * u, y};
+	const float asp = sWinH > 0 ? sWinW / sWinH : 16.0f / 9.0f;
+	if (asp >= 1.25f) {
+		const float t = SDL_clamp((asp - 1.25f) / 0.45f, 0.0f, 1.0f);
+		const float kPic = 0.80f + 0.10f * t, kGap = 6.0f + 2.0f * t;
+		const float kW = 400.0f * kPic + 320.0f + kGap, kH = 240.0f;
+		const float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
+		const float x = (sWinW - kW * u) * 0.5f, y = (sWinH - kH * u) * 0.5f;
+		m = {u * kPic, x, y + (240.0f - 240.0f * kPic) * 0.5f * u, u, x + (400.0f * kPic + kGap) * u, y};
 	} else {
-		constexpr float kPic = 0.6f, kMargin = 8, kW = 320, kH = 240 * kPic + 240 + kMargin * 2;
-		float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
-		float y = (sWinH - kH * u) * 0.5f + kMargin * u;
-		m = {u * kPic, sWinW * 0.5f - 200 * u * kPic, y, u, sWinW * 0.5f - 160 * u, y + 240 * kPic * u};
+		const float availH = asp > 0 ? 320.0f / asp : 568.0f;
+		const float kPic = SDL_clamp((availH - 256.0f) / 240.0f, 0.64f, 0.80f);
+		const float kGap = 8.0f, kW = 320.0f, kH = 240.0f * kPic + kGap + 240.0f + 8.0f;
+		const float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
+		const float blockH = (240.0f * kPic + kGap + 240.0f) * u;
+		const float y = (sWinH - blockH) * 0.5f;
+		m = {u * kPic, sWinW * 0.5f - 200.0f * u * kPic, y, u, sWinW * 0.5f - 160.0f * u, y + (240.0f * kPic + kGap) * u};
 	}
 	return m;
 }
