@@ -12,6 +12,8 @@
 
 const char* const kRendererNames[] = {"OpenGL", "Vulkan", "Software"};
 const int kRendererCount = 3;
+Rng gRng;
+void shopCheckSave() {}
 static char sDir[256];
 
 namespace port {
@@ -62,10 +64,10 @@ int main() {
 	const int payload = 64;
 #endif
 
-	printf("1. A 0.4 save upgrades with every score and setting kept\n");
+	printf("1. A 0.4 save upgrades with scores and settings kept (and 0.4 Zen/Combo retired)\n");
 	write04("save.bin", payload);
 	saveLoad();
-	CHECK(gSave.best[0] == 11 && gSave.best[6] == 77 && gSave.best[7] == 0);
+	CHECK(gSave.best[0] == 11 && gSave.best[1] == 22 && gSave.best[MODE_ZEN] == 0 && gSave.best[3] == 44 && gSave.best[MODE_COMBO] == 0 && gSave.best[7] == 0);
 	CHECK(gSave.totalFruit == 1234 && gSave.bestCombo == 56);
 	CHECK(gSave.sfx == 40 && gSave.music == 30 && gSave.menuSfx == 20 && gSave.menuTrack == 3 && gSave.gameTrack == 4);
 	CHECK(gSave.artStyle == 1 && gSave.board == 2 && gSave.scene == 1 && gSave.blade == 5 && gSave.effects == 2);
@@ -74,7 +76,7 @@ int main() {
 	CHECK(gSave.forgiveness == 90 && gSave.frenzyDrain == 10 && gSave.misses == 5);
 	CHECK(gSave.coins == 0 && gSave.ownedThemes == 1 && gSave.uiScale == 0 && gSave.snapAssist == 1 && gSave.stickSpeed == 50);
 #ifndef TEST_3DS_LAYOUT
-	CHECK(gSave.renderer == 2 && gSave.vsync == 1 && gSave.preset == 1 && gSave.hwChecked == 0);
+	CHECK(gSave.renderer == 2 && gSave.vsync == 1 && gSave.preset == 3 && gSave.hwChecked == 1);
 #endif
 
 	printf("2. The first 1.0 write keeps the 0.4 file as save04.bak\n");
@@ -118,37 +120,51 @@ int main() {
 	saveLoad();
 	CHECK(gSave.coins == 0 && gSave.best[0] == 0 && gSave.sfx == 100);
 
-	printf("7. A shorter 1.x save loads, with the rest at defaults\n");
+	printf("7. Shorter 1.1 and 1.2 saves load and upgrade into 2.0 with new fields at defaults\n");
 	{
+		auto writeShort = [&](u16 shortSize) {
+			char b[300];
+			path(b, "save.bin");
+			FILE* f = fopen(b, "wb");
+			u32 magic = 0x35534C46, sum = fnv((const u8*)&gSave, shortSize);
+			u16 head[2] = {1, shortSize};
+			fwrite(&magic, 4, 1, f);
+			fwrite(head, 4, 1, f);
+			fwrite(&gSave, shortSize, 1, f);
+			fwrite(&sum, 4, 1, f);
+			fclose(f);
+		};
 		saveLoad();
+		gSave.scoreRules = 2;
+		gSave.best11[1] = 420;
+		gSave.best[1] = 0;
+		writeShort((u16)offsetof(Settings, best));  // ends right after 1.1's tables
+		saveLoad();
+		CHECK(gSave.scoreRules == 3 && gSave.best[1] == 420 && gSave.seenRoom50Cutscene == 0 && gSave.sfx == 100);
+
 		gSave.coins = 7;
 		gSave.best[2] = 500;
-		const u16 shortSize = 200;  // as if an older 1.x save ended here
-		char b[300];
-		path(b, "save.bin");
-		FILE* f = fopen(b, "wb");
-		u32 magic = 0x35534C46, sum = fnv((const u8*)&gSave, shortSize);
-		u16 head[2] = {1, shortSize};
-		fwrite(&magic, 4, 1, f);
-		fwrite(head, 4, 1, f);
-		fwrite(&gSave, shortSize, 1, f);
-		fwrite(&sum, 4, 1, f);
-		fclose(f);
+		gSave.seenRoom50Cutscene = 1;
+		writeShort((u16)offsetof(Settings, seenRoom50Cutscene));  // pre-2.0 shorter save
 		gSave.best[2] = 0;
+		gSave.seenRoom50Cutscene = 1;
 		saveLoad();
-		CHECK(gSave.best[2] == 500 && gSave.sfx == 100);
+		CHECK(gSave.coins == 7 && gSave.best[2] == 500 && gSave.sfx == 100 && gSave.seenRoom50Cutscene == 0);
 	}
 
-	printf("8. Reset Everything keeps coins and Shop items\n");
+	printf("8. Reset Everything keeps coins and Shop items and clears seenRoom50Cutscene\n");
 	gSave.coins = 42;
 	gSave.ownedTrails = 0x7;
 	gSave.best[0] = 9;
+	gSave.seenRoom50Cutscene = 1;
+	saveResetScores();
+	CHECK(gSave.best[0] == 0 && gSave.seenRoom50Cutscene == 1);
 	saveDefaults(false, SEC_ALL);
-	CHECK(gSave.coins == 42 && gSave.ownedTrails == 0x7 && gSave.best[0] == 0);
+	CHECK(gSave.coins == 42 && gSave.ownedTrails == 0x7 && gSave.best[0] == 0 && gSave.seenRoom50Cutscene == 0);
 
 	char cmd[300];
 	snprintf(cmd, sizeof cmd, "rm -rf %s", sDir);
-	system(cmd);
+	if (system(cmd) != 0) {}
 	printf("%s (Settings is %d bytes)\n", sFails ? "FAILED" : "ALL PASSED", (int)sizeof(Settings));
 	return sFails ? 1 : 0;
 }

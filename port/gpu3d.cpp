@@ -198,9 +198,18 @@ static inline const Lit& lit(const Vertex* v, u32 i) {
 	if (gSave.ambientOcc) ambient *= 0.8f + 0.2f * (0.5f - 0.5f * wy);
 	float shade = (ambient + 0.5f * diff) / 255.0f, high = sSkin.shine * h;
 	const float grey = (0.3f * q.r + 0.59f * q.g + 0.11f * q.b) * sSkin.mix, keep = 1 - sSkin.mix;
-	l.c.r = clampf((q.r * keep + grey * sSkin.r) * shade + high, 0, 1);
-	l.c.g = clampf((q.g * keep + grey * sSkin.g) * shade + high, 0, 1);
-	l.c.b = clampf((q.b * keep + grey * sSkin.b) * shade + high, 0, 1);
+	if (sSkin.shine >= 0.99f) {
+		// Holographic: add spatial iridescent rainbow shimmer on top of the cycling skin colour.
+		const float ir = 3.2f * (wx - wy + wz);
+		const float sr = 0.72f + 0.28f * SDL_sinf(ir), sg = 0.72f + 0.28f * SDL_sinf(ir + 2.0944f), sb = 0.72f + 0.28f * SDL_sinf(ir + 4.1888f);
+		l.c.r = clampf((q.r * keep + grey * sSkin.r * sr) * shade + high, 0, 1);
+		l.c.g = clampf((q.g * keep + grey * sSkin.g * sg) * shade + high, 0, 1);
+		l.c.b = clampf((q.b * keep + grey * sSkin.b * sb) * shade + high, 0, 1);
+	} else {
+		l.c.r = clampf((q.r * keep + grey * sSkin.r) * shade + high, 0, 1);
+		l.c.g = clampf((q.g * keep + grey * sSkin.g) * shade + high, 0, 1);
+		l.c.b = clampf((q.b * keep + grey * sSkin.b) * shade + high, 0, 1);
+	}
 	l.c.a = 1;
 	return l;
 }
