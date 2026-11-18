@@ -449,7 +449,7 @@ bool beginTop(int eye) {
 	sOx = m.picX;
 	sOy = m.picY;
 	sShaking = sMenuShake;
-	clipTo(m.picX, m.picY, 400 * m.picScale, 240 * m.picScale, 48.0f * m.picScale);
+	clipTo(m.picX, m.picY, 400 * m.picScale, 240 * m.picScale, 6.0f * m.picScale);
 	return true;
 }
 
@@ -475,7 +475,7 @@ void beginBottom() {
 	sOx = m.signX;
 	sOy = m.signY;
 	sShaking = sMenuShake;
-	clipTo(m.signX, m.signY, 320 * m.signScale, 240 * m.signScale, 48.0f * m.signScale);
+	clipTo(m.signX, m.signY, 320 * m.signScale, 240 * m.signScale, 6.0f * m.signScale);
 }
 
 void windowArea(float* x, float* y, float* w, float* h) {
