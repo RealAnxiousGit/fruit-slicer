@@ -64,6 +64,7 @@ static constexpr int kBatchMax = 60000;
 static SDL_Vertex* sBatch;
 static int sBatchCount;
 static SDL_Texture* sBatchTex;
+static bool sAdditive = false;
 
 SDL_Renderer* renderer() { return sRenderer; }
 SDL_Window* window() { return sWindow; }
@@ -81,6 +82,19 @@ static void flush() {
 	SDL_RenderGeometry(sRenderer, sBatchTex, sBatch, sBatchCount, nullptr, 0);
 	sBatchCount = 0;
 	drawCallsLive++;
+}
+
+bool isAdditive() { return sAdditive; }
+
+void setAdditive(bool on) {
+	if (on == sAdditive) return;
+	flush();
+	sAdditive = on;
+	const SDL_BlendMode mode = on ? SDL_BLENDMODE_ADD : SDL_BLENDMODE_BLEND;
+	if (sRenderer) SDL_SetRenderDrawBlendMode(sRenderer, mode);
+	for (int i = 0; i < SHEET_COUNT; i++) {
+		if (sSheets[i].tex) SDL_SetTextureBlendMode(sSheets[i].tex, mode);
+	}
 }
 
 SDL_Vertex* reserveTris(SDL_Texture* tex, int count) {
@@ -146,7 +160,7 @@ static bool loadSheet(SheetId id, const char* path, const SheetRect* rects) {
 		sh.rects = rects;
 		sh.w = fullW;
 		sh.h = fullH;
-		SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+		SDL_SetTextureBlendMode(t, sAdditive ? SDL_BLENDMODE_ADD : SDL_BLENDMODE_BLEND);
 		SDL_SetTextureScaleMode(t, SDL_SCALEMODE_LINEAR);
 	}
 	SDL_DestroySurface(s);
@@ -329,6 +343,7 @@ static void recordFrame() {
 #endif
 
 void beginFrame() {
+	setAdditive(false);
 	int w = 1280, h = 720;
 	SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h);
 	static const float kScales[] = {0.75f, 1.0f, 1.25f};
@@ -364,6 +379,7 @@ void beginFrame() {
 }
 
 void endFrame() {
+	setAdditive(false);
 	flush();
 	if (sRenderScale != 1) {
 		SDL_SetRenderTarget(sRenderer, nullptr);
@@ -444,6 +460,7 @@ static void clipToWindow() {
 
 bool beginTop(int eye) {
 	if (eye != 0) return false;
+	setAdditive(false);
 	MenuLayout m = menuLayout();
 	sScale = m.picScale;
 	sOx = m.picX;
@@ -470,6 +487,7 @@ int shotResult() {
 }
 
 void beginBottom() {
+	setAdditive(false);
 	MenuLayout m = menuLayout();
 	sScale = m.signScale;
 	sOx = m.signX;
@@ -494,6 +512,7 @@ void topToCorner(float x, float y, float* cx, float* cy) {
 
 void beginCorner() {
 	MenuLayout m = menuLayout();
+	setAdditive(false);
 	flush();
 	clipToWindow();
 	sScale = m.signScale;
@@ -533,6 +552,7 @@ static inline float fieldUnit() {
 }
 
 void beginField() {
+	setAdditive(false);
 	flush();
 	clipToWindow();
 	sScale = fieldUnit();
@@ -675,6 +695,7 @@ void tri(float x0, float y0, u32 c0, float x1, float y1, u32 c1, float x2, float
 
 // One board fills the whole window, whatever its shape, behind everything else.
 void drawBackdrop(u32 tint) {
+	setAdditive(false);
 	const Sheet& s = sSheets[SHEET_BOARD];
 	if (gSave.highContrast) {
 		flush();
@@ -697,6 +718,7 @@ void drawBackdrop(u32 tint) {
 }
 
 void fadeAll(float alpha) {
+	setAdditive(false);
 	flush();
 	clipToWindow();
 	SDL_FColor c = {0, 0, 0, alpha};

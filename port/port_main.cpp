@@ -68,13 +68,25 @@ bool running() {
 
 static char sTyped[32];
 static int sTypeMax, sTypeResult;
-static bool sTyping;
-void textStart(const char* current, int maxLen) {
+static bool sTyping, sTypeNumeric;
+void textStart(const char* current, int maxLen, bool numericOnly) {
 	snprintf(sTyped, sizeof sTyped, "%s", current);
 	sTypeMax = maxLen < (int)sizeof sTyped - 1 ? maxLen : (int)sizeof sTyped - 1;
 	sTypeResult = 0;
+	sTypeNumeric = numericOnly;
 	sTyping = true;
+#if defined(__ANDROID__) && defined(SDL_PROP_TEXTINPUT_TYPE_NUMBER)
+	if (numericOnly) {
+		SDL_PropertiesID props = SDL_CreateProperties();
+		SDL_SetNumberProperty(props, SDL_PROP_TEXTINPUT_TYPE_NUMBER, SDL_TEXTINPUT_TYPE_NUMBER);
+		SDL_StartTextInputWithProperties(gfx::window(), props);
+		SDL_DestroyProperties(props);
+	} else {
+		SDL_StartTextInput(gfx::window());  // on a phone, this brings up the on-screen keyboard
+	}
+#else
 	SDL_StartTextInput(gfx::window());  // on a phone, this brings up the on-screen keyboard
+#endif
 }
 int textPoll(char* out, size_t size) {
 	snprintf(out, size, "%s", sTyped);
@@ -83,11 +95,13 @@ int textPoll(char* out, size_t size) {
 void textStop() {
 	if (sTyping) SDL_StopTextInput(gfx::window());
 	sTyping = false;
+	sTypeNumeric = false;
 }
 static void textArrived(const char* s) {
 	if (!sTyping || sTypeResult) return;
 	for (int n = (int)strlen(sTyped); *s && n < sTypeMax; s++) {
 		if ((unsigned char)*s >= 128) continue;
+		if (sTypeNumeric && (*s < '0' || *s > '9')) continue;
 		sTyped[n++] = *s;
 		sTyped[n] = 0;
 	}
@@ -101,6 +115,11 @@ static bool textKey(SDL_Keycode key) {
 	else if (key == SDLK_ESCAPE || key == SDLK_AC_BACK) sTypeResult = -1;
 	return true;
 }
+#ifdef AUTOTEST
+void testTextInject(const char* s) { textArrived(s); }
+void testTextBackspace() { textKey(SDLK_BACKSPACE); }
+void testTextFinish(bool accept) { textKey(accept ? SDLK_RETURN : SDLK_ESCAPE); }
+#endif
 
 bool spSupported() { return false; }
 void spUserName(char* out, size_t size) {

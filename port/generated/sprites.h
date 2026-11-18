@@ -139,3 +139,9 @@
 #define sprites_bface_apple_daze_idx 136
 #define sprites_bface_apple_wind_idx 137
 #define sprites_boss_worm_idx 138
+#define sprites_boss_durian_dead_idx 139
+#define sprites_bface_durian_dead_idx 140
+#define sprites_boss_lemon_dead_idx 141
+#define sprites_bface_lemon_dead_idx 142
+#define sprites_boss_apple_dead_idx 143
+#define sprites_bface_apple_dead_idx 144
