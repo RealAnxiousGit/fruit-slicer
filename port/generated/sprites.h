@@ -151,3 +151,6 @@
 #define sprites_ic_skull_idx 148
 #define sprites_lem_floatie_idx 149
 #define sprites_lem_drain_idx 150
+#define sprites_lem_floatie_back_idx 151
+#define sprites_lem_floatie_front_idx 152
+#define sprites_boss_worm_hole_idx 153

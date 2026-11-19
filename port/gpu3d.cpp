@@ -75,7 +75,7 @@ static SDL_Texture* loadDetail(const char* name) {
 
 bool init() {
 	if (gfx::softwareRenderer()) return false;  // thousands of triangles are for GPUs: this renderer uses 2D art
-	for (int i = 0; i < m3d::MESH_COUNT; i++) sTex[i] = loadDetail(kTexNames[i]);
+	for (int i = 0; i < m3d::MESH_COUNT; i++) sTex[i] = kTexNames[i] ? loadDetail(kTexNames[i]) : nullptr;
 	return true;
 }
 
@@ -90,6 +90,7 @@ void shutdown() {
 void reloadTextures() {
 	if (gfx::softwareRenderer()) return;
 	for (int i = 0; i < m3d::MESH_COUNT; i++) {
+		if (!kTexNames[i]) continue;
 		SDL_Texture* t = loadDetail(kTexNames[i]);
 		if (!t) continue;  // keep the old skin rather than none
 		if (sTex[i]) SDL_DestroyTexture(sTex[i]);
@@ -104,13 +105,50 @@ void release(void* p) {
 }
 static m3d::Skin sSkin = {0, 1, 1, 1, 1, 0.32f};
 
-void begin(float, float, bool) { setSkin(nullptr); }
+struct BatchTri {
+	SDL_Vertex v[3];
+	SDL_Texture* tex;
+	float z;
+};
+static std::vector<BatchTri> sTriBatch;
+static std::vector<u32> sBatchSorted;
+static bool sBatching;
+
+void begin(float, float, bool) {
+	setSkin(nullptr);
+	sTriBatch.clear();
+	sBatching = true;
+}
 
 void setSkin(const m3d::Skin* skin) {
 	static const m3d::Skin kPlain = {0, 1, 1, 1, 1, 0.32f};
 	sSkin = skin ? *skin : kPlain;
 }
-void end() {}
+
+void end() {
+	if (!sBatching) return;
+	sBatching = false;
+	const u32 count = (u32)sTriBatch.size();
+	if (count == 0) return;
+	float nearest = -1e9f, farthest = 1e9f;
+	for (const BatchTri& bt : sTriBatch) {
+		if (bt.z > nearest) nearest = bt.z;
+		if (bt.z < farthest) farthest = bt.z;
+	}
+	static constexpr int kBuckets = 512;
+	static u32 starts[kBuckets + 1];
+	SDL_memset(starts, 0, sizeof starts);
+	const float toBucket = nearest > farthest ? (kBuckets - 1) / (nearest - farthest) : 0;
+	for (const BatchTri& bt : sTriBatch) starts[(int)((bt.z - farthest) * toBucket) + 1]++;
+	for (int i = 0; i < kBuckets; i++) starts[i + 1] += starts[i];
+	if (sBatchSorted.size() < count) sBatchSorted.resize(count);
+	for (u32 i = 0; i < count; i++) sBatchSorted[starts[(int)((sTriBatch[i].z - farthest) * toBucket)]++] = i;
+	for (u32 i = 0; i < count; i++) {
+		const BatchTri& bt = sTriBatch[sBatchSorted[i]];
+		gfx::pushTris(bt.tex, bt.v, 3);
+	}
+	sTriBatch.clear();
+}
 
 struct Lit {
 	float x, y, z, facing;
@@ -172,7 +210,7 @@ static void lightVerts(const Vertex* v, u32 n, const Pose& p) {
 		Lit& l = sLit[i];
 		l.x = ox + (m[0][0] * q.x + m[0][1] * q.y + m[0][2] * q.z) * s * unit;
 		l.y = oy + (m[1][0] * q.x + m[1][1] * q.y + m[1][2] * q.z) * s * unit;
-		l.z = (m[2][0] * q.x + m[2][1] * q.y + m[2][2] * q.z) * s;
+		l.z = p.z + (m[2][0] * q.x + m[2][1] * q.y + m[2][2] * q.z) * s;
 		l.facing = (m[2][0] * q.nx + m[2][1] * q.ny + m[2][2] * q.nz) / 127.0f;
 		l.c.a = 0;  // not lit yet: about half of a fruit faces away and never needs it
 	}
@@ -226,6 +264,37 @@ static inline void emit(SDL_Vertex* o, const Lit& l, float u, float v) {
 // `body` is where the skin ends in the triangle list: past it are stems, flesh and cut faces.
 static constexpr int kDepthBuckets = 512;
 static void sortAndDraw(int mesh, const Vertex* v, u32 tris, const u16* idx, const Uv* uv, u32 body) {
+	if (sBatching) {
+		sTriBatch.reserve(sTriBatch.size() + tris);
+		for (u32 t = 0; t < tris; t++) {
+			u32 a = idx ? idx[t * 3] : t * 3, b = idx ? idx[t * 3 + 1] : t * 3 + 1, c = idx ? idx[t * 3 + 2] : t * 3 + 2;
+			if (sLit[a].facing < 0 && sLit[b].facing < 0 && sLit[c].facing < 0) continue;  // the fruit's far side
+			const Lit& la = lit(v, a);
+			const Lit& lb = lit(v, b);
+			const Lit& lc = lit(v, c);
+			BatchTri bt;
+			bt.tex = sTex[mesh];
+			bt.z = sLit[a].z + sLit[b].z + sLit[c].z;
+			if (t * 3 < body && sTex[mesh] && sSkin.mix == 0) {
+				float u0 = uv[a].u, u1 = uv[b].u, u2 = uv[c].u;
+				float lo = SDL_min(u0, SDL_min(u1, u2)), hi = SDL_max(u0, SDL_max(u1, u2));
+				if (hi - lo > 0.5f) {
+					if (u0 < 0.5f) u0 += 1;
+					if (u1 < 0.5f) u1 += 1;
+					if (u2 < 0.5f) u2 += 1;
+				}
+				emit(&bt.v[0], la, u0 * 0.5f, uv[a].v * kVScale);
+				emit(&bt.v[1], lb, u1 * 0.5f, uv[b].v * kVScale);
+				emit(&bt.v[2], lc, u2 * 0.5f, uv[c].v * kVScale);
+			} else {
+				emit(&bt.v[0], la, 0.25f, kWhiteV);
+				emit(&bt.v[1], lb, 0.25f, kWhiteV);
+				emit(&bt.v[2], lc, 0.25f, kWhiteV);
+			}
+			sTriBatch.push_back(bt);
+		}
+		return;
+	}
 	sOrder.clear();
 	sOrder.reserve(tris);
 	float nearest = -1e9f, farthest = 1e9f;
