@@ -203,7 +203,11 @@ bool init() {
 	flags |= SDL_WINDOW_FULLSCREEN;
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait");  // the field follows any shape
 #endif
+#ifdef BOSS_TEST_APP
+	sWindow = SDL_CreateWindow("Fruit Slicer - Orchard Blast Boss Test", 1280, 720, flags);
+#else
 	sWindow = SDL_CreateWindow("Fruit Slicer", 1280, 720, flags);
+#endif
 	if (!sWindow) {
 		fprintf(stderr, "[gfx] no window: %s\n", SDL_GetError());
 		return false;

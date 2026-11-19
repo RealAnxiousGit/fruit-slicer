@@ -69,7 +69,8 @@ typedef int16_t s16;
 enum {
 	KEY_A = 1u << 0, KEY_B = 1u << 1, KEY_SELECT = 1u << 2, KEY_START = 1u << 3,
 	KEY_RIGHT = 1u << 4, KEY_LEFT = 1u << 5, KEY_UP = 1u << 6, KEY_DOWN = 1u << 7,
-	KEY_L = 1u << 9, KEY_R = 1u << 8, KEY_X = 1u << 10, KEY_Y = 1u << 11, KEY_TOUCH = 1u << 20,
+	KEY_L = 1u << 9, KEY_R = 1u << 8, KEY_X = 1u << 10, KEY_Y = 1u << 11,
+	KEY_ZL = 1u << 14, KEY_ZR = 1u << 15, KEY_TAB = 1u << 16, KEY_TOUCH = 1u << 20,
 };
 
 constexpr u32 C2D_Color32(u8 r, u8 g, u8 b, u8 a) { return (u32)r | ((u32)g << 8) | ((u32)b << 16) | ((u32)a << 24); }

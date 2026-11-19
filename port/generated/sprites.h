@@ -145,3 +145,9 @@
 #define sprites_bface_lemon_dead_idx 142
 #define sprites_boss_apple_dead_idx 143
 #define sprites_bface_apple_dead_idx 144
+#define sprites_cd_cutboard_idx 145
+#define sprites_cd_lifesteal_idx 146
+#define sprites_cd_bossharvest_idx 147
+#define sprites_ic_skull_idx 148
+#define sprites_lem_floatie_idx 149
+#define sprites_lem_drain_idx 150

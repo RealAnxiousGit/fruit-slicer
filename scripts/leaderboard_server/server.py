@@ -53,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(p.query)
         mode = qs.get("mode", [""])[0]
         player_id = qs.get("player_id", [""])[0][:32]
-        limit = min(25, max(1, int(qs.get("limit", ["10"])[0] or 10)))
+        limit = min(100, max(1, int(qs.get("limit", ["10"])[0] or 10)))
         is_test = qs.get("test", ["0"])[0] == "1"
         if not SLUG_RE.match(mode):
             return self._send(400, {"ok": False, "error": "bad_mode"})

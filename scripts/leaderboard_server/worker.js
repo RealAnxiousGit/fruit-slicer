@@ -39,7 +39,7 @@ export default {
     if (request.method === 'GET') {
       const mode = url.searchParams.get('mode') || '';
       const playerId = (url.searchParams.get('player_id') || '').slice(0, 32);
-      const limit = Math.min(25, Math.max(1, Number(url.searchParams.get('limit') || 10) || 10));
+      const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') || 10) || 10));
       const isTest = url.searchParams.get('test') === '1';
       if (!SLUG_RE.test(mode)) return jsonResp({ ok: false, error: 'bad_mode' }, 400);
 

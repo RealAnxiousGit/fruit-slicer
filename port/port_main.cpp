@@ -165,11 +165,20 @@ static float axis(SDL_GamepadAxis a) { return sPad ? SDL_GetGamepadAxis(sPad, a)
 // Once a frame: the sticks and the trigger, and the left stick as menu directions with key-like repeat.
 static void readPad(Input& in, float dt) {
 	if (!sPad) return;
+	static u32 sTrigHeld = 0;
 	float lx = axis(SDL_GAMEPAD_AXIS_LEFTX), ly = axis(SDL_GAMEPAD_AXIS_LEFTY);
 	float sx = lx + axis(SDL_GAMEPAD_AXIS_RIGHTX), sy = ly + axis(SDL_GAMEPAD_AXIS_RIGHTY);
 	in.stickX = sx < -1 ? -1 : (sx > 1 ? 1 : sx);
 	in.stickY = sy < -1 ? -1 : (sy > 1 ? 1 : sy);
-	in.stickSlice = axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 0.35f;
+	const float lt = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), rt = axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
+	in.stickSlice = rt > 0.35f;
+	u32 trig = 0;
+	if (lt > 0.35f) trig |= KEY_ZL;
+	if (rt > 0.35f && !app::inFieldView()) trig |= KEY_ZR;
+	const u32 freshTrig = trig & ~sTrigHeld;
+	in.down |= freshTrig;
+	in.repeat |= freshTrig;
+	sTrigHeld = trig;
 	u32 dirs = sPadHeld & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT);  // the D-pad repeats like the stick
 	if (lx < -0.6f) dirs |= KEY_LEFT;
 	if (lx > 0.6f) dirs |= KEY_RIGHT;
@@ -188,7 +197,7 @@ static void readPad(Input& in, float dt) {
 		}
 	}
 	sStickDirs = dirs;
-	in.held |= sPadHeld | dirs;
+	in.held |= sPadHeld | dirs | trig;
 }
 
 static void openPad(SDL_JoystickID id) {
@@ -205,9 +214,16 @@ static u32 keyBits(SDL_Keycode k) {
 		case SDLK_RIGHT: case SDLK_D: return KEY_RIGHT;
 		case SDLK_RETURN: case SDLK_SPACE: return KEY_A;
 		case SDLK_ESCAPE: case SDLK_AC_BACK: return KEY_B | KEY_START;
-		case SDLK_Q: return KEY_L;  // Orchard Blast's charm slots, and the Shop's tabs
+		case SDLK_Q: return KEY_L;  // Orchard Blast's charm slots, Shop tabs, Stats tabs
 		case SDLK_E: return KEY_R;
+		case SDLK_Z: case SDLK_1: case SDLK_PAGEUP: return KEY_ZL;
+		case SDLK_C: case SDLK_2: case SDLK_PAGEDOWN: return KEY_ZR;
+#ifdef BOSS_TEST_APP
+		case SDLK_TAB: return KEY_TAB;
+		case SDLK_I: return KEY_SELECT;
+#else
 		case SDLK_TAB: case SDLK_I: return KEY_SELECT;  // Orchard Blast's Inventory
+#endif
 		default: return 0;
 	}
 }
@@ -237,6 +253,9 @@ int main(int, char**) {
 #ifdef LAB
 	// The Lab keeps its own folder and starts fresh each run, so it never touches a player's save.
 	char* pref = SDL_GetPrefPath("RealAnxiousGit", "FruitSlicerLab");
+#elif defined(BOSS_TEST_APP)
+	// Boss Test isolates its folder and skips save writes so it never corrupts player saves.
+	char* pref = SDL_GetPrefPath("RealAnxiousGit", "FruitSlicerBossTest");
 #else
 	char* pref = SDL_GetPrefPath("RealAnxiousGit", "FruitSlicer");
 #endif
