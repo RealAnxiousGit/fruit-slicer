@@ -208,9 +208,9 @@ void applyVsync() {
 // At start, after the renderer: the window takes the saved mode.
 void displayStart() {
 	applyGraphics();  // remembers the Texture Quality the art was loaded at
-#if PORT_WEB
-	// A page can only go fullscreen when the player asks, so it always starts in the page.
-	gSave.windowMode = 0;
+#if PORT_WEB || PORT_ANDROID
+	// Browser and Android surfaces are sized by the page/display; never call SDL_SetWindowSize over them.
+	gSave.windowMode = PORT_ANDROID ? 1 : 0;
 	sNow = sBefore = fromSave();
 	applyVsync();
 	return;

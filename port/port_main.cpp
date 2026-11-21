@@ -290,6 +290,7 @@ int main(int, char**) {
 	bool held = false, moved = false;
 	float mx = 0, my = 0;
 	u32 keysHeld = 0;
+	Uint64 lastTouchMs = 0;
 	const Uint64 kStep = 1000000000ull / 60;
 	Uint64 last = SDL_GetTicksNS(), owed = kStep;
 #ifdef TEST_SHOTS
@@ -385,19 +386,26 @@ int main(int, char**) {
 					break;
 				case SDL_EVENT_FINGER_DOWN:
 				case SDL_EVENT_FINGER_MOTION:
+				case SDL_EVENT_FINGER_UP:
+					lastTouchMs = SDL_GetTicks();
 					in.mode = 1 + INPUT_TOUCH;
 					break;
-				case SDL_EVENT_MOUSE_MOTION:
+				case SDL_EVENT_MOUSE_MOTION: {
 					mx = e.motion.x;
 					my = e.motion.y;
 					moved = true;
-					in.mode = 1 + (e.motion.which == SDL_TOUCH_MOUSEID ? INPUT_TOUCH : INPUT_KEYMOUSE);
+					const bool fromTouch = e.motion.which == SDL_TOUCH_MOUSEID || (lastTouchMs != 0 && SDL_GetTicks() - lastTouchMs < 400);
+					if (e.motion.which == SDL_TOUCH_MOUSEID) lastTouchMs = SDL_GetTicks();
+					if (fromTouch) in.mode = 1 + INPUT_TOUCH;
+					else in.mode = 1 + INPUT_KEYMOUSE;
 					break;
+				}
 				case SDL_EVENT_MOUSE_WHEEL:
 					in.wheel += e.wheel.y > 0 ? 1 : (e.wheel.y < 0 ? -1 : 0);
 					if (e.wheel.which != SDL_TOUCH_MOUSEID) in.mode = 1 + INPUT_KEYMOUSE;
 					break;
 				case SDL_EVENT_MOUSE_BUTTON_DOWN:
+					if (e.button.which == SDL_TOUCH_MOUSEID) lastTouchMs = SDL_GetTicks();
 					in.mode = 1 + (e.button.which == SDL_TOUCH_MOUSEID ? INPUT_TOUCH : INPUT_KEYMOUSE);
 					if (e.button.button == SDL_BUTTON_LEFT) {
 						mx = e.button.x;
@@ -446,6 +454,10 @@ int main(int, char**) {
 					held = false;
 					keysHeld = 0;
 					app::notifySuspended();
+					break;
+				case SDL_EVENT_DID_ENTER_FOREGROUND:
+				case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+					gfx::ensureTextures();
 					break;
 				default:
 					break;

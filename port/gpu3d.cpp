@@ -53,6 +53,13 @@ static SDL_Texture* loadDetail(const char* name) {
 		src = gfx::halveForQuality(gfx::loadPng(path), 2);
 	}
 	if (!src) return nullptr;
+	const int maxTex = (int)SDL_GetNumberProperty(SDL_GetRendererProperties(gfx::renderer()), SDL_PROP_RENDERER_MAX_TEXTURE_SIZE_NUMBER, 4096);
+	while (maxTex > 0 && (src->w * 2 > maxTex || src->h > maxTex) && src->w >= 4 && src->h >= 4) {
+		SDL_Surface* half = SDL_ScaleSurface(src, src->w / 2, src->h / 2, SDL_SCALEMODE_LINEAR);
+		if (!half) break;
+		SDL_DestroySurface(src);
+		src = half;
+	}
 	SDL_Surface* rgb = SDL_ConvertSurface(src, SDL_PIXELFORMAT_RGBA32);
 	SDL_DestroySurface(src);
 	if (!rgb) return nullptr;

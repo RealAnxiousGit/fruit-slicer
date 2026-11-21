@@ -306,6 +306,13 @@ void reloadAllTextures() {
 	m3dport::reloadTextures();
 }
 
+void ensureTextures() {
+	if (!sSheets[SHEET_SPRITES].tex || !sSheets[SHEET_LOGO].tex || !sSheets[SHEET_FONT].tex ||
+	    !sSheets[SHEET_FRUIT].tex || !sSheets[SHEET_BOARD].tex) {
+		reloadAllTextures();
+	}
+}
+
 // Only the board on show is kept, which matters most for Ultra: a 4K board is about 33 MB.
 void sync() {
 	const int board = shownBoard();
