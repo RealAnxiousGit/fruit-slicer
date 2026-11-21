@@ -153,10 +153,14 @@ static u32 padBits(SDL_Gamepad* pad, Uint8 button) {
 	switch (SDL_GetGamepadButtonLabel(pad, (SDL_GamepadButton)button)) {
 		case SDL_GAMEPAD_BUTTON_LABEL_A: case SDL_GAMEPAD_BUTTON_LABEL_CROSS: return KEY_A;
 		case SDL_GAMEPAD_BUTTON_LABEL_B: case SDL_GAMEPAD_BUTTON_LABEL_CIRCLE: return KEY_B;
+		case SDL_GAMEPAD_BUTTON_LABEL_X: case SDL_GAMEPAD_BUTTON_LABEL_SQUARE: return KEY_X;
+		case SDL_GAMEPAD_BUTTON_LABEL_Y: case SDL_GAMEPAD_BUTTON_LABEL_TRIANGLE: return KEY_Y;
 		default: break;
 	}
 	if (button == SDL_GAMEPAD_BUTTON_SOUTH) return KEY_A;
 	if (button == SDL_GAMEPAD_BUTTON_EAST) return KEY_B;
+	if (button == SDL_GAMEPAD_BUTTON_WEST) return KEY_X;
+	if (button == SDL_GAMEPAD_BUTTON_NORTH) return KEY_Y;
 	return 0;
 }
 
@@ -172,6 +176,8 @@ static void readPad(Input& in, float dt) {
 	in.stickY = sy < -1 ? -1 : (sy > 1 ? 1 : sy);
 	const float lt = axis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), rt = axis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
 	in.stickSlice = rt > 0.35f;
+	if (fabsf(in.stickX) > 0.25f || fabsf(in.stickY) > 0.25f || lt > 0.35f || rt > 0.35f || sPadHeld != 0)
+		in.mode = 1 + INPUT_PAD;
 	u32 trig = 0;
 	if (lt > 0.35f) trig |= KEY_ZL;
 	if (rt > 0.35f && !app::inFieldView()) trig |= KEY_ZR;
@@ -216,6 +222,7 @@ static u32 keyBits(SDL_Keycode k) {
 		case SDLK_ESCAPE: case SDLK_AC_BACK: return KEY_B | KEY_START;
 		case SDLK_Q: return KEY_L;  // Orchard Blast's charm slots, Shop tabs, Stats tabs
 		case SDLK_E: return KEY_R;
+		case SDLK_R: return KEY_X;  // Orchard Blast's level-up card Reroll
 		case SDLK_Z: case SDLK_1: case SDLK_PAGEUP: return KEY_ZL;
 		case SDLK_C: case SDLK_2: case SDLK_PAGEDOWN: return KEY_ZR;
 #ifdef BOSS_TEST_APP
@@ -347,10 +354,15 @@ int main(int, char**) {
 				case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
 					port::applyVsync();  // moved to a screen with another refresh rate
 					break;
+				case SDL_EVENT_RENDER_TARGETS_RESET:
+				case SDL_EVENT_RENDER_DEVICE_RESET:
+					gfx::reloadAllTextures();
+					break;
 				case SDL_EVENT_TEXT_INPUT:
 					port::textArrived(e.text.text);
 					break;
 				case SDL_EVENT_KEY_DOWN: {
+					if (e.key.key != SDLK_AC_BACK) in.mode = 1 + INPUT_KEYMOUSE;
 					if (port::textKey(e.key.key)) break;
 					if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT))) {
 						if (!e.key.repeat) port::toggleFullscreen();
@@ -371,15 +383,22 @@ int main(int, char**) {
 				case SDL_EVENT_KEY_UP:
 					keysHeld &= ~keyBits(e.key.key);
 					break;
+				case SDL_EVENT_FINGER_DOWN:
+				case SDL_EVENT_FINGER_MOTION:
+					in.mode = 1 + INPUT_TOUCH;
+					break;
 				case SDL_EVENT_MOUSE_MOTION:
 					mx = e.motion.x;
 					my = e.motion.y;
 					moved = true;
+					in.mode = 1 + (e.motion.which == SDL_TOUCH_MOUSEID ? INPUT_TOUCH : INPUT_KEYMOUSE);
 					break;
 				case SDL_EVENT_MOUSE_WHEEL:
 					in.wheel += e.wheel.y > 0 ? 1 : (e.wheel.y < 0 ? -1 : 0);
+					if (e.wheel.which != SDL_TOUCH_MOUSEID) in.mode = 1 + INPUT_KEYMOUSE;
 					break;
 				case SDL_EVENT_MOUSE_BUTTON_DOWN:
+					in.mode = 1 + (e.button.which == SDL_TOUCH_MOUSEID ? INPUT_TOUCH : INPUT_KEYMOUSE);
 					if (e.button.button == SDL_BUTTON_LEFT) {
 						mx = e.button.x;
 						my = e.button.y;
@@ -412,6 +431,7 @@ int main(int, char**) {
 					break;
 				case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 					if (sPad && e.gbutton.which == SDL_GetGamepadID(sPad)) {
+						in.mode = 1 + INPUT_PAD;
 						u32 b = padBits(sPad, e.gbutton.button);
 						in.down |= b;
 						in.repeat |= b;
@@ -446,14 +466,15 @@ int main(int, char**) {
 		// Slice Without Holding: during a game, a moving mouse counts as a held button. A short grace
 		// keeps one swipe in one piece when a frame passes with no motion event.
 		static int movingFrames = 0;
+		const bool mouseMoved = moved && in.mode != 1 + INPUT_TOUCH && gInputMode != INPUT_TOUCH;
 		if (gSave.sliceNoHold && app::inFieldView()) {
-			movingFrames = moved ? 4 : (movingFrames > 0 ? movingFrames - 1 : 0);
+			movingFrames = mouseMoved ? 4 : (movingFrames > 0 ? movingFrames - 1 : 0);
 			if (movingFrames > 0) in.touching = true;
 		} else {
 			movingFrames = 0;
 		}
 #endif
-		in.hovering = moved && !held;
+		in.hovering = moved && !held && in.mode != 1 + INPUT_TOUCH && gInputMode != INPUT_TOUCH;
 		moved = false;
 		if (releaseAfter) held = false;
 

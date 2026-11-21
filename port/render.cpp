@@ -150,7 +150,21 @@ static bool loadSheet(SheetId id, const char* path, const SheetRect* rects) {
 	// Coordinates stay in full-size pixels, since a half-size sheet covers the same 0 to 1. Text stays sharp.
 	const float fullW = (float)s->w, fullH = (float)s->h;
 	if (id != SHEET_FONT && id != SHEET_LOGO) s = halveForQuality(s, 1);
+	const int maxTex = (int)SDL_GetNumberProperty(SDL_GetRendererProperties(sRenderer), SDL_PROP_RENDERER_MAX_TEXTURE_SIZE_NUMBER, 4096);
+	while (s && maxTex > 0 && (s->w > maxTex || s->h > maxTex) && s->w >= 2 && s->h >= 2) {
+		SDL_Surface* half = SDL_ScaleSurface(s, s->w / 2, s->h / 2, SDL_SCALEMODE_LINEAR);
+		if (!half) break;
+		SDL_DestroySurface(s);
+		s = half;
+	}
 	SDL_Texture* t = SDL_CreateTextureFromSurface(sRenderer, s);
+	while (!t && s && s->w >= 512 && s->h >= 512) {
+		SDL_Surface* half = SDL_ScaleSurface(s, s->w / 2, s->h / 2, SDL_SCALEMODE_LINEAR);
+		if (!half) break;
+		SDL_DestroySurface(s);
+		s = half;
+		t = SDL_CreateTextureFromSurface(sRenderer, s);
+	}
 	Sheet& sh = sSheets[id];
 	if (t) {
 		flush();
@@ -264,12 +278,29 @@ void loadStep(int) { sync(); }
 
 // The font and logo only change size for Ultra, so they reload only when Ultra comes or goes.
 void reloadTextures() {
-	if (ultraArt() != sUltraLoaded) {
+	if (ultraArt() != sUltraLoaded || !sSheets[SHEET_FONT].tex || !sSheets[SHEET_LOGO].tex) {
 		loadAllSheets();
 	} else {
 		loadArt(SHEET_SPRITES, "sprites", kRectsSprites, ULTRA_RECTS(kRectsSpritesUltra));
 		loadArt(SHEET_FRUIT, "fruit", kRectsFruit, ULTRA_RECTS(kRectsFruitUltra));
 	}
+	sLoadedBoard = -1;
+	sync();
+	m3dport::reloadTextures();
+}
+
+// Render Scale: anything but 100% draws into a texture of that size, which is then stretched to the window.
+static SDL_Texture* sTarget;
+static int sTargetW, sTargetH;
+static float sRenderScale = 1;
+static void updateField();
+
+void reloadAllTextures() {
+	if (sTarget) {
+		SDL_DestroyTexture(sTarget);
+		sTarget = nullptr;
+	}
+	loadAllSheets();
 	sLoadedBoard = -1;
 	sync();
 	m3dport::reloadTextures();
@@ -318,10 +349,6 @@ void getOffset(float* x, float* y) {
 	*y = sBaseY + (sShaking ? sShakeY : 0);
 }
 
-// Render Scale: anything but 100% draws into a texture of that size, which is then stretched to the window.
-static SDL_Texture* sTarget;
-static int sTargetW, sTargetH;
-static float sRenderScale = 1;
 float renderScaleNow() { return sRenderScale; }
 
 #ifdef TEST_RECORD
@@ -349,7 +376,19 @@ static void recordFrame() {
 void beginFrame() {
 	setAdditive(false);
 	int w = 1280, h = 720;
-	SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h);
+	if (!SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h) || w <= 0 || h <= 0) {
+		SDL_GetWindowSizeInPixels(sWindow, &w, &h);
+	}
+	if (w <= 0) w = 1280;
+	if (h <= 0) h = 720;
+	static int sPrevOutW = 0, sPrevOutH = 0;
+	if ((sPrevOutW != w || sPrevOutH != h) && sPrevOutW > 0) {
+		if (!sSheets[SHEET_SPRITES].tex || !sSheets[SHEET_LOGO].tex || !sSheets[SHEET_FONT].tex || !sSheets[SHEET_BOARD].tex) {
+			reloadAllTextures();
+		}
+	}
+	sPrevOutW = w;
+	sPrevOutH = h;
 	static const float kScales[] = {0.75f, 1.0f, 1.25f};
 	float want = kScales[gSave.renderScale < 3 ? gSave.renderScale : 1];
 	sRenderScale = 1;
@@ -373,6 +412,7 @@ void beginFrame() {
 	}
 	sWinW = (float)w;
 	sWinH = (float)h;
+	updateField();
 	sClipX0 = sClipY0 = 0;
 	sClipX1 = sWinW;
 	sClipY1 = sWinH;
@@ -440,8 +480,9 @@ static MenuLayout menuLayout() {
 		m = {u * kPic, x, y + (240.0f - 240.0f * kPic) * 0.5f * u, u, x + (400.0f * kPic + kGap) * u, y};
 	} else {
 		const float availH = asp > 0 ? 320.0f / asp : 568.0f;
-		const float kPic = SDL_clamp((availH - 256.0f) / 240.0f, 0.64f, 0.80f);
-		const float kGap = 8.0f, kW = 320.0f, kH = 240.0f * kPic + kGap + 240.0f + 8.0f;
+		const float kPic = SDL_clamp((availH - 256.0f) / 240.0f, 0.64f, 0.78f);
+		const float kGap = SDL_clamp((availH - 400.0f) * 0.05f, 6.0f, 14.0f);
+		const float kW = 332.0f, kH = 240.0f * kPic + kGap + 240.0f + 12.0f;
 		const float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
 		const float blockH = (240.0f * kPic + kGap + 240.0f) * u;
 		const float y = (sWinH - blockH) * 0.5f;
@@ -536,19 +577,19 @@ void beginCorner() {
 float gFieldW = 427, gFieldH = 240;
 
 namespace gfx {
-// The field takes the window's shape. 16:9 and wider: 427 x 240, with bars at the sides. Squarer: as wide,
-// and taller. Upright: it narrows from 427 (square) to 240 (9:16) and keeps growing taller from there, so
-// a fruit is about as big on an upright phone as on the same phone turned sideways.
+// Dynamic stage: scales smoothly across every aspect ratio from ultrawide (21:9+) through landscape (16:9),
+// tablet/square (4:3, 1:1), and portrait (9:16..9:21) without snapping between fixed resolution presets.
 void fieldFor(float a, float* w, float* h) {
-	if (a >= 16.0f / 9) {
-		*w = 427;
-		*h = 240;
-	} else if (a >= 1) {
-		*w = 427;
-		*h = 427 / a;
+	if (a <= 0.01f) a = 16.0f / 9.0f;
+	if (a >= 16.0f / 9.0f) {
+		*h = 240.0f;
+		*w = SDL_clamp(240.0f * a, 427.0f, 560.0f);
+	} else if (a >= 1.0f) {
+		*w = 427.0f;
+		*h = 427.0f / a;
 	} else {
-		const float t = SDL_clamp((a - 9.0f / 16) / (1 - 9.0f / 16), 0.0f, 1.0f);
-		*w = 240 + (427 - 240) * t;
+		const float t = SDL_clamp((a - 9.0f / 16.0f) / (1.0f - 9.0f / 16.0f), 0.0f, 1.0f);
+		*w = 240.0f + (427.0f - 240.0f) * t;
 		*h = *w / a;
 	}
 }

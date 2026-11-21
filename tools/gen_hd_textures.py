@@ -63,7 +63,10 @@ def make(kind, seed):
     if kind == "coconut":
         return 0.84 + 0.24 * band(r, 30, 100, sx=0.1) + 0.12 * band(r, 100, 130, sx=0.15)
     if kind == "gold":
-        return 0.97 + 0.05 * band(r, 40, 120, sx=0.05)
+        x = np.arange(W)[None, :] / W * 2 * np.pi
+        y = np.arange(H)[:, None] / H * np.pi
+        sheen = 0.5 + 0.5 * np.sin(5 * x + 2.5 * np.cos(2 * y))
+        return 0.86 + 0.14 * (sheen ** 2) + 0.04 * band(r, 40, 120, sx=0.05)
     if kind == "bomb":
         return 0.94 + 0.06 * band(r, 15, 60) - 0.24 * spots(r, 50, 0.9)
     if kind == "banana":

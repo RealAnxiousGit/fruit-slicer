@@ -37,6 +37,7 @@ void hardwareCheck(float workMs);  // each frame until the first-start check has
 }  // namespace port
 namespace gfx {
 void reloadTextures();     // after Texture Quality changes
+void reloadAllTextures();  // after render device/target reset
 float renderScaleNow();    // what Render Scale is drawing at this frame
 }  // namespace gfx
 namespace m3dport {

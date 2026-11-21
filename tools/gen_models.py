@@ -302,7 +302,10 @@ def gold(lat, lon):
         return (19 + 7 * abs(math.cos(ph * 2.5))) * (0.72 + 0.28 * math.sin(th))
 
     def col(th, ph):
-        return lerp3((255, 230, 96), (240, 170, 34), th / math.pi)
+        ridge = 0.5 + 0.5 * math.cos(ph * 5.0)
+        t = th / math.pi
+        base = lerp3((255, 238, 128), (222, 148, 22), t)
+        return lerp3(base, (255, 250, 190), 0.35 * (ridge ** 2) * math.sin(th))
 
     return surface(lat, lon, rad, col)
 

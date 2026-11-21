@@ -22,8 +22,8 @@
 #define PORT_QUIT_BOMB (!PORT_WEB)     // the Quit Game bomb on the title; a browser tab can't close itself
 #define PORT_TWO_SCREENS 0
 #define PORT_HAS_SENSITIVITY PORT_ANDROID
-#define PORT_PAUSE_BUTTON (PORT_ANDROID || PORT_WEB)  // a phone's browser has no Escape key either
-#define PORT_MOUSE (!PORT_ANDROID)
+#define PORT_PAUSE_BUTTON 1            // dynamic touch buttons (touchUiActive()) across the unified Universal port
+#define PORT_MOUSE 1                   // full mouse & keyboard compatibility across Windows, Linux, Android and Web
 #define PORT_LIGHT_FRENZY PORT_ANDROID
 #define PORT_SENSITIVITY_LABEL "Touch Sensitivity"
 #define PORT_SENSITIVITY_HINT "Higher follows quick finger flicks."

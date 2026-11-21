@@ -192,6 +192,28 @@ def make_icon():
     x0, y0, x1, y1 = 90, 930, 950, 80
     blade(tile, x0, y0, x1, y1, 58)
     sliced(tile, "orange", 512, 512, 640, x0, y0, x1, y1, 0.24)
+    full_bleed = tile.copy().convert("RGB")
+    res_dir = os.path.join(ROOT, "android", "app", "src", "main", "res")
+    for folder, px in (("mipmap-mdpi", 48), ("mipmap-hdpi", 72), ("mipmap-xhdpi", 96), ("mipmap-xxhdpi", 144), ("mipmap-xxxhdpi", 192)):
+        mdir = os.path.join(res_dir, folder)
+        os.makedirs(mdir, exist_ok=True)
+        full_bleed.resize((px, px), Image.LANCZOS).save(os.path.join(mdir, "ic_launcher.png"), optimize=True)
+    # Adaptive icon (Android 8+): full-bleed background + safe-zone foreground so any launcher mask has zero white border.
+    adapt_bg = pool_of_light(board(S, S, 8), S / 2, S / 2, 620, 620, 0.3).convert("RGB")
+    adapt_fg = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    blade(adapt_fg, 220, 810, 815, 210, 42)
+    sliced(adapt_fg, "orange", 512, 512, 460, 220, 810, 815, 210, 0.24)
+    nodpi_dir = os.path.join(res_dir, "drawable-nodpi")
+    os.makedirs(nodpi_dir, exist_ok=True)
+    adapt_bg.resize((432, 432), Image.LANCZOS).save(os.path.join(nodpi_dir, "ic_launcher_background.png"), optimize=True)
+    adapt_fg.resize((432, 432), Image.LANCZOS).save(os.path.join(nodpi_dir, "ic_launcher_foreground.png"), optimize=True)
+    anydpi_dir = os.path.join(res_dir, "mipmap-anydpi-v26")
+    os.makedirs(anydpi_dir, exist_ok=True)
+    with open(os.path.join(anydpi_dir, "ic_launcher.xml"), "w", newline="\n") as f:
+        f.write('<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                '    <background android:drawable="@drawable/ic_launcher_background" />\n'
+                '    <foreground android:drawable="@drawable/ic_launcher_foreground" />\n'
+                '</adaptive-icon>\n')
     mask = Image.new("L", (S, S), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, S - 1, S - 1), 190, fill=255)
     tile.putalpha(mask)

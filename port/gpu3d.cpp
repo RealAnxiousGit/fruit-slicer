@@ -10,6 +10,7 @@
 #include "gfx_sdl.h"
 #include "model3d_internal.h"
 #include "render.h"
+#include "shop.h"
 
 namespace m3dport {
 using m3d::PartData;
@@ -235,15 +236,35 @@ static inline const Lit& lit(const Vertex* v, u32 i) {
 	// Ambient occlusion: less of the room's light reaches the parts of a fruit that face the board.
 	if (gSave.ambientOcc) ambient *= 0.8f + 0.2f * (0.5f - 0.5f * wy);
 	float shade = (ambient + 0.5f * diff) / 255.0f, high = sSkin.shine * h;
-	const float grey = (0.3f * q.r + 0.59f * q.g + 0.11f * q.b) * sSkin.mix, keep = 1 - sSkin.mix;
+	const float keep = 1 - sSkin.mix;
 	if (sSkin.shine >= 0.99f) {
-		// Holographic: high-contrast spatial rainbow iridescence across the surface normal + specular shimmer.
-		const float ir = 6.2f * (wx - wy + wz);
-		const float sr = 0.54f + 0.46f * SDL_sinf(ir), sg = 0.54f + 0.46f * SDL_sinf(ir + 2.0944f), sb = 0.54f + 0.46f * SDL_sinf(ir + 4.1888f);
-		l.c.r = clampf((q.r * keep + grey * sSkin.r * sr) * shade + high * (0.45f + 0.55f * sr), 0, 1);
-		l.c.g = clampf((q.g * keep + grey * sSkin.g * sg) * shade + high * (0.45f + 0.55f * sg), 0, 1);
-		l.c.b = clampf((q.b * keep + grey * sSkin.b * sb) * shade + high * (0.45f + 0.55f * sb), 0, 1);
+		// Holographic: animated shining rainbow overlay sweeping across the fruit while keeping the fruit underneath visible.
+		const float phase = shopHoloPhase();
+		const float sweep = 4.6f * (wx - 0.85f * wy + 0.55f * wz) + phase * 1.6f;
+		const float band = 0.5f + 0.5f * SDL_sinf(sweep);
+		const float sheen = band * band * band;
+		const float ir = sweep * 1.15f;
+		const float sr = 0.56f + 0.44f * SDL_sinf(ir);
+		const float sg = 0.56f + 0.44f * SDL_sinf(ir + 2.0944f);
+		const float sb = 0.56f + 0.44f * SDL_sinf(ir + 4.1888f);
+		const float baseR = q.r * shade;
+		const float baseG = q.g * shade;
+		const float baseB = q.b * shade;
+		const float over = 0.26f + 0.54f * sheen + 0.72f * h;
+		l.c.r = clampf(baseR * (1.0f - 0.22f * sheen) + sr * over, 0, 1);
+		l.c.g = clampf(baseG * (1.0f - 0.22f * sheen) + sg * over, 0, 1);
+		l.c.b = clampf(baseB * (1.0f - 0.22f * sheen) + sb * over, 0, 1);
+	} else if (sSkin.mix >= 0.95f) {
+		// Solid Gold: rich metallic gold reflection with warm amber shadows, bright gold midtones, and crisp specular sheen.
+		const float lum = (0.3f * q.r + 0.59f * q.g + 0.11f * q.b) / 255.0f;
+		const float metal = (0.35f + 0.65f * lum) * (0.42f + 0.82f * diff) * (gSave.ambientOcc ? (0.82f + 0.18f * (0.5f - 0.5f * wy)) : 1.0f);
+		const float rim = clampf(1.0f - wz, 0.0f, 1.0f);
+		const float goldGlow = 0.16f * rim * rim + high * 1.15f;
+		l.c.r = clampf(metal * 1.08f * (sSkin.r * 0.52f) + goldGlow, 0, 1);
+		l.c.g = clampf(metal * 0.92f * (sSkin.g * 0.52f) + goldGlow * 0.90f, 0, 1);
+		l.c.b = clampf(metal * 0.42f * (sSkin.b * 0.52f) + goldGlow * 0.58f, 0, 1);
 	} else {
+		const float grey = (0.3f * q.r + 0.59f * q.g + 0.11f * q.b) * sSkin.mix;
 		l.c.r = clampf((q.r * keep + grey * sSkin.r) * shade + high, 0, 1);
 		l.c.g = clampf((q.g * keep + grey * sSkin.g) * shade + high, 0, 1);
 		l.c.b = clampf((q.b * keep + grey * sSkin.b) * shade + high, 0, 1);
@@ -275,7 +296,7 @@ static void sortAndDraw(int mesh, const Vertex* v, u32 tris, const u16* idx, con
 			BatchTri bt;
 			bt.tex = sTex[mesh];
 			bt.z = sLit[a].z + sLit[b].z + sLit[c].z;
-			if (t * 3 < body && sTex[mesh] && sSkin.mix == 0) {
+			if (t * 3 < body && sTex[mesh] && (sSkin.mix == 0 || sSkin.shine >= 0.99f)) {
 				float u0 = uv[a].u, u1 = uv[b].u, u2 = uv[c].u;
 				float lo = SDL_min(u0, SDL_min(u1, u2)), hi = SDL_max(u0, SDL_max(u1, u2));
 				if (hi - lo > 0.5f) {
@@ -324,7 +345,7 @@ static void sortAndDraw(int mesh, const Vertex* v, u32 tris, const u16* idx, con
 		const Lit& la = lit(v, a);
 		const Lit& lb = lit(v, b);
 		const Lit& lc = lit(v, c);
-		if (t * 3 < body && sTex[mesh] && sSkin.mix == 0) {  // a skin replaces the printed peel
+		if (t * 3 < body && sTex[mesh] && (sSkin.mix == 0 || sSkin.shine >= 0.99f)) {  // a skin replaces the printed peel
 			float u0 = uv[a].u, u1 = uv[b].u, u2 = uv[c].u;
 			float lo = SDL_min(u0, SDL_min(u1, u2)), hi = SDL_max(u0, SDL_max(u1, u2));
 			if (hi - lo > 0.5f) {
