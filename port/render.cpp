@@ -4,6 +4,9 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 #include "gfx_sdl.h"
 #include "sheet_rects.h"
@@ -41,6 +44,7 @@ static SDL_Renderer* sRenderer;
 static bool sSoftware;
 static float sScale = 1, sOx, sOy;
 static float sWinW = 1280, sWinH = 720;
+static float sSafeL = 0, sSafeT = 0, sSafeR = 0, sSafeB = 0;
 static float sClipX0, sClipY0, sClipX1 = 1280, sClipY1 = 720;  // where drawing lands right now
 static float sBaseX, sBaseY, sShakeX, sShakeY;
 static bool sShaking;
@@ -295,6 +299,59 @@ static int sTargetW, sTargetH;
 static float sRenderScale = 1;
 static void updateField();
 
+bool isPortrait() { return sWinH > sWinW; }
+
+static void updateSafeArea() {
+	sSafeL = sSafeT = sSafeR = sSafeB = 0;
+	if (!sWindow) return;
+#if PORT_ANDROID
+	SDL_Rect safe{};
+	int winPtW = 0, winPtH = 0;
+	if (!SDL_GetWindowSafeArea(sWindow, &safe) || !SDL_GetWindowSize(sWindow, &winPtW, &winPtH) || winPtW <= 0 || winPtH <= 0) return;
+	const float sx = sWinW / (float)winPtW;
+	const float sy = sWinH / (float)winPtH;
+	sSafeL = SDL_clamp((float)safe.x * sx, 0.0f, sWinW * 0.14f);
+	sSafeT = SDL_clamp((float)safe.y * sy, 0.0f, sWinH * 0.12f);
+	sSafeR = SDL_clamp((float)(winPtW - (safe.x + safe.w)) * sx, 0.0f, sWinW * 0.14f);
+	sSafeB = SDL_clamp((float)(winPtH - (safe.y + safe.h)) * sy, 0.0f, sWinH * 0.12f);
+#elif PORT_WEB
+	const int winPtW = EM_ASM_INT({ return Math.max(1, window.innerWidth || 1); });
+	const int winPtH = EM_ASM_INT({ return Math.max(1, window.innerHeight || 1); });
+	const float sx = sWinW / (float)winPtW;
+	const float sy = sWinH / (float)winPtH;
+	const int sl = EM_ASM_INT({
+		if (!window._fsSafeProbe) {
+			const d = document.createElement('div');
+			d.style.cssText = 'position:fixed;left:env(safe-area-inset-left,0px);top:env(safe-area-inset-top,0px);right:env(safe-area-inset-right,0px);bottom:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden;';
+			document.body.appendChild(d);
+			window._fsSafeProbe = d;
+		}
+		return Math.round(parseFloat(getComputedStyle(window._fsSafeProbe).left) || 0);
+	});
+	const int st = EM_ASM_INT({ return Math.round(parseFloat(getComputedStyle(window._fsSafeProbe).top) || 0); });
+	const int sr = EM_ASM_INT({ return Math.round(parseFloat(getComputedStyle(window._fsSafeProbe).right) || 0); });
+	const int sb = EM_ASM_INT({ return Math.round(parseFloat(getComputedStyle(window._fsSafeProbe).bottom) || 0); });
+	sSafeL = SDL_clamp((float)sl * sx, 0.0f, sWinW * 0.14f);
+	sSafeT = SDL_clamp((float)st * sy, 0.0f, sWinH * 0.12f);
+	sSafeR = SDL_clamp((float)sr * sx, 0.0f, sWinW * 0.14f);
+	sSafeB = SDL_clamp((float)sb * sy, 0.0f, sWinH * 0.12f);
+#endif
+}
+
+void syncWindowSize() {
+	if (!sWindow) return;
+	int w = 1280, h = 720;
+	if ((!sRenderer || !SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h)) || w <= 0 || h <= 0) {
+		SDL_GetWindowSizeInPixels(sWindow, &w, &h);
+	}
+	if (w <= 0) w = 1280;
+	if (h <= 0) h = 720;
+	sWinW = (float)w * sRenderScale;
+	sWinH = (float)h * sRenderScale;
+	updateSafeArea();
+	updateField();
+}
+
 void reloadAllTextures() {
 	if (sTarget) {
 		SDL_DestroyTexture(sTarget);
@@ -419,6 +476,7 @@ void beginFrame() {
 	}
 	sWinW = (float)w;
 	sWinH = (float)h;
+	updateSafeArea();
 	updateField();
 	sClipX0 = sClipY0 = 0;
 	sClipX1 = sWinW;
@@ -477,23 +535,27 @@ struct MenuLayout {
 
 static MenuLayout menuLayout() {
 	MenuLayout m;
-	const float asp = sWinH > 0 ? sWinW / sWinH : 16.0f / 9.0f;
+	const float ux = sSafeL, uy = sSafeT;
+	const float uw = SDL_max(1.0f, sWinW - sSafeL - sSafeR);
+	const float uh = SDL_max(1.0f, sWinH - sSafeT - sSafeB);
+	const float asp = uh > 0 ? uw / uh : 16.0f / 9.0f;
 	if (asp >= 1.25f) {
 		const float t = SDL_clamp((asp - 1.25f) / 0.45f, 0.0f, 1.0f);
 		const float kPic = 0.80f + 0.10f * t, kGap = 6.0f + 2.0f * t;
 		const float kW = 400.0f * kPic + 320.0f + kGap, kH = 240.0f;
-		const float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
-		const float x = (sWinW - kW * u) * 0.5f, y = (sWinH - kH * u) * 0.5f;
+		const float a = uw / kW, b = uh / kH, u = a < b ? a : b;
+		const float x = ux + (uw - kW * u) * 0.5f, y = uy + (uh - kH * u) * 0.5f;
 		m = {u * kPic, x, y + (240.0f - 240.0f * kPic) * 0.5f * u, u, x + (400.0f * kPic + kGap) * u, y};
 	} else {
 		const float availH = asp > 0 ? 320.0f / asp : 568.0f;
-		const float kPic = SDL_clamp((availH - 256.0f) / 240.0f, 0.64f, 0.78f);
-		const float kGap = SDL_clamp((availH - 400.0f) * 0.05f, 6.0f, 14.0f);
-		const float kW = 332.0f, kH = 240.0f * kPic + kGap + 240.0f + 12.0f;
-		const float a = sWinW / kW, b = sWinH / kH, u = a < b ? a : b;
+		const float kPic = SDL_clamp((availH - 252.0f) / 240.0f, 0.66f, 0.80f);
+		const float kGap = SDL_clamp((availH - 420.0f) * 0.10f, 8.0f, 22.0f);
+		const float kW = 328.0f, kH = 240.0f * kPic + kGap + 240.0f + 12.0f;
+		const float a = uw / kW, b = uh / kH, u = a < b ? a : b;
 		const float blockH = (240.0f * kPic + kGap + 240.0f) * u;
-		const float y = (sWinH - blockH) * 0.5f;
-		m = {u * kPic, sWinW * 0.5f - 200.0f * u * kPic, y, u, sWinW * 0.5f - 160.0f * u, y + (240.0f * kPic + kGap) * u};
+		const float y = uy + (uh - blockH) * 0.5f;
+		const float cx = ux + uw * 0.5f;
+		m = {u * kPic, cx - 200.0f * u * kPic, y, u, cx - 160.0f * u, y + (240.0f * kPic + kGap) * u};
 	}
 	return m;
 }
@@ -556,10 +618,10 @@ void beginBottom() {
 
 void windowArea(float* x, float* y, float* w, float* h) {
 	MenuLayout m = menuLayout();
-	*x = -m.signX / m.signScale;
-	*y = -m.signY / m.signScale;
-	*w = sWinW / m.signScale;
-	*h = sWinH / m.signScale;
+	*x = (sSafeL - m.signX) / m.signScale;
+	*y = (sSafeT - m.signY) / m.signScale;
+	*w = SDL_max(1.0f, sWinW - sSafeL - sSafeR) / m.signScale;
+	*h = SDL_max(1.0f, sWinH - sSafeT - sSafeB) / m.signScale;
 }
 
 void topToCorner(float x, float y, float* cx, float* cy) {
@@ -607,11 +669,17 @@ void fieldFor(float a, float* w, float* h) {
 	}
 }
 
-static void updateField() { fieldFor(sWinH > 0 ? sWinW / sWinH : 16.0f / 9, &gFieldW, &gFieldH); }
+static void updateField() {
+	const float uw = SDL_max(1.0f, sWinW - sSafeL - sSafeR);
+	const float uh = SDL_max(1.0f, sWinH - sSafeT - sSafeB);
+	fieldFor(uh > 0 ? uw / uh : 16.0f / 9, &gFieldW, &gFieldH);
+}
 
 static inline float fieldUnit() {
 	updateField();
-	float a = sWinW / kFieldW, b = sWinH / kFieldH;
+	const float uw = SDL_max(1.0f, sWinW - sSafeL - sSafeR);
+	const float uh = SDL_max(1.0f, sWinH - sSafeT - sSafeB);
+	float a = uw / kFieldW, b = uh / kFieldH;
 	return a < b ? a : b;
 }
 
@@ -620,8 +688,10 @@ void beginField() {
 	flush();
 	clipToWindow();
 	sScale = fieldUnit();
-	sOx = (sWinW - kFieldW * sScale) * 0.5f;
-	sOy = (sWinH - kFieldH * sScale) * 0.5f;
+	const float uw = SDL_max(1.0f, sWinW - sSafeL - sSafeR);
+	const float uh = SDL_max(1.0f, sWinH - sSafeT - sSafeB);
+	sOx = sSafeL + (uw - kFieldW * sScale) * 0.5f;
+	sOy = sSafeT + (uh - kFieldH * sScale) * 0.5f;
 	sShaking = true;
 }
 
@@ -629,8 +699,10 @@ void windowToGame(float wx, float wy, bool field, int* tx, int* ty) {
 	float s, ox, oy;
 	if (field) {
 		s = fieldUnit();
-		ox = (sWinW - kFieldW * s) * 0.5f;
-		oy = (sWinH - kFieldH * s) * 0.5f;
+		const float uw = SDL_max(1.0f, sWinW - sSafeL - sSafeR);
+		const float uh = SDL_max(1.0f, sWinH - sSafeT - sSafeB);
+		ox = sSafeL + (uw - kFieldW * s) * 0.5f;
+		oy = sSafeT + (uh - kFieldH * s) * 0.5f;
 	} else {
 		MenuLayout m = menuLayout();
 		s = m.signScale;

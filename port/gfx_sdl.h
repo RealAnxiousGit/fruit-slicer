@@ -39,6 +39,7 @@ namespace gfx {
 void reloadTextures();     // after Texture Quality changes
 void reloadAllTextures();  // after render device/target reset
 void ensureTextures();     // reload only if any core sheet was lost
+void syncWindowSize();     // refresh cached window/safe-area dimensions on resize or rotation
 float renderScaleNow();    // what Render Scale is drawing at this frame
 }  // namespace gfx
 namespace m3dport {

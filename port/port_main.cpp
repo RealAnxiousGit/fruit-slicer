@@ -363,8 +363,11 @@ int main(int, char**) {
 					port::textArrived(e.text.text);
 					break;
 				case SDL_EVENT_KEY_DOWN: {
-					if (e.key.key != SDLK_AC_BACK) in.mode = 1 + INPUT_KEYMOUSE;
-					if (port::textKey(e.key.key)) break;
+					u32 b = keyBits(e.key.key);
+					const bool handledText = port::textKey(e.key.key);
+					const bool sysShortcut = e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT)) || e.key.key == SDLK_F3;
+					if (e.key.key != SDLK_AC_BACK && (b != 0 || sysShortcut || handledText)) in.mode = 1 + INPUT_KEYMOUSE;
+					if (handledText) break;
 					if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT))) {
 						if (!e.key.repeat) port::toggleFullscreen();
 						break;
@@ -373,7 +376,6 @@ int main(int, char**) {
 						if (!e.key.repeat) port::toggleOverlay();
 						break;
 					}
-					u32 b = keyBits(e.key.key);
 					in.repeat |= b;
 					if (!e.key.repeat) {
 						in.down |= b;
@@ -389,6 +391,9 @@ int main(int, char**) {
 				case SDL_EVENT_FINGER_UP:
 					lastTouchMs = SDL_GetTicks();
 					in.mode = 1 + INPUT_TOUCH;
+					break;
+				case SDL_EVENT_FINGER_CANCELED:
+					held = false;
 					break;
 				case SDL_EVENT_MOUSE_MOTION: {
 					mx = e.motion.x;
@@ -416,6 +421,8 @@ int main(int, char**) {
 					break;
 				case SDL_EVENT_MOUSE_BUTTON_UP:
 					if (e.button.button == SDL_BUTTON_LEFT) {
+						mx = e.button.x;
+						my = e.button.y;
 						// A quick tap on a slow device can start and end between two frames. The game still sees it.
 						if (pressedNow) releaseAfter = true;
 						else held = false;
@@ -457,6 +464,8 @@ int main(int, char**) {
 					break;
 				case SDL_EVENT_DID_ENTER_FOREGROUND:
 				case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+				case SDL_EVENT_WINDOW_RESIZED:
+					gfx::syncWindowSize();
 					gfx::ensureTextures();
 					break;
 				default:
