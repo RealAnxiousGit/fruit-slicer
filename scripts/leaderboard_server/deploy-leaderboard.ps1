@@ -1,6 +1,6 @@
 # Authenticates Wrangler (if needed), creates/locates the SCORES KV namespace,
 # updates wrangler.toml, deploys fruit-slicer-lb, and runs check-leaderboard-backend.py.
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 Set-Location $PSScriptRoot
 
 Write-Host "== 1. Checking Cloudflare Wrangler login..."
