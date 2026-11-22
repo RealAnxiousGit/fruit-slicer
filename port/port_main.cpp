@@ -265,6 +265,7 @@ int main(int, char**) {
 	// The full look by default, except on a phone with little memory: it starts on the light settings.
 	gIsNew3ds = !gfx::lowMemory();
 	gHas3dScreen = false;
+	gRng.s = (u32)SDL_GetTicks() | 0x51CE0001u;
 #ifdef LAB
 	// The Lab keeps its own folder and starts fresh each run, so it never touches a player's save.
 	char* pref = SDL_GetPrefPath("RealAnxiousGit", "FruitSlicerLab");
