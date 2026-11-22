@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.0
+
+**Fruit Slicer: Orchard Blast.** Saves from 1.0 and 1.1 carry over: your best scores, coins, shop unlocks and settings are kept. The game is now also playable directly in your browser on itch.io (WebAssembly + WebGL2 + IndexedDB saves).
+
+### New
+
+- **Orchard Blast:** an endless roguelike mode where every sliced fruit grants XP to draft uncapped upgrades and active/passive charms (`Q`/`E` or touch slots, `Tab`/`I` for the scrollable Inventory, plus free and coin Rerolls on level-up). Face 7 escalating bosses — The Big Melon, The Bomb King, The Pineapple Guard, The Inferno Pepper, and Room 25+ Milestone Bosses Dusty Durian, Lord Lemon and Aggro Apple — plus Royal crowned variants from lap 2 onward. Saved runs can be resumed anytime between sessions.
+- **Boss Rush:** pick a starting build (Tank, Glass Cannon or Charmer) and battle 5 escalating bosses back to back (ending with a Milestone Boss finale) for the fastest clear time.
+- **Recipe:** fill 3–4 ingredient Smoothie orders within 60 seconds; slicing the wrong fruit spoils the cup and bombs take 10 seconds off the clock.
+- **Sharpshooter:** 60 seconds of colored shape rings around flying fruit — only slice the called shape.
+- **Juggle:** keep fruit bouncing airborne cleanly; 3 drops or knocked bombs end the run.
+- **Browser / WebAssembly Port:** playable directly on itch.io with WebGL2 rendering, dynamic aspect resizing, keyboard/mouse/touch/controller support, and persistent IndexedDB saves.
+- **Cross-Platform Online Leaderboards:** submit personal bests with a 6-character tag across all 14 modes on Windows, Linux, Android, Web and Nintendo 3DS. View the Online Top 10 on the result sign or browse Global Top 100 rankings in Stats.
+- **Mode Guides:** How to Play now includes interactive illustrated guides for all 14 modes alongside the playable Practice lessons.
+- **Shop & Skins:** added the animated **Holographic** 3D fruit skin, the `"Show the World You're Enough"` vocal Shop track (NickBin ft. Cabex Music, Calling All Villains), and 9 boss battle tracks (including 4 Milestone Boss tracks).
+- **3D Boss Props & Vector Logo:** 3D translucent boss shields, Lord Lemon's 3D floatie, volumetric 3D lemonade pool and 3D drain plug, Dusty Durian's 3D radial thorns, Aggro Apple's emerging 3D worms, 3D Royal crowns and 3D flying power-ups. The `"FRUIT / SLICER"` logo is now drawn as crisp vector geometry with an interactive per-letter rainbow easter egg when clicked or tapped.
+
+### Changed & Fixed
+
+- **Dynamic Input & Aspect Reflow:** prompts and HUD buttons switch automatically between Touch, Keyboard+Mouse and Controller, and gameplay/menus reflow cleanly across 16:9, 4:3, 21:9, 9:16 and 9:20 portrait screens (including live phone rotation and safe-area insets).
+- **Android Portrait & Audio Parity:** replaced mobile GPU scissor clipping with direct screen-space CPU quad/triangle clipping, centered portrait menus and Orchard Inventory, kept the Leaderboard Name prompt above the soft keyboard, fixed Android asset short-read streaming, and disabled APK compression on `.pcm`/`.ogg` audio.
+- **3D/2D Hitbox Parity & Progressive Orchard XP:** aligned 3D and 2D fruit, seed and projectile hitboxes, smoothed 3D boss spin recoveries upright, and tuned Orchard Blast's XP curve for steady multi-room progression.
+
 ## 1.1.0
 
 Saves from 1.0 carry over: scores, coins, unlocks and settings are kept. Zen and Combo Rush play by new rules, so their old best scores are cleared once, the first time 1.1 opens your save, and start fresh.

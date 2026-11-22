@@ -7,7 +7,14 @@ A free, fan-made fruit-slicing arcade game for Windows, Linux, Android, and Web 
 All screenshots are from the Linux version.
 
 <p>
-  <img src="docs/screenshots/title.png" width="400" alt="Title screen with the logo and a menu of fruit to slice">
+  <img src="docs/screenshots/title.png" width="400" alt="Title screen with the vector logo and a menu of fruit to slice">
+  <img src="docs/screenshots/orchard.png" width="400" alt="Drafting uncapped roguelike upgrades in Orchard Blast">
+  <img src="docs/screenshots/boss_lemon.png" width="400" alt="Fighting Lord Lemon in 3D with his floatie, sour lemonade flood and floating drain plug">
+  <img src="docs/screenshots/boss_durian.png" width="400" alt="Fighting Dusty Durian in 3D with extending radial thorns">
+  <img src="docs/screenshots/recipe.png" width="400" alt="Filling a 3-ingredient Smoothie order in Recipe mode">
+  <img src="docs/screenshots/sharpshooter.png" width="400" alt="Slicing the called shape ring in Sharpshooter mode">
+  <img src="docs/screenshots/juggle.png" width="400" alt="Keeping 3D fruit airborne in Juggle mode">
+  <img src="docs/screenshots/holo.png" width="400" alt="The animated Holographic 3D fruit skin">
   <img src="docs/screenshots/gameplay.png" width="400" alt="Slicing 3D fruit in Zen mode">
   <img src="docs/screenshots/frenzy.png" width="400" alt="A Fruit Frenzy filling the board with 3D fruit">
   <img src="docs/screenshots/combo.png" width="400" alt="A swipe through three fruit earning a combo bonus">
@@ -205,6 +212,7 @@ The eight songs added in 1.1 and 2.0 are by NickBin and friends, all rights rese
 | Lies | NickBin | EDM |
 | Lies (VIP Remix) | NickBin | EDM |
 | JUST STAY WITH ME | NickBin | Dariacore |
+| Show the World You're Enough | NickBin ft. Cabex Music, Calling All Villains | Electronic / Vocal |
 
 They were cut to whole bars so they loop cleanly, and matched to the game's loudness.
 
