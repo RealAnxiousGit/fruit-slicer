@@ -496,7 +496,14 @@ int main(int, char**) {
 		in.held = keysHeld;
 		readPad(in, steps / 60.0f);
 		float rx = mx, ry = my;
-		SDL_RenderCoordinatesFromWindow(gfx::renderer(), mx, my, &rx, &ry);
+		int winW = 0, winH = 0, pixW = 0, pixH = 0;
+		if (SDL_GetWindowSize(gfx::window(), &winW, &winH) && winW > 0 && winH > 0 &&
+		    SDL_GetWindowSizeInPixels(gfx::window(), &pixW, &pixH) && pixW > 0 && pixH > 0) {
+			rx = mx * ((float)pixW / (float)winW);
+			ry = my * ((float)pixH / (float)winH);
+		} else {
+			SDL_RenderCoordinatesFromWindow(gfx::renderer(), mx, my, &rx, &ry);
+		}
 		rx *= gfx::renderScaleNow();  // Render Scale draws at another size than the window
 		ry *= gfx::renderScaleNow();
 		int tx = 0, ty = 0;

@@ -113,6 +113,15 @@ SDL_Vertex* reserveTris(SDL_Texture* tex, int count) {
 }
 
 void pushTris(SDL_Texture* tex, const SDL_Vertex* v, int count) {
+	if (sClipX0 > 0.0f || sClipY0 > 0.0f || sClipX1 < sWinW || sClipY1 < sWinH) {
+		for (int i = 0; i + 2 < count; i += 3) {
+			const float cx = (v[i].position.x + v[i + 1].position.x + v[i + 2].position.x) * (1.0f / 3.0f);
+			const float cy = (v[i].position.y + v[i + 1].position.y + v[i + 2].position.y) * (1.0f / 3.0f);
+			if (cx < sClipX0 || cx > sClipX1 || cy < sClipY0 || cy > sClipY1) continue;
+			if (SDL_Vertex* at = reserveTris(tex, 3)) SDL_memcpy(at, v + i, 3 * sizeof(SDL_Vertex));
+		}
+		return;
+	}
 	if (SDL_Vertex* at = reserveTris(tex, count)) SDL_memcpy(at, v, (size_t)count * sizeof(SDL_Vertex));
 }
 
@@ -574,11 +583,9 @@ static SDL_Rect sBaseClip;
 static bool sHasBaseClip;
 
 static void clipTo(float x, float y, float w, float h, float bleed = 0) {
-	flush();
-	SDL_Rect r = {(int)(x - bleed), (int)(y - bleed), (int)(w + bleed * 2), (int)(h + bleed * 2)};
+	SDL_Rect r = {(int)floorf(x - bleed), (int)floorf(y - bleed), (int)ceilf(w + bleed * 2), (int)ceilf(h + bleed * 2)};
 	sBaseClip = r;
 	sHasBaseClip = true;
-	SDL_SetRenderClipRect(sRenderer, &r);
 	sClipX0 = SDL_max((float)r.x, 0.0f);
 	sClipY0 = SDL_max((float)r.y, 0.0f);
 	sClipX1 = SDL_min((float)(r.x + r.w), sWinW);
@@ -587,7 +594,6 @@ static void clipTo(float x, float y, float w, float h, float bleed = 0) {
 
 static void clipToWindow() {
 	sHasBaseClip = false;
-	SDL_SetRenderClipRect(sRenderer, nullptr);
 	sClipX0 = sClipY0 = 0;
 	sClipX1 = sWinW;
 	sClipY1 = sWinH;
@@ -742,16 +748,31 @@ void toScreen(float x, float y, float* sx, float* sy) {
 float viewScale() { return sScale; }
 
 void setClip(float x, float y, float w, float h) {
-	flush();
 	float sx, sy;
 	toScreen(x, y, &sx, &sy);
-	const SDL_Rect r = {(int)floorf(sx), (int)floorf(sy), (int)ceilf(w * sScale), (int)ceilf(h * sScale)};
-	SDL_SetRenderClipRect(sRenderer, &r);
+	const float x0 = floorf(sx), y0 = floorf(sy);
+	const float x1 = ceilf(sx + w * sScale), y1 = ceilf(sy + h * sScale);
+	const float bx0 = sHasBaseClip ? SDL_max((float)sBaseClip.x, 0.0f) : 0.0f;
+	const float by0 = sHasBaseClip ? SDL_max((float)sBaseClip.y, 0.0f) : 0.0f;
+	const float bx1 = sHasBaseClip ? SDL_min((float)(sBaseClip.x + sBaseClip.w), sWinW) : sWinW;
+	const float by1 = sHasBaseClip ? SDL_min((float)(sBaseClip.y + sBaseClip.h), sWinH) : sWinH;
+	sClipX0 = SDL_max(x0, bx0);
+	sClipY0 = SDL_max(y0, by0);
+	sClipX1 = SDL_min(x1, bx1);
+	sClipY1 = SDL_min(y1, by1);
 }
 
 void clearClip() {
-	flush();
-	SDL_SetRenderClipRect(sRenderer, sHasBaseClip ? &sBaseClip : nullptr);
+	if (sHasBaseClip) {
+		sClipX0 = SDL_max((float)sBaseClip.x, 0.0f);
+		sClipY0 = SDL_max((float)sBaseClip.y, 0.0f);
+		sClipX1 = SDL_min((float)(sBaseClip.x + sBaseClip.w), sWinW);
+		sClipY1 = SDL_min((float)(sBaseClip.y + sBaseClip.h), sWinH);
+	} else {
+		sClipX0 = sClipY0 = 0;
+		sClipX1 = sWinW;
+		sClipY1 = sWinH;
+	}
 }
 
 int fontImageCount() { return (int)(sizeof(kRectsFont) / sizeof(kRectsFont[0])); }
@@ -759,9 +780,9 @@ int fontImageCount() { return (int)(sizeof(kRectsFont) / sizeof(kRectsFont[0]));
 static void quad(SDL_Texture* tex, const SheetRect& r, float tw, float th, const float xs[4], const float ys[4], u32 color) {
 	SDL_FColor c = fcolor(color);
 	float u0 = r.x / tw, v0 = r.y / th, u1 = (r.x + r.w) / tw, v1 = (r.y + r.h) / th;
-	// SDL's Software renderer turns an upright quad into a scaled copy, and a scaled copy that crosses
-	// the edge of the drawing area loses its transparency: a glow becomes a solid box. So trim it first.
-	if (sSoftware && xs[0] == xs[3] && xs[1] == xs[2] && ys[0] == ys[1] && ys[2] == ys[3] && xs[0] < xs[1] && ys[0] < ys[2]) {
+	// Screen-space UV clipping trims every upright quad cleanly against sClipX0..sClipY1 on all renderers
+	// without depending on mobile GPU glScissor / vkCmdSetScissor orientation state.
+	if (xs[0] == xs[3] && xs[1] == xs[2] && ys[0] == ys[1] && ys[2] == ys[3] && xs[0] < xs[1] && ys[0] < ys[2]) {
 		float x0 = xs[0], x1 = xs[1], y0 = ys[0], y1 = ys[2];
 		float cx0 = SDL_max(x0, sClipX0), cx1 = SDL_min(x1, sClipX1), cy0 = SDL_max(y0, sClipY0), cy1 = SDL_min(y1, sClipY1);
 		if (cx0 >= cx1 || cy0 >= cy1) return;
@@ -770,7 +791,7 @@ static void quad(SDL_Texture* tex, const SheetRect& r, float tw, float th, const
 		SDL_Vertex a = {{cx0, cy0}, c, {nu0, nv0}}, b = {{cx1, cy0}, c, {nu1, nv0}};
 		SDL_Vertex d = {{cx1, cy1}, c, {nu1, nv1}}, e = {{cx0, cy1}, c, {nu0, nv1}};
 		SDL_Vertex v[6] = {a, b, d, a, d, e};
-		pushTris(tex, v, 6);
+		if (SDL_Vertex* at = reserveTris(tex, 6)) SDL_memcpy(at, v, 6 * sizeof(SDL_Vertex));
 		return;
 	}
 	SDL_Vertex a = {{xs[0], ys[0]}, c, {u0, v0}}, b = {{xs[1], ys[1]}, c, {u1, v0}};
@@ -826,10 +847,15 @@ void rect(float x, float y, float w, float h, u32 color) {
 	float x0, y0;
 	toScreen(x, y, &x0, &y0);
 	float x1 = x0 + w * sScale, y1 = y0 + h * sScale;
+	x0 = SDL_max(x0, sClipX0);
+	y0 = SDL_max(y0, sClipY0);
+	x1 = SDL_min(x1, sClipX1);
+	y1 = SDL_min(y1, sClipY1);
+	if (x0 >= x1 || y0 >= y1) return;
 	SDL_FColor c = fcolor(color);
 	SDL_Vertex a = {{x0, y0}, c, {0, 0}}, b = {{x1, y0}, c, {0, 0}}, d = {{x1, y1}, c, {0, 0}}, e = {{x0, y1}, c, {0, 0}};
 	SDL_Vertex v[6] = {a, b, d, a, d, e};
-	pushTris(nullptr, v, 6);
+	if (SDL_Vertex* at = reserveTris(nullptr, 6)) SDL_memcpy(at, v, 6 * sizeof(SDL_Vertex));
 }
 
 void tri(float x0, float y0, u32 c0, float x1, float y1, u32 c1, float x2, float y2, u32 c2) {
