@@ -51,6 +51,9 @@ android {
     lint {
         abortOnError = false
     }
+    androidResources {
+        noCompress 'pcm', 'ogg'
+    }
 }
 
 // The game looks for romfs/ inside the APK, the same folder the desktop builds keep beside the game.

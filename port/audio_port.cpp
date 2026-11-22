@@ -337,4 +337,8 @@ void fuseStop() {
 	sFuse.on = false;
 	SDL_UnlockMutex(sLock);
 }
+
+void resume() {
+	if (sStream) SDL_ResumeAudioStreamDevice(sStream);
+}
 }  // namespace audioport

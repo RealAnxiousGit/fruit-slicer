@@ -45,3 +45,6 @@ float renderScaleNow();    // what Render Scale is drawing at this frame
 namespace m3dport {
 void reloadTextures();
 }
+namespace audioport {
+void resume();
+}

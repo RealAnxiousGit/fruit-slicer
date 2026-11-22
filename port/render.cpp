@@ -219,7 +219,7 @@ bool init() {
 	if (strcmp(driver, "software") != 0) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 #if PORT_ANDROID
 	flags |= SDL_WINDOW_FULLSCREEN;
-	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait");  // the field follows any shape
+	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown");  // the field follows any shape
 #endif
 #ifdef BOSS_TEST_APP
 	sWindow = SDL_CreateWindow("Fruit Slicer - Orchard Blast Boss Test", 1280, 720, flags);
@@ -308,6 +308,7 @@ static void updateSafeArea() {
 	SDL_Rect safe{};
 	int winPtW = 0, winPtH = 0;
 	if (!SDL_GetWindowSafeArea(sWindow, &safe) || !SDL_GetWindowSize(sWindow, &winPtW, &winPtH) || winPtW <= 0 || winPtH <= 0) return;
+	if (safe.w <= 0 || safe.h <= 0 || safe.x < 0 || safe.y < 0 || safe.x + safe.w > winPtW + 2 || safe.y + safe.h > winPtH + 2) return;
 	const float sx = sWinW / (float)winPtW;
 	const float sy = sWinH / (float)winPtH;
 	sSafeL = SDL_clamp((float)safe.x * sx, 0.0f, sWinW * 0.14f);
@@ -338,14 +339,25 @@ static void updateSafeArea() {
 #endif
 }
 
-void syncWindowSize() {
-	if (!sWindow) return;
-	int w = 1280, h = 720;
-	if ((!sRenderer || !SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h)) || w <= 0 || h <= 0) {
-		SDL_GetWindowSizeInPixels(sWindow, &w, &h);
+static void queryOutputSize(int* outW, int* outH) {
+	int w = 1280, h = 720, pw = 0, ph = 0;
+	const bool gotOut = sRenderer && SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h) && w > 0 && h > 0;
+	if (sWindow && SDL_GetWindowSizeInPixels(sWindow, &pw, &ph) && pw > 0 && ph > 0) {
+		if (!gotOut || (w > h) != (pw > ph)) {
+			w = pw;
+			h = ph;
+		}
 	}
 	if (w <= 0) w = 1280;
 	if (h <= 0) h = 720;
+	*outW = w;
+	*outH = h;
+}
+
+void syncWindowSize() {
+	if (!sWindow) return;
+	int w = 1280, h = 720;
+	queryOutputSize(&w, &h);
 	sWinW = (float)w * sRenderScale;
 	sWinH = (float)h * sRenderScale;
 	updateSafeArea();
@@ -440,13 +452,10 @@ static void recordFrame() {
 void beginFrame() {
 	setAdditive(false);
 	int w = 1280, h = 720;
-	if (!SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h) || w <= 0 || h <= 0) {
-		SDL_GetWindowSizeInPixels(sWindow, &w, &h);
-	}
-	if (w <= 0) w = 1280;
-	if (h <= 0) h = 720;
+	queryOutputSize(&w, &h);
 	static int sPrevOutW = 0, sPrevOutH = 0;
 	if ((sPrevOutW != w || sPrevOutH != h) && sPrevOutW > 0) {
+		SDL_SetRenderViewport(sRenderer, nullptr);
 		if (!sSheets[SHEET_SPRITES].tex || !sSheets[SHEET_LOGO].tex || !sSheets[SHEET_FONT].tex || !sSheets[SHEET_BOARD].tex) {
 			reloadAllTextures();
 		}
@@ -549,7 +558,7 @@ static MenuLayout menuLayout() {
 	} else {
 		const float availH = asp > 0 ? 320.0f / asp : 568.0f;
 		const float kPic = SDL_clamp((availH - 252.0f) / 240.0f, 0.66f, 0.80f);
-		const float kGap = SDL_clamp((availH - 420.0f) * 0.10f, 8.0f, 22.0f);
+		const float kGap = 4.0f;
 		const float kW = 328.0f, kH = 240.0f * kPic + kGap + 240.0f + 12.0f;
 		const float a = uw / kW, b = uh / kH, u = a < b ? a : b;
 		const float blockH = (240.0f * kPic + kGap + 240.0f) * u;
@@ -561,9 +570,14 @@ static MenuLayout menuLayout() {
 }
 
 // A side's slide-in and its long lists stay within that side. Bleed preserves focus rings & outlines.
+static SDL_Rect sBaseClip;
+static bool sHasBaseClip;
+
 static void clipTo(float x, float y, float w, float h, float bleed = 0) {
 	flush();
 	SDL_Rect r = {(int)(x - bleed), (int)(y - bleed), (int)(w + bleed * 2), (int)(h + bleed * 2)};
+	sBaseClip = r;
+	sHasBaseClip = true;
 	SDL_SetRenderClipRect(sRenderer, &r);
 	sClipX0 = SDL_max((float)r.x, 0.0f);
 	sClipY0 = SDL_max((float)r.y, 0.0f);
@@ -572,6 +586,7 @@ static void clipTo(float x, float y, float w, float h, float bleed = 0) {
 }
 
 static void clipToWindow() {
+	sHasBaseClip = false;
 	SDL_SetRenderClipRect(sRenderer, nullptr);
 	sClipX0 = sClipY0 = 0;
 	sClipX1 = sWinW;
@@ -736,7 +751,7 @@ void setClip(float x, float y, float w, float h) {
 
 void clearClip() {
 	flush();
-	SDL_SetRenderClipRect(sRenderer, nullptr);
+	SDL_SetRenderClipRect(sRenderer, sHasBaseClip ? &sBaseClip : nullptr);
 }
 
 int fontImageCount() { return (int)(sizeof(kRectsFont) / sizeof(kRectsFont[0])); }

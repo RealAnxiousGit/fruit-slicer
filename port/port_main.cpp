@@ -41,7 +41,15 @@ AssetFile* assetOpen(const char* path) {
 	if (!io) return nullptr;
 	return new AssetFile{io};
 }
-size_t assetRead(void* out, size_t bytes, AssetFile* a) { return SDL_ReadIO(a->io, out, bytes); }
+size_t assetRead(void* out, size_t bytes, AssetFile* a) {
+	size_t total = 0;
+	while (total < bytes) {
+		const size_t got = SDL_ReadIO(a->io, (u8*)out + total, bytes - total);
+		if (got == 0) break;
+		total += got;
+	}
+	return total;
+}
 long assetSize(AssetFile* a) { return (long)SDL_GetIOSize(a->io); }
 void assetClose(AssetFile* a) {
 	SDL_CloseIO(a->io);
@@ -463,10 +471,23 @@ int main(int, char**) {
 					app::notifySuspended();
 					break;
 				case SDL_EVENT_DID_ENTER_FOREGROUND:
-				case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-				case SDL_EVENT_WINDOW_RESIZED:
 					gfx::syncWindowSize();
 					gfx::ensureTextures();
+					audioport::resume();
+					break;
+				case SDL_EVENT_AUDIO_DEVICE_ADDED:
+					audioport::resume();
+					break;
+				case SDL_EVENT_WINDOW_SAFE_AREA_CHANGED:
+					gfx::syncWindowSize();
+					break;
+				case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+				case SDL_EVENT_WINDOW_RESIZED:
+					held = false;
+					releaseAfter = false;
+					gfx::syncWindowSize();
+					gfx::ensureTextures();
+					app::notifyResized();
 					break;
 				default:
 					break;
