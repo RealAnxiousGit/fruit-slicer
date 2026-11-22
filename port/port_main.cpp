@@ -474,14 +474,14 @@ int main(int, char**) {
 		in.tx = tx;
 		in.ty = ty;
 		in.touching = held;
+		in.hoverSlice = false;
 #if PORT_MOUSE
-		// Slice Without Holding: during a game, a moving mouse counts as a held button. A short grace
-		// keeps one swipe in one piece when a frame passes with no motion event.
+		// Slice Without Holding: moving the mouse slices gameplay via hoverSlice, without faking UI clicks.
 		static int movingFrames = 0;
 		const bool mouseMoved = moved && in.mode != 1 + INPUT_TOUCH && gInputMode != INPUT_TOUCH;
 		if (gSave.sliceNoHold && app::inFieldView()) {
 			movingFrames = mouseMoved ? 4 : (movingFrames > 0 ? movingFrames - 1 : 0);
-			if (movingFrames > 0) in.touching = true;
+			in.hoverSlice = movingFrames > 0;
 		} else {
 			movingFrames = 0;
 		}

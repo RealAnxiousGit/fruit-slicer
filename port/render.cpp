@@ -568,6 +568,12 @@ void topToCorner(float x, float y, float* cx, float* cy) {
 	*cy = (m.picY + y * m.picScale - m.signY) / m.signScale;
 }
 
+void signToTop(float sx, float sy, float* tx, float* ty) {
+	MenuLayout m = menuLayout();
+	*tx = (m.signX + sx * m.signScale - m.picX) / m.picScale;
+	*ty = (m.signY + sy * m.signScale - m.picY) / m.picScale;
+}
+
 void beginCorner() {
 	MenuLayout m = menuLayout();
 	setAdditive(false);

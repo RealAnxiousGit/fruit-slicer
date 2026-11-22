@@ -1,8 +1,8 @@
-# Fruit Slicer
+# Fruit Slicer: Orchard Blast
 
-A free, fan-made fruit-slicing arcade game for Windows, Linux and Android. Swipe to cut fruit out of the air, chain combos and stay away from the bombs. A two-screen version for the Nintendo 3DS lives at [fruit-slicer-3ds](https://github.com/RealAnxiousGit/fruit-slicer-3ds), built from the same game code.
+A free, fan-made fruit-slicing arcade game for Windows, Linux, Android, and Web (playable in your browser on itch.io). Swipe to cut fruit out of the air, chain combos, draft roguelike upgrades, battle seeded bosses, and stay away from the bombs. A two-screen version for the Nintendo 3DS lives at [fruit-slicer-3ds](https://github.com/RealAnxiousGit/fruit-slicer-3ds), built from the same game code.
 
-**Version 1.1.0.** Tested on Windows 11 on all four renderers, on Linux under WSL, and on a real Android phone as well as the Android emulator. Native Linux desktops, more phones and real 4K monitors are still untested, so reports are welcome.
+**Version 2.0.0.** Tested on Windows 11, Linux, Android, WebAssembly/WebGL2, and Nintendo 3DS.
 
 All screenshots are from the Linux version.
 
@@ -27,6 +27,7 @@ Get the files from the [Releases](https://github.com/RealAnxiousGit/fruit-slicer
 | Linux | `FruitSlicer-*-x86_64.AppImage` | Mark it as executable and run it. |
 | Linux | `FruitSlicer-*-linux-x86_64.tar.gz` | Unpack it and run `FruitSlicer`. |
 | Android 5.0 or newer | `FruitSlicer-*-android.apk` | Open it on your phone and allow the install. |
+| Browser (itch.io) | `FruitSlicer-*-web.zip` | Playable directly in your browser with WebGL2 and IndexedDB saves. |
 
 **Any screen shape:** the field takes your window's shape. A wide window gets the usual field, and a tall one, like a phone held upright, gets a tall, narrow field that fills it.
 
@@ -75,14 +76,19 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | Combo Rush | Only combos score: a fruit on its own is worth nothing, and each one in a long combo is worth more, up to 12. The bigger your combo, the faster fruit comes. Swipe bonuses are doubled. One bomb or an empty combo meter ends the run, and there is no clock. |
 | Daily Fruit | 60 seconds, the same run for everyone that day on every platform, with no server. A calendar keeps your daily scores and streak, and each day's first run pays a coin bonus. |
 | Beat Slice | 60 seconds to music. Fruit is thrown as usual, but only slices on the beat score, and a streak of them scores more. The board's edges glow when a slice will count. Pick any track you own from the track list. |
+| Orchard Blast | Endless roguelike mode. Slicing fruit grants XP to draft uncapped upgrades and active/passive charms (`Q`/`E` or touch slots, `Tab`/`I` for Inventory, free and coin Rerolls). Face 7 escalating bosses (plus Royal variants and Room 25+ Milestone Bosses) and resume saved runs anytime. |
+| Boss Rush | Pick a starting build (Tank, Glass Cannon, Charmer) and fight 5 escalating bosses back to back for the fastest clear time. |
+| Recipe | Fill 3-4 ingredient Smoothie orders within 60 seconds; wrong fruit spoils the cup and bombs cost 10 seconds. |
+| Sharpshooter | 60 seconds of colored shape rings. Only slice the called shape! |
+| Juggle | Keep fruit bouncing airborne cleanly; 3 drops or knocked bombs end the run. |
 
-Pick a Game shows six signs a page. The arrows beside the signs, left and right, or the mouse wheel turn the page.
+Pick a Game shows six signs a page. The arrows beside the signs, left and right, or the mouse wheel turn the page. Input prompts and touch buttons adapt automatically between Touch, Keyboard+Mouse, and Controller.
 
 **Mixer:** rules that change any mode, in any mix: Low Gravity, Giant Fruit, Tiny Fruit, Mirror, Double Bombs (Zen stays bomb-free) and Sides Only. Runs with a rule on keep their own best scores. Daily Fruit and Beat Slice always play without them. Slice the coconut under Pick a Game's info sign to open it, or press Back or View on a controller.
 
 **Pass and Play:** 2 to 4 players take one run each on the same device, in Classic, Arcade, Frenzy, Sudden Death, Minefield or Combo Rush. Each player has a colour and a name you can type, and a results board shows who won. These runs don't change your bests.
 
-**Practice:** the first Play starts a short, skippable lesson run (a slice, a three-fruit swipe, a coconut, a bomb, a coin, the Frenzy meter and a menu fruit). How to Play replays it.
+**Practice & Mode Guides:** the first Play starts a short, skippable lesson run. How to Play replays it and includes interactive Mode Guides for all 14 modes.
 
 **Custom Music** (Windows, Linux and Android): press Add Songs in Beat Slice and pick any number of `.mp3`, `.ogg`, `.flac` or 16-bit `.wav` songs in your system's file picker, and they are copied in. You can also put songs in the `Custom Music` folder next to your save yourself (Android: `Android/data/com.realanxiousgit.fruitslicer/files/Custom Music`). They appear in Beat Slice's track list, and the game listens for the beat when you pick one. If it's off, Beat Tool lets you fix it by ear: slower, faster, half, double, earlier, later, a click track and the bar start.
 
@@ -108,13 +114,9 @@ Pick a Game shows six signs a page. The arrows beside the signs, left and right,
 
 **Coins** spin through the air now and then. Slicing one is worth 5 points and 5 coins, and every 100 points of a run pays 1 more. A coin is never a strike, and a missed one costs nothing. The run's coins show under the score; your total shows in the menus and the pause menu.
 
-**Shop:** spend coins on board themes (Night Picnic, Beach Towel, Kitchen Counter, Snowfall, Autumn Leaves, Pumpkin Patch, Spring Blossom, Bamboo Mat), blade trails (Ink, Flame, Rainbow, Ribbon, Sparkle, Comet, Sunset, Candy Cane, Aurora), splat colours, fruit skins (Solid Gold and Clear Glass) and thirteen recorded songs. Each tab shows six items; scroll for the rest. Items are tried on while selected, and bought items are equipped from the Shop or Options. A song plays for 8 seconds, then your own music comes back; Use puts it on as both the Menu and the Game Music.
+**Shop:** spend coins on board themes (Night Picnic, Beach Towel, Kitchen Counter, Snowfall, Autumn Leaves, Pumpkin Patch, Spring Blossom, Bamboo Mat), blade trails (Ink, Flame, Rainbow, Ribbon, Sparkle, Comet, Sunset, Candy Cane, Aurora), splat colours, fruit skins (Solid Gold, Clear Glass, and Holographic) and recorded/boss songs. Each tab shows six items; scroll for the rest. Items are tried on while selected, and bought items are equipped from the Shop or Options. A song plays for 8 seconds, then your own music comes back; Use puts it on as both the Menu and the Game Music.
 
-**Seasonal boards:** late October, December and spring bring pumpkins, snow or blossom in place of a free board, never one you bought. Seasonal Boards in Advanced Graphics turns them off.
-
-**Fruit Journal:** a sticker book with a page for every fruit and how many you've sliced. Milestones of 10, 50, 250 and 1000 pay coins.
-
-**Stats:** fruit sliced, coins earned, time played, favourite mode, longest combo and Daily streak, plus the best score in every mode.
+**Online Leaderboards & Stats:** submit personal bests with a 6-character tag across all 14 modes on Windows, Linux, Android, Web, and 3DS. Stats tracks fruit sliced, coins earned, time played, favourite mode, longest combo, Daily streak, Best Room in Orchard Blast, and Global Top 100 rankings.
 
 **Slow motion:** a 10-fruit swipe slows time for a moment. Calm Effects turns it off.
 
@@ -124,8 +126,8 @@ Each sign shows the main settings. Fine tuning and resets are on the Advanced pa
 
 | Section | Settings |
 | --- | --- |
-| Audio | Sound Effects, Music and Menu Sounds sliders. Menu Music and Game Music each choose Auto or a track. Latency Test and Beat Timing. |
-| Visuals and Display | Art Style (3D Models or 2D Stickers), Board, Blade, Trail, Display Mode (windowed, borderless or fullscreen) and Graphics: Performance, Quality or Beautiful. **Advanced Graphics:** Resolution with a revert countdown, V-Sync, Renderer, Textures (up to Ultra on Windows and Linux), Shadows, Ambient Occlusion, Bloom, Render Scale, Effects, 3D Detail, Slice Style, Transitions and Seasonal Boards. Android has no Display Mode or Resolution. |
+| Audio | Sound Effects, Music and Menu Sounds sliders. Menu Music, Game Music and Boss Music each choose Auto/Off or a track (including Custom Music). Latency Test and Beat Timing. |
+| Visuals and Display | Art Style (3D Models or 2D Stickers), Board, Blade, Trail, Display Mode (windowed, borderless or fullscreen) and Graphics: Performance, Quality or Beautiful. **Advanced Graphics:** Resolution with a revert countdown, V-Sync, Renderer, Textures (up to Ultra on Windows and Linux), Shadows, Ambient Occlusion, Bloom, Render Scale, Effects (None, Low, Simple, Full), 3D Detail, Slice Style, Transitions and Seasonal Boards. Android has no Display Mode or Resolution. |
 | Gameplay and Controls | Difficulty (Easy, Normal, Hard, Insane), Misses Allowed, Stick Slicing (Hold or Flick), Point Speed and Vibration. **Advanced Gameplay:** Fruit Speed, Bomb Amount, Slice Forgiveness, Frenzy Drain and Snap Assist. Android adds Touch Sensitivity. |
 | Accessibility | UI Scale, Larger Text, High Contrast, Colour-blind Mode, Slice Assist, Sound Captions and, with a mouse, Slice Without Holding. **Advanced Accessibility:** Calm Effects, Screen Shake and Game Speed. |
 | Scores and Data | Check for Updates, Check Now, and reset scores or everything. |
@@ -192,7 +194,7 @@ Programming by NickBin, with the Claude Code toolkit.
 
 **Boss music (1.2):** four tracks made in code for Fruit Slicer, and five from [OpenGameArt.org](https://opengameart.org): "8bit Action Boss Battle" by MintoDog (CC0), "Boss Fight 2" by ansimuz (CC0), "Boss Fight Bounce" by Locomule (CC0), "Epic Boss Battle" by Juhani Junkala (CC0), and "A Champion's Will" by ATMANAN, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). All five were converted and levelled to the game's loudness; their licence pages are in `docs/music-licences`.
 
-The seven songs added in 1.1 are by NickBin and friends, all rights reserved and used with permission:
+The eight songs added in 1.1 and 2.0 are by NickBin and friends, all rights reserved and used with permission (plus `"Show the World You're Enough"` by NickBin ft. Cabex Music, Calling All Villains):
 
 | Song | Artists | Genre |
 | --- | --- | --- |
