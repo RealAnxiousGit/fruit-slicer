@@ -47,3 +47,4 @@ source/streetpass.cpp
 source/leaderboard.h
 source/leaderboard.cpp
 source/radio.inc
+source/achievements.inc
