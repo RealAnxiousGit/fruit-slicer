@@ -48,3 +48,8 @@ source/leaderboard.h
 source/leaderboard.cpp
 source/radio.inc
 source/achievements.inc
+
+source/mods.h
+source/mods.cpp
+source/tinfl.inc
+source/mods_ui.inc

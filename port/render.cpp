@@ -9,6 +9,7 @@
 #endif
 
 #include "gfx_sdl.h"
+#include "mods.h"
 #include "sheet_rects.h"
 #if PORT_ULTRA
 #include "sheet_rects_ultra.h"
@@ -126,6 +127,15 @@ void pushTris(SDL_Texture* tex, const SDL_Vertex* v, int count) {
 }
 
 SDL_Surface* loadPng(const char* path) {
+	u8* buf = nullptr;
+	size_t sz = 0;
+	if (mods::readAsset(path, &buf, &sz)) {
+		SDL_IOStream* io = SDL_IOFromConstMem(buf, sz);
+		SDL_Surface* modSurf = io ? SDL_LoadPNG_IO(io, true) : nullptr;
+		free(buf);
+		if (modSurf) return modSurf;
+		fprintf(stderr, "[mods] ignoring invalid PNG override %s\n", path);
+	}
 	char full[512];
 #if PORT_ANDROID
 	snprintf(full, sizeof full, "romfs/%s", path);  // assets inside the APK
@@ -290,6 +300,58 @@ int loadStepCount() { return 1; }
 void loadStep(int) { sync(); }
 
 // The font and logo only change size for Ultra, so they reload only when Ultra comes or goes.
+static SDL_Texture* sModIcons[mods::kMaxMods];
+static u32 sModIconGen = 0;
+
+static void clearModIcons() {
+	for (int i = 0; i < mods::kMaxMods; i++) {
+		if (sModIcons[i]) {
+			SDL_DestroyTexture(sModIcons[i]);
+			sModIcons[i] = nullptr;
+		}
+	}
+	sModIconGen = mods::iconGen();
+}
+
+void toScreen(float x, float y, float* sx, float* sy);
+static void quad(SDL_Texture* tex, const SheetRect& r, float tw, float th, const float xs[4], const float ys[4], u32 color);
+void drawModIcon(int modIdx, float x, float y, float sz) {
+	if (sModIconGen != mods::iconGen()) clearModIcons();
+	const mods::ModInfo* m = mods::get(modIdx);
+	if (m && m->hasIcon && m->iconPng && m->iconSize > 0 && modIdx >= 0 && modIdx < mods::kMaxMods) {
+		if (!sModIcons[modIdx]) {
+			SDL_IOStream* io = SDL_IOFromConstMem(m->iconPng, m->iconSize);
+			SDL_Surface* s = io ? SDL_LoadPNG_IO(io, true) : nullptr;
+			if (s) {
+				sModIcons[modIdx] = SDL_CreateTextureFromSurface(sRenderer, s);
+				SDL_DestroySurface(s);
+				if (sModIcons[modIdx]) SDL_SetTextureScaleMode(sModIcons[modIdx], SDL_SCALEMODE_LINEAR);
+			}
+		}
+		if (sModIcons[modIdx]) {
+			float x0, y0;
+			toScreen(x, y, &x0, &y0);
+			const float x1 = x0 + sz * sScale, y1 = y0 + sz * sScale;
+			const float xs[4] = {x0, x1, x1, x0}, ys[4] = {y0, y0, y1, y1};
+			const SheetRect r = {0, 0, (float)sModIcons[modIdx]->w, (float)sModIcons[modIdx]->h, (float)sModIcons[modIdx]->w, (float)sModIcons[modIdx]->h};
+			quad(sModIcons[modIdx], r, (float)sModIcons[modIdx]->w, (float)sModIcons[modIdx]->h, xs, ys, WHITE);
+			return;
+		}
+	}
+	rect(x, y, sz, sz, rgba(8, 10, 14, 255));
+	rect(x, y, sz, 1.5f, rgba(90, 96, 110, 220));
+	rect(x, y + sz - 1.5f, sz, 1.5f, rgba(90, 96, 110, 220));
+	text("?", x + sz * 0.5f, y + sz * 0.24f, sz * 0.017f, WHITE, ALIGN_CENTER);
+}
+
+void reloadAll() {
+	clearModIcons();
+	loadAllSheets();
+	sLoadedBoard = -1;
+	sync();
+	m3dport::reloadTextures();
+}
+
 void reloadTextures() {
 	if (ultraArt() != sUltraLoaded || !sSheets[SHEET_FONT].tex || !sSheets[SHEET_LOGO].tex) {
 		loadAllSheets();

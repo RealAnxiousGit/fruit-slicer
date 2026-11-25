@@ -17,20 +17,24 @@
 #include "app.h"
 #include "common.h"
 #include "gfx_sdl.h"
+#include "mods.h"
 #include "port_api.h"
 #include "render.h"
 
 namespace port {
 struct AssetFile {
 	SDL_IOStream* io;
+	u8* mem;
+	size_t memSize;
+	size_t memPos;
 };
 
 AssetFile* fileOpen(const char* fullPath) {
 	SDL_IOStream* io = SDL_IOFromFile(fullPath, "rb");
-	return io ? new AssetFile{io} : nullptr;
+	return io ? new AssetFile{io, nullptr, 0, 0} : nullptr;
 }
 
-AssetFile* assetOpen(const char* path) {
+AssetFile* assetOpenRaw(const char* path) {
 	char full[512];
 #if PORT_ANDROID
 	snprintf(full, sizeof full, "romfs/%s", path);
@@ -39,9 +43,25 @@ AssetFile* assetOpen(const char* path) {
 #endif
 	SDL_IOStream* io = SDL_IOFromFile(full, "rb");
 	if (!io) return nullptr;
-	return new AssetFile{io};
+	return new AssetFile{io, nullptr, 0, 0};
+}
+
+AssetFile* assetOpen(const char* path) {
+	u8* buf = nullptr;
+	size_t sz = 0;
+	if (mods::readAudioAsFsa1(path, &buf, &sz)) {
+		return new AssetFile{nullptr, buf, sz, 0};
+	}
+	return assetOpenRaw(path);
 }
 size_t assetRead(void* out, size_t bytes, AssetFile* a) {
+	if (a->mem) {
+		size_t avail = a->memPos < a->memSize ? a->memSize - a->memPos : 0;
+		size_t take = bytes < avail ? bytes : avail;
+		if (take > 0) memcpy(out, a->mem + a->memPos, take);
+		a->memPos += take;
+		return take;
+	}
 	size_t total = 0;
 	while (total < bytes) {
 		const size_t got = SDL_ReadIO(a->io, (u8*)out + total, bytes - total);
@@ -50,9 +70,10 @@ size_t assetRead(void* out, size_t bytes, AssetFile* a) {
 	}
 	return total;
 }
-long assetSize(AssetFile* a) { return (long)SDL_GetIOSize(a->io); }
+long assetSize(AssetFile* a) { return a->mem ? (long)a->memSize : (long)SDL_GetIOSize(a->io); }
 void assetClose(AssetFile* a) {
-	SDL_CloseIO(a->io);
+	if (a->mem) free(a->mem);
+	if (a->io) SDL_CloseIO(a->io);
 	delete a;
 }
 
