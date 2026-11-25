@@ -46,3 +46,4 @@ source/streetpass.h
 source/streetpass.cpp
 source/leaderboard.h
 source/leaderboard.cpp
+source/radio.inc
