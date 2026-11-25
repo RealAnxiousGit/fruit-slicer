@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.0
+
+**Records, Radio, Achievements, Mods & Orchard Blast Rebalance.** Saves from 2.0.0 carry over seamlessly and silently unlock retroactive achievements on first boot.
+
+### New
+
+- **Records Hub & Appearance:** moved Stats and Fruit Journal into a new **Records** menu alongside **Appearance** (Boards, Skins, Splats, Trails, Blades, and 4 free Oscilloscope styles: `Rainbow`, `Simple White`, `Simple Green`, `Bloomin' Blue`), **Radio**, and **Achievements**.
+- **Radio:** full-track music gallery for default and Shop-unlocked tracks with a Grid/List dropdown, live search bar (by title or tag), one-click Menu+Game / Boss theme equipping, and `Tab`/`Select` live Oscilloscope visualizer.
+- **Achievements:** 32 total achievements (31 Universal, 30 3DS) with bespoke icons, black-silhouette locked state, wide-banner top-of-screen slide-in toasts, and universal Shop coin rewards (`+15` to `+100`).
+- **Mods Menu:** supports extracted folder mods and `.zip` archives with `mod.txt` metadata + `icon.png` (and `modTemplate.zip` starter kit), enable/disable toggles, priority reordering, and browser `.zip` import saved in IndexedDB.
+- **Orchard Blast 2.1.0 Expansion:** added 12 new passive charms across 6 rarity tiers (`Common`, `Uncommon`, `Rare`, `Epic`, `Legend`, `Mythic`), including 4 boss-drop Mythics (`Orchard Crown`, `Twin Harvest`, `Solar Blade`, `Prismatic Core`) with a 1-in-8 regular / 1-in-4 milestone drop chance, rotating rainbow pinwheel reveal, and permanent save unlock.
+
+### Changed & Fixed
+
+- **Double XP & Rebalance:** renamed `Double Points` to **Double XP** in Orchard Blast (`2×` XP per fruit), tuned **Easy** (`30` HP, gentler throws, generous XP) and **Normal** (`25` HP, smoother Rooms 1–10) while keeping **Hard/Insane** strict, and added 1 starter Reroll on all runs.
+- **3DS Small-Text Readability:** enlarged cramped labels across Orchard Blast, Radio, Mods, and Achievements.
+
 ## 2.0.0
 
 **Fruit Slicer: Orchard Blast.** Saves from 1.0 and 1.1 carry over: your best scores, coins, shop unlocks and settings are kept. The game is now also playable directly in your browser on itch.io (WebAssembly + WebGL2 + IndexedDB saves).

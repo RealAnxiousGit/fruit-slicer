@@ -2,7 +2,7 @@
 
 A free, fan-made fruit-slicing arcade game for Windows, Linux, Android, and Web (playable in your browser on itch.io). Swipe to cut fruit out of the air, chain combos, draft roguelike upgrades, battle seeded bosses, and stay away from the bombs. A two-screen version for the Nintendo 3DS lives at [fruit-slicer-3ds](https://github.com/RealAnxiousGit/fruit-slicer-3ds), built from the same game code.
 
-**Version 2.0.0.** Tested on Windows 11, Linux, Android, WebAssembly/WebGL2, and Nintendo 3DS.
+**Version 2.1.0.** Tested on Windows 11, Linux, Android, WebAssembly/WebGL2, and Nintendo 3DS.
 
 All screenshots are from the Linux version.
 
@@ -117,7 +117,11 @@ Pick a Game shows six signs a page. The arrows beside the signs, left and right,
 
 **Difficulty:** Easy, Normal, Hard and Insane change how fast fruit is thrown and how many bombs come with it. Easy throws the fewest bombs. Hard and Insane can throw two bombs in one wave (never in Sudden Death), and in Minefield bombs make up as much as two thirds of the throws on Insane.
 
-## Coins, Shop, Journal and Stats
+## Coins, Shop, Records and Mods
+
+**Records:** a dedicated hub right next to Shop and Options housing **Stats**, **Fruit Journal**, **Appearance** (Boards, Fruit Skins, Splats, Blade Trails, Blades, plus 4 free Oscilloscope styles: `Rainbow`, `Simple White`, `Simple Green`, and `Bloomin' Blue`), **Radio** (full-track preview & equip music gallery with Grid/List toggle, live search bar, and `Tab`/`Select` live Oscilloscope visualizer), and **Achievements** (31 platform achievements with wide-banner slide-in toasts, Shop coin rewards, and silent retroactive unlocks for 2.0.0 saves).
+
+**Mods:** supports extracted folder mods and `.zip` archives (`modTemplate.zip` included in `mods/`), priority reordering, enable/disable toggles, and a browser `.zip` **Import** button saved in IndexedDB.
 
 **Coins** spin through the air now and then. Slicing one is worth 5 points and 5 coins, and every 100 points of a run pays 1 more. A coin is never a strike, and a missed one costs nothing. The run's coins show under the score; your total shows in the menus and the pause menu.
 
