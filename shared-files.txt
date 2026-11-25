@@ -13,6 +13,7 @@ source/game.h
 source/gfx_shared.cpp
 source/jobs.h
 source/main.cpp
+source/appearance.inc
 source/model3d.cpp
 source/model3d.h
 source/model3d_internal.h
