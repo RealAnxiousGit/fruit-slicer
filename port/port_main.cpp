@@ -22,6 +22,7 @@
 #include "render.h"
 
 namespace port {
+static bool sShotPending = false;
 struct AssetFile {
 	SDL_IOStream* io;
 	u8* mem;
@@ -395,7 +396,7 @@ int main(int, char**) {
 				case SDL_EVENT_KEY_DOWN: {
 					u32 b = keyBits(e.key.key);
 					const bool handledText = port::textKey(e.key.key);
-					const bool sysShortcut = e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT)) || e.key.key == SDLK_F3;
+					const bool sysShortcut = e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT)) || e.key.key == SDLK_F3 || e.key.key == SDLK_F2;
 					if (e.key.key != SDLK_AC_BACK && (b != 0 || sysShortcut || handledText)) in.mode = 1 + INPUT_KEYMOUSE;
 					if (handledText) break;
 					if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && (e.key.mod & SDL_KMOD_ALT))) {
@@ -404,6 +405,10 @@ int main(int, char**) {
 					}
 					if (e.key.key == SDLK_F3) {
 						if (!e.key.repeat) port::toggleOverlay();
+						break;
+					}
+					if (e.key.key == SDLK_F2) {
+						if (!e.key.repeat) port::sShotPending = true;
 						break;
 					}
 					in.repeat |= b;
@@ -650,6 +655,35 @@ void shareCard(float x, float y, float w, float h) {
 	snprintf(sCardPath, sizeof sCardPath, "%s%s", folder, name);
 	gfx::requestShotArea(sCardPath, x, y, w, h);
 	sCardWaiting = true;
+}
+
+bool screenshotTriggered() {
+	const bool v = sShotPending;
+	sShotPending = false;
+	return v;
+}
+
+bool nextScreenshotPath(char* out, int size) {
+	if (!out || size <= 0) return false;
+#if PORT_ANDROID
+	return false;
+#else
+	char name[64];
+	const time_t now = time(nullptr);
+	strftime(name, sizeof name, "FruitSlicer_%Y%m%d_%H%M%S.png", localtime(&now));
+	char folder[320];
+	const char* pics = SDL_GetUserFolder(SDL_FOLDER_PICTURES);
+	if (pics) {
+		snprintf(folder, sizeof folder, "%sFruit Slicer/", pics);
+		SDL_CreateDirectory(folder);
+		snprintf(folder, sizeof folder, "%sFruit Slicer/Screenshots/", pics);
+	} else {
+		dataPath(folder, sizeof folder, "Screenshots/");
+	}
+	SDL_CreateDirectory(folder);
+	snprintf(out, size, "%s%s", folder, name);
+	return true;
+#endif
 }
 
 #if PORT_ANDROID
