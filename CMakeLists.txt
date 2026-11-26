@@ -73,7 +73,7 @@ if(EMSCRIPTEN)
   target_link_options(${GAME_TARGET} PRIVATE
     -sASYNCIFY -sASYNCIFY_STACK_SIZE=262144 -sSTACK_SIZE=1048576
     -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728
-    -sEXPORTED_RUNTIME_METHODS=FS,UTF8ToString,stringToUTF8 -lidbfs.js
+    -sEXPORTED_FUNCTIONS=_main,_malloc,_free -sEXPORTED_RUNTIME_METHODS=FS,UTF8ToString,stringToUTF8 -lidbfs.js
     "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/romfs@/romfs"
     "SHELL:--exclude-file ${CMAKE_SOURCE_DIR}/romfs/gfx4k"
     "SHELL:--exclude-file ${CMAKE_SOURCE_DIR}/romfs/tex4k"
