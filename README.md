@@ -22,6 +22,10 @@ All screenshots are from the Linux version.
   <img src="docs/screenshots/beat.png" width="400" alt="Beat Slice, where only slices on the beat score">
   <img src="docs/screenshots/sunburst.png" width="400" alt="Scrubbing the blade across the Sunburst Fruit at the end of a run">
   <img src="docs/screenshots/result.png" width="400" alt="The result sign after an Arcade run with a new best score">
+  <img src="docs/screenshots/radio.png" width="400" alt="Records Radio gallery with track list, preview, search, and Import">
+  <img src="docs/screenshots/oscilloscope.png" width="400" alt="Radio Oscilloscope visualizer with real-time waveform">
+  <img src="docs/screenshots/achievements.png" width="400" alt="Records Achievements grid with coin rewards and filter tabs">
+  <img src="docs/screenshots/mods.png" width="400" alt="Mods menu supporting folder and zip packs">
 </p>
 
 ## Download
@@ -51,6 +55,7 @@ The Linux builds need glibc 2.35 or newer, which means Ubuntu 22.04 or newer or 
 | Escape | Pause, and go back one menu. Hold it for 3 seconds on the title to quit. |
 | Arrow keys or WASD | Move the selector, change a setting |
 | Enter or Space | Select |
+| F2 | Save screenshot to Pictures/Fruit Slicer/Screenshots |
 | F11 or Alt+Enter | Fullscreen |
 
 | Android | Action |
